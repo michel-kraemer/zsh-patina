@@ -40,27 +40,38 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
     reader
         .read_line(&mut header)
         .context("Unable to read header")?;
-    let mut parts = header.split_ascii_whitespace();
-    let terminal_columns = parts
-        .next()
-        .context("Unable to get number of terminal columns from header")?
-        .parse::<usize>()
-        .context("Unable to parse number of terminal columns")?;
-    let terminal_lines = parts
-        .next()
-        .context("Unable to get number of terminal lines from header")?
-        .parse::<usize>()
-        .context("Unable to parse number of terminal lines")?;
-    let cursor = parts
-        .next()
-        .context("Unable to get cursor position from header")?
-        .parse::<usize>()
-        .context("Unable to parse cursor position")?;
-    let line_count = parts
-        .next()
-        .context("Unable to get number of lines from header")?
-        .parse::<usize>()
-        .context("Unable to parse number of lines")?;
+    let mut term_cols = 1000;
+    let mut term_rows = 1000;
+    let mut cursor = 0;
+    let mut line_count = 0;
+    for h in header.split_ascii_whitespace() {
+        let (key, value) = h
+            .split_once("=")
+            .context("Unable to split header key-value pair")?;
+        match key {
+            "term_cols" => {
+                term_cols = value
+                    .parse::<usize>()
+                    .context("Unable to parse number of terminal columns")?;
+            }
+            "term_rows" => {
+                term_rows = value
+                    .parse::<usize>()
+                    .context("Unable to parse number of terminal rows")?;
+            }
+            "cursor" => {
+                cursor = value
+                    .parse::<usize>()
+                    .context("Unable to parse cursor position")?;
+            }
+            "line_count" => {
+                line_count = value
+                    .parse::<usize>()
+                    .context("Unable to parse number of lines")?;
+            }
+            _ => {}
+        }
+    }
 
     // read lines
     let mut lines = String::new();
@@ -91,16 +102,16 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
     // try to cut off as much as possible. In practice, since we don't know
     // exactly where the cursor is on the screen, we will most likely still
     // include too much, but that's OK.
-    let min = line_lengths[0..cursor_line.saturating_sub(terminal_lines)]
+    let min = line_lengths[0..cursor_line.saturating_sub(term_rows)]
         .iter()
         .sum::<usize>()
-        .max(cursor.saturating_sub(terminal_columns * terminal_lines));
+        .max(cursor.saturating_sub(term_cols * term_rows));
     let max = line_lengths[0..line_lengths
         .len()
-        .min(cursor_line.saturating_add(terminal_lines))]
+        .min(cursor_line.saturating_add(term_rows))]
         .iter()
         .sum::<usize>()
-        .min(cursor.saturating_add(terminal_columns * terminal_lines));
+        .min(cursor.saturating_add(term_cols * term_rows));
 
     // write response
     let result = highlighter.highlight(&lines);

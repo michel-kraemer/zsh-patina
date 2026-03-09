@@ -47,7 +47,7 @@ _zsh_patina() {
 
     {
         # send header
-        print -r -- "$COLUMNS $LINES $CURSOR $count"
+        print -r -- "term_cols=$COLUMNS term_rows=$LINES cursor=$CURSOR line_count=$count"
 
         # send lines
         print -r -- "$BUFFER"
