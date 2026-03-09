@@ -8,9 +8,9 @@ Internally, the plugin uses [syntect](https://github.com/trishume/syntect/), whi
 
 In contrast to other ZSH syntax highlighters (e.g. [zsh-syntax-highlighting](https://github.com/zsh-users/zsh-syntax-highlighting/) or [fast-syntax-highlighting](https://github.com/zdharma-continuum/fast-syntax-highlighting)), which use different colors to indicate whether a command or a directory/file exists, zsh-patina performs **static highlighting that does not change while you type**. This way, you get a similar experience to editing code in your IDE.
 
-## Example
+## Examples
 
-<img src="./.github/screenshot.jpg" alt="Screenshot" />
+<img src="./.github/screenshot.png" alt="Screenshot" />
 
 ## How to install
 
