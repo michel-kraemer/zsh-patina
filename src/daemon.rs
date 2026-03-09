@@ -9,7 +9,10 @@ use std::{
     sync::Arc,
 };
 
-use crate::{Config, highlighter::Highlighter};
+use crate::{
+    Config,
+    highlighter::{Highlighter, Span},
+};
 
 fn pid_path(data_dir: &Path) -> PathBuf {
     data_dir.join("daemon.pid")
@@ -133,23 +136,34 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
         .min(cursor.saturating_add(term_cols * term_rows));
 
     // perform highlighting
-    let result = highlighter.highlight(&lines);
+    let mut result = highlighter.highlight(&lines);
 
-    for mut s in result.into_iter() {
-        if s.end <= pre_buffer_total_len {
-            // skip spans in the pre-buffer
-            continue;
-        }
+    // skip spans in the pre-buffer
+    result.retain(|s| s.end > pre_buffer_total_len);
 
-        // subtract pre-buffer offset
+    // subtract pre-buffer offset
+    for s in &mut result {
         s.start = s.start.saturating_sub(pre_buffer_total_len);
         s.end = s.end.saturating_sub(pre_buffer_total_len);
+    }
 
-        if s.end <= min || s.start >= max {
-            // skip spans outside the current terminal window
-            continue;
+    // skip spans outside the current terminal window
+    result.retain(|s| s.start < max && s.end > min);
+
+    // merge consecutive spans with the same color
+    let mut merged: Vec<Span> = Vec::new();
+    for span in result {
+        if let Some(prev) = merged.last_mut()
+            && prev.end == span.start
+            && prev.foreground_color == span.foreground_color
+        {
+            prev.end = span.end;
+        } else {
+            merged.push(span);
         }
+    }
 
+    for s in merged {
         // write response
         stream
             .write_all(format!("{} {} fg={}\n", s.start, s.end, s.foreground_color).as_bytes())

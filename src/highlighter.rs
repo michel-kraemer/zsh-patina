@@ -136,19 +136,6 @@ impl Highlighter {
             }
         }
 
-        // optimization: merge consecutive spans with the same color
-        let mut merged: Vec<Span> = Vec::new();
-        for span in result.into_iter() {
-            if let Some(prev) = merged.last_mut()
-                && prev.end == span.start
-                && prev.foreground_color == span.foreground_color
-            {
-                prev.end = span.end;
-            } else {
-                merged.push(span);
-            }
-        }
-
-        merged
+        result
     }
 }
