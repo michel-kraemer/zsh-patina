@@ -136,7 +136,7 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
         .min(cursor.saturating_add(term_cols * term_rows));
 
     // perform highlighting
-    let mut result = highlighter.highlight(&lines);
+    let mut result = highlighter.highlight(&lines)?;
 
     // skip spans in the pre-buffer
     result.retain(|s| s.end > pre_buffer_total_len);

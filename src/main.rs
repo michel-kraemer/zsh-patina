@@ -1,4 +1,9 @@
-use std::{env, fs, path::PathBuf, time::Duration};
+use std::{
+    env, fs,
+    io::{self, Read, Write},
+    path::PathBuf,
+    time::Duration,
+};
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -7,8 +12,12 @@ use figment::{
     providers::{Format, Serialized, Toml},
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
-use crate::daemon::{start_daemon, status_daemon, stop_daemon};
+use crate::{
+    daemon::{start_daemon, status_daemon, stop_daemon},
+    highlighter::{Highlighter, Token},
+};
 
 mod daemon;
 mod highlighter;
@@ -34,6 +43,14 @@ enum Command {
 
     /// Check whether the highlighter daemon is running
     Status,
+
+    /// Tokenize a command (from a file or from stdin) and print the identified
+    /// tokens
+    Tokenize {
+        /// The input file to tokenize. If this parameter is not provided, the
+        /// command will be read from stdin.
+        input_file: Option<String>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -82,6 +99,88 @@ impl Default for HighlightingConfig {
     }
 }
 
+/// Tokenize an input file and print the identified tokens to stdout. If the
+/// input file is `None`, read from stdin.
+fn tokenize(config: &Config, input_file: &Option<String>) -> Result<()> {
+    // read input
+    let input = if let Some(input_file) = input_file {
+        fs::read_to_string(input_file)
+            .with_context(|| format!("Failed to read file '{input_file}'"))?
+    } else {
+        let mut buf = String::new();
+        io::stdin()
+            .read_to_string(&mut buf)
+            .context("Failed to read from stdin")?;
+        buf
+    };
+
+    // tokenize
+    let highlighter = Highlighter::new(
+        config.highlighting.max_line_length,
+        config.highlighting.timeout,
+    );
+    let tokens = highlighter.tokenize(&input)?;
+
+    // join consecutive tokens
+    let tokens = tokens.into_iter().fold(Vec::<Token>::new(), |mut acc, t| {
+        if let Some(last) = acc.last_mut()
+            && last.scope == t.scope
+            && last.range.end == t.range.start
+        {
+            last.range.end = t.range.end;
+            acc
+        } else {
+            acc.push(t);
+            acc
+        }
+    });
+
+    // print tokens
+    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
+    for t in tokens {
+        if t.scope == "source.shell.bash" {
+            // don't print the whole command
+            continue;
+        }
+        if t.range.is_empty() {
+            // don't print empty tokens
+            continue;
+        }
+
+        stdout.set_color(ColorSpec::new().set_fg(Some(Color::Yellow)))?;
+        write!(stdout, "╭─")?;
+        stdout.set_color(ColorSpec::new().set_fg(Some(Color::Blue)))?;
+        write!(stdout, "[{}:{}] ", t.line, t.column)?;
+        stdout.set_color(ColorSpec::new().set_fg(Some(Color::Rgb(160, 160, 160))))?;
+        writeln!(stdout, "{}", t.scope)?;
+
+        let mut contents = input[t.range].to_string();
+        contents.push('\n');
+        for l in contents.lines() {
+            stdout.set_color(ColorSpec::new().set_fg(Some(Color::Yellow)))?;
+            write!(stdout, "│ ")?;
+
+            let leading_spaces = l.chars().take_while(|c| c.is_whitespace()).count();
+            let trailing_spaces = l.chars().rev().take_while(|c| c.is_whitespace()).count();
+            if leading_spaces > 0 {
+                stdout.set_color(ColorSpec::new().set_fg(Some(Color::Rgb(96, 96, 96))))?;
+                write!(stdout, "{}", "·".repeat(leading_spaces))?;
+            }
+            stdout.set_color(ColorSpec::new().set_fg(Some(Color::White)))?;
+            writeln!(stdout, "{}", l.trim())?;
+            if trailing_spaces > 0 {
+                stdout.set_color(ColorSpec::new().set_fg(Some(Color::Rgb(96, 96, 96))))?;
+                write!(stdout, "{}", "·".repeat(trailing_spaces))?;
+            }
+        }
+
+        writeln!(stdout)?;
+    }
+    stdout.reset()?;
+
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let home = PathBuf::from(env::var("HOME").context("$HOME not set")?);
     let config_dir = home.join(".config/zsh-patina");
@@ -110,5 +209,6 @@ fn main() -> Result<()> {
             start_daemon(&data_dir, &config)
         }
         Command::Status => status_daemon(&data_dir),
+        Command::Tokenize { input_file } => tokenize(&config, &input_file),
     }
 }
