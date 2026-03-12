@@ -60,6 +60,9 @@ pub struct Span {
 
     /// The foreground color of the span
     pub foreground_color: String,
+
+    /// The background color of the span
+    pub background_color: Option<String>,
 }
 
 /// A token with a scope, line and column number, and range in the input command
@@ -155,6 +158,7 @@ impl Highlighter {
 
             for r in ranges {
                 let fg = to_ansi_color(r.0.foreground);
+                let bg = to_ansi_color(r.0.background);
 
                 // this is O(n) but necessary in case the command contains
                 // multi-byte characters
@@ -163,12 +167,13 @@ impl Highlighter {
                 // highlighting `None` or `white` (i.e. default terminal color)
                 // is not necessary
                 if let Some(fg) = fg
-                    && fg != "white"
+                    && !(fg == "white" && bg.is_none())
                 {
                     result.push(Span {
                         start: i,
                         end: i + len,
                         foreground_color: fg,
+                        background_color: bg,
                     });
                 }
 

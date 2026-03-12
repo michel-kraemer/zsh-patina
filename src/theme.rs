@@ -1,7 +1,10 @@
-use std::{collections::HashMap, fs, str::FromStr};
+use std::{collections::HashMap, fmt::Formatter, fs, str::FromStr};
 
 use anyhow::{Context, Result, bail};
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error};
+use serde::{
+    Deserialize, Deserializer, Serialize, Serializer,
+    de::{Error, MapAccess, Visitor, value::MapAccessDeserializer},
+};
 use syntect::{
     highlighting::{
         Color, ScopeSelector, ScopeSelectors, StyleModifier, Theme as SyntectTheme, ThemeItem,
@@ -124,10 +127,77 @@ impl<'de> Deserialize<'de> for ThemeSource {
     }
 }
 
+#[derive(Default)]
+pub struct Style {
+    pub foreground: String,
+    pub background: Option<String>,
+}
+
+impl TryFrom<&Style> for StyleModifier {
+    type Error = anyhow::Error;
+
+    fn try_from(style: &Style) -> Result<Self> {
+        Ok(Self {
+            foreground: Some(parse_color(&style.foreground)?),
+            background: style
+                .background
+                .as_ref()
+                .map(|f| parse_color(f))
+                .transpose()?,
+            ..Default::default()
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for Style {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct StringOrStruct;
+
+        impl<'de> Visitor<'de> for StringOrStruct {
+            type Value = Style;
+
+            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+                formatter.write_str("string or style struct")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Style, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(Style {
+                    foreground: value.to_string(),
+                    ..Default::default()
+                })
+            }
+
+            fn visit_map<M>(self, map: M) -> Result<Style, M::Error>
+            where
+                M: MapAccess<'de>,
+            {
+                #[derive(Deserialize)]
+                struct Helper {
+                    foreground: String,
+                    background: Option<String>,
+                }
+                let h = Helper::deserialize(MapAccessDeserializer::new(map))?;
+                Ok(Style {
+                    foreground: h.foreground,
+                    background: h.background,
+                })
+            }
+        }
+
+        deserializer.deserialize_any(StringOrStruct)
+    }
+}
+
 #[derive(Deserialize)]
 pub struct Theme {
     #[serde(flatten)]
-    scopes: HashMap<String, String>,
+    scopes: HashMap<String, Style>,
 }
 
 impl Theme {
@@ -152,7 +222,7 @@ impl Theme {
     /// Resolve a scope to a color by looking it up in the theme. If the scope
     /// is not found, its parent scopes are tried until a match is found or
     /// there are no more parent scopes left.
-    pub fn resolve<'a>(&'a self, scope: &str) -> Option<&'a str> {
+    pub fn resolve<'a>(&'a self, scope: &str) -> Option<&'a Style> {
         let mut s = scope;
         while !s.is_empty() {
             if let Some(c) = self.scopes.get(s) {
@@ -176,6 +246,13 @@ impl TryFrom<Theme> for SyntectTheme {
                     b: 0,
                     a: 0,
                 }),
+                // this will be converted to `None` in the highlighter module:
+                background: Some(Color {
+                    r: 0,
+                    g: 0,
+                    b: 0,
+                    a: 1,
+                }),
                 ..Default::default()
             },
             scopes: theme
@@ -189,10 +266,7 @@ impl TryFrom<Theme> for SyntectTheme {
                                 ..Default::default()
                             }],
                         },
-                        style: StyleModifier {
-                            foreground: Some(parse_color(s.1)?),
-                            ..Default::default()
-                        },
+                        style: s.1.try_into()?,
                     })
                 })
                 .collect::<Result<_>>()?,

@@ -156,6 +156,7 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
         if let Some(prev) = merged.last_mut()
             && prev.end == span.start
             && prev.foreground_color == span.foreground_color
+            && prev.background_color == span.background_color
         {
             prev.end = span.end;
         } else {
@@ -165,8 +166,13 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
 
     for s in merged {
         // write response
+        let mut message = format!("{} {} fg={}", s.start, s.end, s.foreground_color);
+        if let Some(bg) = s.background_color {
+            message.push_str(&format!(",bg={}", bg));
+        }
+        message.push('\n');
         stream
-            .write_all(format!("{} {} fg={}\n", s.start, s.end, s.foreground_color).as_bytes())
+            .write_all(message.as_bytes())
             .context("Unable to send response")?;
     }
 

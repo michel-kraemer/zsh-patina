@@ -104,7 +104,7 @@ The path must be absolute.
 
 ### Creating a custom theme
 
-A theme is a TOML file that maps **scopes** to **colors**. Each key is a scope name (note the quotation marks!) and each value is a color. For example:
+A theme is a TOML file that maps **scopes** to **styles**. Each key is a scope name (note the quotation marks!) and each value is either a string denoting a foreground [color](#colors) or a [style](#styles). For example:
 
 ```toml
 # comments
@@ -124,7 +124,7 @@ A theme is a TOML file that maps **scopes** to **colors**. Each key is a scope n
 "variable.function" = "cyan"
 
 # keywords
-"keyword" = "blue"
+"keyword" = { foreground = "blue", background = "red" }
 ```
 
 ### Colors
@@ -135,6 +135,14 @@ Colors can be specified as:
 - A **hex color** in the format `#RRGGBB` (e.g. `"#a0a0a0"`) or `#RGB` (e.g. `"#f00"`)
 
 ANSI color names use your terminal's color scheme, so the actual appearance depends on your terminal configuration. Hex colors are displayed as true colors (24-bit) if your terminal supports them.
+
+### Styles
+
+A style is a struct with a foreground color and a background color. For example:
+
+```toml
+"keyword" = { foreground = "blue", background = "red" }
+```
 
 ### Scopes
 

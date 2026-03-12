@@ -207,23 +207,43 @@ fn tokenize(config: &Config, input_file: &Option<String>) -> Result<()> {
 
             let leading_spaces = l.chars().take_while(|c| c.is_whitespace()).count();
             let trailing_spaces = l.chars().rev().take_while(|c| c.is_whitespace()).count();
+
+            let (fg, bg) = if let Some(style) = theme.resolve(&t.scope) {
+                (
+                    parse_term_color(&style.foreground)?,
+                    style
+                        .background
+                        .as_ref()
+                        .map(|c| parse_term_color(c))
+                        .transpose()?,
+                )
+            } else {
+                (Color::White, None)
+            };
+
+            let mut color_spec = ColorSpec::new();
+            if let Some(bg) = bg {
+                color_spec.set_bg(Some(bg));
+            }
+
             if leading_spaces > 0 {
-                stdout.set_color(ColorSpec::new().set_fg(Some(Color::Rgb(96, 96, 96))))?;
+                color_spec.set_fg(Some(Color::Rgb(96, 96, 96)));
+                stdout.set_color(&color_spec)?;
                 write!(stdout, "{}", "·".repeat(leading_spaces))?;
             }
 
-            let color = if let Some(c) = theme.resolve(&t.scope) {
-                parse_term_color(c)?
-            } else {
-                Color::White
-            };
-            stdout.set_color(ColorSpec::new().set_fg(Some(color)))?;
-            writeln!(stdout, "{}", l.trim())?;
+            color_spec.set_fg(Some(fg));
+            stdout.set_color(&color_spec)?;
+            write!(stdout, "{}", l.trim())?;
 
             if trailing_spaces > 0 {
-                stdout.set_color(ColorSpec::new().set_fg(Some(Color::Rgb(96, 96, 96))))?;
+                color_spec.set_fg(Some(Color::Rgb(96, 96, 96)));
+                stdout.set_color(&color_spec)?;
                 write!(stdout, "{}", "·".repeat(trailing_spaces))?;
             }
+
+            stdout.reset()?;
+            writeln!(stdout)?;
         }
 
         writeln!(stdout)?;
