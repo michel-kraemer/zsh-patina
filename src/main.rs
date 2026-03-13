@@ -15,11 +15,13 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use crate::{
+    check::check_config,
     daemon::{activate, start_daemon, status_daemon, stop_daemon},
     highlighter::{Highlighter, Token},
     theme::{Theme, ThemeSource},
 };
 
+mod check;
 mod color;
 mod daemon;
 mod highlighter;
@@ -60,6 +62,9 @@ enum Command {
 
     /// Check whether the highlighter daemon is running
     Status,
+
+    /// Check user configuration and custom theme (if applicable) for errors
+    Check,
 
     /// Tokenize a command (from a file or from stdin) and print the identified
     /// tokens
@@ -275,6 +280,11 @@ fn main() -> Result<()> {
             start_daemon(&data_dir, &config)
         }
         Command::Status => status_daemon(&data_dir),
+        Command::Check => {
+            check_config(&config)?;
+            println!("Everything is OK.");
+            Ok(())
+        }
         Command::Tokenize { input_file } => tokenize(&config, &input_file),
         Command::ListScopes => list_scopes(),
     }

@@ -14,6 +14,7 @@ use std::{
 
 use crate::{
     Config,
+    check::check_config,
     highlighter::{Highlighter, Span},
 };
 
@@ -198,6 +199,8 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
 }
 
 pub fn activate(data_dir: &Path, config: &Config) -> Result<()> {
+    check_config(config)?;
+
     if start_daemon_internal(data_dir, config)? == Role::Parent {
         let exe = std::env::current_exe()?;
 
@@ -208,6 +211,7 @@ pub fn activate(data_dir: &Path, config: &Config) -> Result<()> {
         s.write_all(source.as_bytes())?;
         s.flush()?;
     }
+
     Ok(())
 }
 
