@@ -8,7 +8,7 @@ description = "$ A blazingly fast Zsh plugin performing syntax highlighting of y
 readme = "README.md"
 homepage = "https://github.com/michel-kraemer/zsh-patina"
 repository = "https://github.com/michel-kraemer/zsh-patina"
-keywords = ["cli", "shell", "zsh", "syntax", "highlighting", "syntax-highlighting"]
+keywords = ["shell", "zsh", "syntax", "highlighting", "syntax-highlighting"]
 categories = ["command-line-utilities"]
 rust-version = "1.88"
 
