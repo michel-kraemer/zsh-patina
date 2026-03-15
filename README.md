@@ -4,7 +4,7 @@
 
 The plugin spawns a small background daemon written in Rust. The daemon is shared between Zsh sessions and caches the syntax definition and color theme. Typical commands are highlighted in **less than a millisecond**. Extremely long commands only take a few milliseconds.
 
-Internally, the plugin relies on [syntect](https://github.com/trishume/syntect/), which provides **high-quality syntax highlighting** based on [Sublime Text](https://www.sublimetext.com/) syntax definitions. The built-in [themes](#theming) use the eight ANSI colors and are compatible with all terminal emulators.
+Internally, the plugin relies on [syntect](https://github.com/trishume/syntect/), which provides **high-quality syntax highlighting** based on [Sublime Text](https://www.sublimetext.com/) syntax definitions. The default built-in [theme](#theming) use the eight ANSI colors and is compatible with all terminal emulators.
 
 In contrast to other Zsh syntax highlighters (e.g. [zsh-syntax-highlighting](https://github.com/zsh-users/zsh-syntax-highlighting/) or [fast-syntax-highlighting](https://github.com/zdharma-continuum/fast-syntax-highlighting)), which use different colors to indicate whether a command or a directory/file exists, zsh-patina performs **static highlighting that solely depends on the characters you enter**. This way, you get a similar experience to editing code in your IDE.
 
@@ -155,9 +155,9 @@ The following built-in themes are available:
 
 | Theme | Description |
 |-------|-------------|
-| `patina` | The default theme with a balanced color palette |
-| `simple` | A minimal theme with fewer colors |
+| `patina` | The **default** theme with a balanced color palette |
 | `lavender` | A variant with magenta/lavender tones |
+| `simple` | A minimal theme with fewer colors |
 | `tokyonight` | Celebrates the lights of downtown Tokyo at night. Originally by [enkia](https://github.com/tokyo-night/tokyo-night-vscode-theme). |
 
 To load a custom theme from a file, use the `file:` prefix:
