@@ -23,6 +23,7 @@ clap = { version = "4.5.60", features = ["derive", "wrap_help"] }
 figment = { version = "0.10.19", features = ["toml"] }
 libc = "0.2.182"
 rayon = "1.11.0"
+rustc-hash = "2.1.1"
 serde = { version = "1.0.228", features = ["derive"] }
 shellexpand = "3.1.2"
 syntect = { version = "5.3.0", default-features = false, features = ["parsing", "regex-fancy"] }

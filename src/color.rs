@@ -1,5 +1,4 @@
 use anyhow::{Context, Result, bail};
-use syntect::highlighting::Color as SyntectColor;
 use termcolor::Color as TermColor;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -34,6 +33,10 @@ fn from_hex(s: &str) -> Result<Color> {
     } else {
         bail!("Color must be in the format #RRGGBB or #RGB");
     }
+}
+
+fn to_hex(r: u8, g: u8, b: u8) -> String {
+    format!("#{:0>2x}{:0>2x}{:0>2x}", r, g, b)
 }
 
 impl TryFrom<&str> for Color {
@@ -76,69 +79,19 @@ impl From<&Color> for TermColor {
     }
 }
 
-impl From<&Color> for SyntectColor {
-    fn from(value: &Color) -> Self {
-        match value {
-            Color::Black => SyntectColor {
-                r: 0,
-                g: 0,
-                b: 0,
-                a: 0,
-            },
-            Color::Red => SyntectColor {
-                r: 1,
-                g: 0,
-                b: 0,
-                a: 0,
-            },
-            Color::Green => SyntectColor {
-                r: 2,
-                g: 0,
-                b: 0,
-                a: 0,
-            },
-            Color::Yellow => SyntectColor {
-                r: 3,
-                g: 0,
-                b: 0,
-                a: 0,
-            },
-            Color::Blue => SyntectColor {
-                r: 4,
-                g: 0,
-                b: 0,
-                a: 0,
-            },
-            Color::Magenta => SyntectColor {
-                r: 5,
-                g: 0,
-                b: 0,
-                a: 0,
-            },
-            Color::Cyan => SyntectColor {
-                r: 6,
-                g: 0,
-                b: 0,
-                a: 0,
-            },
-            Color::White => SyntectColor {
-                r: 7,
-                g: 0,
-                b: 0,
-                a: 0,
-            },
-            Color::Rgb(r, g, b) => SyntectColor {
-                r: *r,
-                g: *g,
-                b: *b,
-                a: 255,
-            },
+impl Color {
+    /// Convert a Color to an ANSI color string
+    pub fn to_ansi_color(self) -> String {
+        match self {
+            Color::Black => "black".to_string(),
+            Color::Red => "red".to_string(),
+            Color::Green => "green".to_string(),
+            Color::Yellow => "yellow".to_string(),
+            Color::Blue => "blue".to_string(),
+            Color::Magenta => "magenta".to_string(),
+            Color::Cyan => "cyan".to_string(),
+            Color::White => "white".to_string(),
+            Color::Rgb(r, g, b) => to_hex(r, g, b),
         }
-    }
-}
-
-impl From<Color> for SyntectColor {
-    fn from(value: Color) -> Self {
-        (&value).into()
     }
 }

@@ -6,48 +6,15 @@ use std::{
 use anyhow::{Context, Result};
 use syntect::{
     easy::HighlightLines,
-    highlighting::{Color, FontStyle, Style, Theme as SyntectTheme},
+    highlighting::{Style, Theme as SyntectTheme},
     parsing::{ClearAmount, ParseState, ScopeStackOp, SyntaxSet},
     util::LinesWithEndings,
 };
 
 use crate::{
     HighlightingConfig,
-    theme::{Theme, ThemeSource},
+    theme::{ScopeMapping, Theme, ThemeSource},
 };
-
-fn to_hex(color: Color) -> String {
-    format!("#{:0>2x}{:0>2x}{:0>2x}", color.r, color.g, color.b)
-}
-
-/// This is similar to how the ansi theme works in Bat
-/// (https://github.com/sharkdp/bat): Colors are specified in the form #RRGGBBAA
-/// where AA can have the following values:
-///
-/// * 00: The red channel specifies which ANSI color to use. Valid values are
-///   00-07 (black, red, green, yellow, blue, magenta, cyan, white in this
-///   order).
-/// * 01: In this case the terminal's default foreground color is used
-/// * else: the color is used as-is without the alpha channel (i.e. #RRGGBB)
-fn to_ansi_color(color: Color) -> Option<String> {
-    if color.a == 0 {
-        Some(match color.r {
-            0x00 => "black".to_string(),
-            0x01 => "red".to_string(),
-            0x02 => "green".to_string(),
-            0x03 => "yellow".to_string(),
-            0x04 => "blue".to_string(),
-            0x05 => "magenta".to_string(),
-            0x06 => "cyan".to_string(),
-            0x07 => "white".to_string(),
-            _ => to_hex(color),
-        })
-    } else if color.a == 1 {
-        None
-    } else {
-        Some(to_hex(color))
-    }
-}
 
 /// A span of text with a foreground color. The range is specified in terms of
 /// character indices, not byte indices.
@@ -102,7 +69,9 @@ pub struct Highlighter {
     max_line_length: usize,
     timeout: Duration,
     syntax_set: SyntaxSet,
-    theme: SyntectTheme,
+    syntect_theme: SyntectTheme,
+    theme: Theme,
+    scope_mapping: ScopeMapping,
 }
 
 impl Highlighter {
@@ -113,18 +82,23 @@ impl Highlighter {
         .expect("Unable to load shell syntax");
 
         let theme = Theme::load(&config.theme)?;
+        let scope_mapping = ScopeMapping::new(&theme);
 
         Ok(Self {
             max_line_length: config.max_line_length,
             timeout: config.timeout,
             syntax_set,
-            theme: theme.try_into().with_context(|| match &config.theme {
-                ThemeSource::Simple => "Failed to parse simple theme".to_string(),
-                ThemeSource::Patina => "Failed to parse default theme".to_string(),
-                ThemeSource::Lavender => "Failed to parse lavender theme".to_string(),
-                ThemeSource::TokyoNight => "Failed to parse tokyonight theme".to_string(),
-                ThemeSource::File(path) => format!("Failed to parse theme file `{path}'"),
+            syntect_theme: theme.to_syntect(&scope_mapping).with_context(|| {
+                match &config.theme {
+                    ThemeSource::Simple => "Failed to parse simple theme".to_string(),
+                    ThemeSource::Patina => "Failed to parse default theme".to_string(),
+                    ThemeSource::Lavender => "Failed to parse lavender theme".to_string(),
+                    ThemeSource::TokyoNight => "Failed to parse tokyonight theme".to_string(),
+                    ThemeSource::File(path) => format!("Failed to parse theme file `{path}'"),
+                }
             })?,
+            theme,
+            scope_mapping,
         })
     }
 
@@ -147,7 +121,7 @@ impl Highlighter {
 
         let syntax = self.syntax_set.find_syntax_by_extension("sh").unwrap();
 
-        let mut h = HighlightLines::new(syntax, &self.theme);
+        let mut h = HighlightLines::new(syntax, &self.syntect_theme);
         let mut i = 0;
         let mut result = Vec::new();
         for line in LinesWithEndings::from(command.trim_ascii_end()) {
@@ -164,10 +138,16 @@ impl Highlighter {
             let ranges: Vec<(Style, &str)> = h.highlight_line(line, &self.syntax_set)?;
 
             for r in ranges {
-                let fg = to_ansi_color(r.0.foreground);
-                let bg = to_ansi_color(r.0.background);
-                let bold = r.0.font_style.contains(FontStyle::BOLD);
-                let underline = r.0.font_style.contains(FontStyle::UNDERLINE);
+                let style = self
+                    .scope_mapping
+                    .decode(&r.0.foreground, &self.theme)
+                    .unwrap_or_default();
+
+                let fg = style
+                    .foreground
+                    .map(|c| c.to_ansi_color())
+                    .unwrap_or_else(|| "white".to_string());
+                let bg = style.background.map(|c| c.to_ansi_color());
 
                 // this is O(n) but necessary in case the command contains
                 // multi-byte characters
@@ -175,16 +155,14 @@ impl Highlighter {
 
                 // highlighting `None` or `white` (i.e. default terminal color)
                 // is not necessary
-                if let Some(fg) = fg
-                    && (fg != "white" || bg.is_some() || bold || underline)
-                {
+                if fg != "white" || bg.is_some() || style.bold || style.underline {
                     result.push(Span {
                         start: i,
                         end: i + len,
                         foreground_color: fg,
                         background_color: bg,
-                        bold,
-                        underline,
+                        bold: style.bold,
+                        underline: style.underline,
                     });
                 }
 

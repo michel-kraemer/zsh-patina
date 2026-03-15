@@ -1,14 +1,15 @@
-use std::{collections::HashMap, fmt::Formatter, fs, str::FromStr};
+use std::{fmt::Formatter, fs, str::FromStr};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
+use rustc_hash::FxHashMap;
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
     de::{Error, MapAccess, Visitor, value::MapAccessDeserializer},
 };
 use syntect::{
     highlighting::{
-        Color as SyntectColor, FontStyle, ScopeSelector, ScopeSelectors, StyleModifier,
-        Theme as SyntectTheme, ThemeItem, ThemeSettings,
+        Color as SyntectColor, ScopeSelector, ScopeSelectors, StyleModifier, Theme as SyntectTheme,
+        ThemeItem, ThemeSettings,
     },
     parsing::ScopeStack,
 };
@@ -60,35 +61,12 @@ impl<'de> Deserialize<'de> for ThemeSource {
     }
 }
 
+#[derive(Clone, Copy, Default)]
 pub struct Style {
-    pub foreground: Color,
+    pub foreground: Option<Color>,
     pub background: Option<Color>,
     pub bold: bool,
     pub underline: bool,
-}
-
-impl TryFrom<&Style> for StyleModifier {
-    type Error = anyhow::Error;
-
-    fn try_from(style: &Style) -> Result<Self> {
-        let font_style = if style.bold || style.underline {
-            let mut fs = FontStyle::empty();
-            if style.bold {
-                fs.set(FontStyle::BOLD, true);
-            }
-            if style.underline {
-                fs.set(FontStyle::UNDERLINE, true);
-            }
-            Some(fs)
-        } else {
-            None
-        };
-        Ok(Self {
-            foreground: Some(style.foreground.into()),
-            background: style.background.as_ref().map(Into::into),
-            font_style,
-        })
-    }
 }
 
 impl<'de> Deserialize<'de> for Style {
@@ -110,10 +88,8 @@ impl<'de> Deserialize<'de> for Style {
                 E: serde::de::Error,
             {
                 Ok(Style {
-                    foreground: Color::try_from(value).map_err(E::custom)?,
-                    background: None,
-                    bold: false,
-                    underline: false,
+                    foreground: Some(Color::try_from(value).map_err(E::custom)?),
+                    ..Default::default()
                 })
             }
 
@@ -123,7 +99,7 @@ impl<'de> Deserialize<'de> for Style {
             {
                 #[derive(Deserialize)]
                 struct Helper {
-                    foreground: String,
+                    foreground: Option<String>,
                     background: Option<String>,
                     #[serde(default)]
                     bold: bool,
@@ -134,7 +110,10 @@ impl<'de> Deserialize<'de> for Style {
                 let h = Helper::deserialize(MapAccessDeserializer::new(map))?;
 
                 Ok(Style {
-                    foreground: Color::try_from(h.foreground.as_str()).map_err(M::Error::custom)?,
+                    foreground: h
+                        .foreground
+                        .map(|fg| Color::try_from(fg.as_str()).map_err(M::Error::custom))
+                        .transpose()?,
                     background: h
                         .background
                         .map(|bg| Color::try_from(bg.as_str()).map_err(M::Error::custom))
@@ -152,7 +131,7 @@ impl<'de> Deserialize<'de> for Style {
 #[derive(Deserialize)]
 pub struct Theme {
     #[serde(flatten)]
-    scopes: HashMap<String, Style>,
+    scopes: FxHashMap<String, Style>,
 }
 
 impl Theme {
@@ -181,55 +160,108 @@ impl Theme {
     /// Resolve a scope to a color by looking it up in the theme. If the scope
     /// is not found, its parent scopes are tried until a match is found or
     /// there are no more parent scopes left.
-    pub fn resolve<'a>(&'a self, scope: &str) -> Option<&'a Style> {
+    pub fn resolve(&self, scope: &str) -> Option<Style> {
         let mut s = scope;
         while !s.is_empty() {
             if let Some(c) = self.scopes.get(s) {
-                return Some(c);
+                return Some(*c);
             }
             s = s.rsplit_once('.')?.0;
         }
         None
     }
-}
 
-impl TryFrom<Theme> for SyntectTheme {
-    type Error = anyhow::Error;
-
-    fn try_from(theme: Theme) -> Result<Self> {
+    pub fn to_syntect(&self, scope_mapping: &ScopeMapping) -> Result<SyntectTheme> {
         Ok(SyntectTheme {
             settings: ThemeSettings {
-                foreground: Some(SyntectColor {
-                    r: 7,
-                    g: 0,
-                    b: 0,
-                    a: 0,
-                }),
-                // this will be converted to `None` in the highlighter module:
-                background: Some(SyntectColor {
-                    r: 0,
-                    g: 0,
-                    b: 0,
-                    a: 1,
-                }),
+                foreground: Some(ScopeMapping::NONE),
+                background: Some(ScopeMapping::NONE),
                 ..Default::default()
             },
-            scopes: theme
+            scopes: self
                 .scopes
                 .iter()
                 .map(|s| {
+                    let path = ScopeStack::from_str(s.0)?;
+                    if path.len() > 1 {
+                        bail!(
+                            "Invalid scope `{}'. Scopes must not contain any whitespace.",
+                            s.0
+                        )
+                    }
+
+                    let foreground = scope_mapping
+                        .encode(s.0)
+                        .with_context(|| format!("Missing scope mapping for `{}'", s.0))?;
+                    let style = StyleModifier {
+                        foreground: Some(foreground),
+                        ..Default::default()
+                    };
+
                     Ok(ThemeItem {
                         scope: ScopeSelectors {
                             selectors: vec![ScopeSelector {
-                                path: ScopeStack::from_str(s.0)?,
+                                path,
                                 ..Default::default()
                             }],
                         },
-                        style: s.1.try_into()?,
+                        style,
                     })
                 })
                 .collect::<Result<_>>()?,
             ..Default::default()
         })
+    }
+}
+
+pub struct ScopeMapping {
+    forward_mapping: FxHashMap<String, u32>,
+    backward_mapping: Vec<String>,
+}
+
+impl ScopeMapping {
+    pub const NONE: SyntectColor = SyntectColor {
+        r: u8::MAX,
+        g: u8::MAX,
+        b: u8::MAX,
+        a: u8::MAX,
+    };
+
+    pub fn new(theme: &Theme) -> Self {
+        let mut forward_mapping = FxHashMap::default();
+        let mut backward_mapping = Vec::new();
+        for scope in theme.scopes.keys() {
+            let id = backward_mapping.len();
+            forward_mapping.insert(scope.clone(), id as u32);
+            backward_mapping.push(scope.clone());
+        }
+        Self {
+            forward_mapping,
+            backward_mapping,
+        }
+    }
+
+    pub fn encode(&self, scope: &str) -> Option<SyntectColor> {
+        let id = self.forward_mapping.get(scope)?;
+        Some(SyntectColor {
+            r: ((id >> 24) & 0xFF) as u8,
+            g: ((id >> 16) & 0xFF) as u8,
+            b: ((id >> 8) & 0xFF) as u8,
+            a: (id & 0xFF) as u8,
+        })
+    }
+
+    pub fn decode(&self, color: &SyntectColor, theme: &Theme) -> Option<Style> {
+        let id = (color.r as u32) << 24
+            | (color.g as u32) << 16
+            | (color.b as u32) << 8
+            | (color.a as u32);
+        match id {
+            u32::MAX => None,
+            _ => {
+                let s = self.backward_mapping.get(id as usize)?;
+                theme.resolve(s)
+            }
+        }
     }
 }

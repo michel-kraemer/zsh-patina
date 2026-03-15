@@ -197,7 +197,9 @@ fn tokenize(config: &Config, input_file: &Option<String>) -> Result<()> {
 
             let color_spec = if let Some(style) = theme.resolve(&t.scope) {
                 let mut color_spec = ColorSpec::new();
-                color_spec.set_fg(Some(style.foreground.into()));
+                if let Some(fg) = &style.foreground {
+                    color_spec.set_fg(Some(fg.into()));
+                }
                 if let Some(bg) = &style.background {
                     color_spec.set_bg(Some(bg.into()));
                 }
