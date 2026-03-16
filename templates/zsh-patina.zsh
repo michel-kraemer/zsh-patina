@@ -4,15 +4,15 @@ zsh-patina() {
 
 _zsh_patina_resolve_callable() {
     if (( $+aliases[(e)$1] || $+galiases[(e)$1] )); then
-        REPLY="alias"
+        REPLY=a
     elif (( $+functions[(e)$1] )); then
-        REPLY=function
+        REPLY=f
     elif (( $+builtins[(e)$1] )); then
-        REPLY=builtin
+        REPLY=b
     elif (( $+commands[(e)$1] )); then
-        REPLY=command
+        REPLY=c
     else
-        REPLY=missing
+        REPLY=m
     fi
 }
 
@@ -82,28 +82,30 @@ _zsh_patina() {
         return
     }
 
-
     # Must be declared here because we reuse them in the while loop. Otherwise,
     # their contents will be printed in the second loop iteration (strange Zsh
     # behaviour).
-    local entry range_start range_end
+    local entry range_start range_end ch
 
     local line
     while IFS= read -r -u $fd line; do
         [[ -z "$line" ]] && continue
 
-        if [[ "$line" == "-DYNAMIC|"* ]]; then
-            # Strip "-DYNAMIC|" prefix and split by "|"
-            local remainder="${line#-DYNAMIC|}"
+        if [[ "$line" == "-DY|"* ]]; then
+            # Strip "-DY|" prefix and split by "|"
+            local remainder="${line#-DY|}"
             local range="${remainder%%|*}"
             local choices_raw="${remainder#*|}"
 
-            # Parse choices_raw ("key:val;key:val;...") into associative array
+            # Parse choices_raw ("key:val;key:val;...") into associative array.
+            # Split keys into individual characters.
             local -A choices=()
             for entry in "${(@s[;])choices_raw}"; do
                 local key="${entry%%:*}"
                 local value="${entry#*:}"
-                choices[$key]="$value"
+                for ch in "${(@s::)key}"; do
+                    choices[$ch]="$value"
+                done
             done
 
             read -r range_start range_end <<< "$range"
@@ -113,8 +115,8 @@ _zsh_patina() {
 
             if (( $+choices[$REPLY] )); then
                 region_highlight+=("$range ${choices[$REPLY]} memo=zsh_patina")
-            elif (( $+choices[else] )); then
-                region_highlight+=("$range ${choices[else]} memo=zsh_patina")
+            elif (( $+choices[e] )); then
+                region_highlight+=("$range ${choices[e]} memo=zsh_patina")
             fi
         else
             region_highlight+=("$line memo=zsh_patina")

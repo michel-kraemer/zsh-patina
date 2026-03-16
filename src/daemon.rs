@@ -210,7 +210,7 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
             SpanStyle::Dynamic(dynamic_style) => match dynamic_style {
                 DynamicStyle::Callable => {
                     format!(
-                        "-DYNAMIC|{} {}|{}\n",
+                        "-DY|{} {}|{}\n",
                         s.start,
                         s.end,
                         highlighter

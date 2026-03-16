@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use rustc_hash::FxHashMap;
 use syntect::{
     easy::HighlightLines,
     highlighting::Theme as SyntectTheme,
@@ -31,7 +32,7 @@ pub struct Span {
     pub style: SpanStyle,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Hash)]
 pub struct StaticStyle {
     /// The foreground color of the span
     pub foreground_color: String,
@@ -115,7 +116,7 @@ pub struct Highlighter {
     theme: Theme,
     scope_mapping: ScopeMapping,
     syntect_theme: SyntectTheme,
-    callable_choices: Vec<(&'static str, StaticStyle)>,
+    callable_choices: Vec<(String, StaticStyle)>,
 }
 
 impl Highlighter {
@@ -154,30 +155,37 @@ impl Highlighter {
                     ThemeSource::File(path) => format!("Failed to parse theme file `{path}'"),
                 })?;
 
-        let mut callable_choices = Vec::new();
+        let mut callable_choices: FxHashMap<StaticStyle, String> = FxHashMap::default();
         if let Some(alias_style) = resolve_static_style("dynamic.callable.alias.shell", &theme) {
-            callable_choices.push(("alias", alias_style));
+            callable_choices.entry(alias_style).or_default().push('a');
         }
         if let Some(builtin_style) = resolve_static_style("dynamic.callable.builtin.shell", &theme)
         {
-            callable_choices.push(("builtin", builtin_style));
+            callable_choices.entry(builtin_style).or_default().push('b');
         }
         if let Some(command_style) = resolve_static_style("dynamic.callable.command.shell", &theme)
         {
-            callable_choices.push(("command", command_style));
+            callable_choices.entry(command_style).or_default().push('c');
         }
         if let Some(function_style) =
             resolve_static_style("dynamic.callable.function.shell", &theme)
         {
-            callable_choices.push(("function", function_style));
+            callable_choices
+                .entry(function_style)
+                .or_default()
+                .push('f');
         }
         if let Some(missing_style) = resolve_static_style("dynamic.callable.missing.shell", &theme)
         {
-            callable_choices.push(("missing", missing_style));
+            callable_choices.entry(missing_style).or_default().push('m');
         }
         if let Some(else_style) = resolve_static_style(CALLABLE, &theme) {
-            callable_choices.push(("else", else_style));
+            callable_choices.entry(else_style).or_default().push('e');
         }
+        let callable_choices = callable_choices
+            .into_iter()
+            .map(|(k, v)| (v, k))
+            .collect::<Vec<_>>();
 
         Ok(Self {
             max_line_length: config.max_line_length,
@@ -191,7 +199,7 @@ impl Highlighter {
     }
 
     /// Return a list of dynamic style choices the plugin has for callables
-    pub fn callable_choices(&self) -> &[(&'static str, StaticStyle)] {
+    pub fn callable_choices(&self) -> &[(String, StaticStyle)] {
         &self.callable_choices
     }
 
