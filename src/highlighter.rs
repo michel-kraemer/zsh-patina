@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     ops::Range,
     time::{Duration, Instant},
 };
@@ -28,6 +29,8 @@ const DYNAMIC_CALLABLE_BUILTIN: &str = "dynamic.callable.builtin.shell";
 const DYNAMIC_CALLABLE_COMMAND: &str = "dynamic.callable.command.shell";
 const DYNAMIC_CALLABLE_FUNCTION: &str = "dynamic.callable.function.shell";
 const DYNAMIC_CALLABLE_MISSING: &str = "dynamic.callable.missing.shell";
+
+const TILDE: &str = "variable.language.tilde.shell";
 
 /// A span of text with a foreground color. The range is specified in terms of
 /// character indices, not byte indices.
@@ -116,6 +119,16 @@ fn resolve_static_style(scope: &str, theme: &Theme) -> Option<StaticStyle> {
     }
 }
 
+fn insert_marker_style(theme: &mut Theme, scope: &str) {
+    if !theme.contains(scope) {
+        if let Some(style) = theme.resolve(scope) {
+            theme.insert(scope.to_string(), style);
+        } else {
+            theme.insert(scope.to_string(), Style::default());
+        }
+    }
+}
+
 pub struct Highlighter {
     max_line_length: usize,
     timeout: Duration,
@@ -137,26 +150,11 @@ impl Highlighter {
 
         // Insert dummy style for callables into the theme. We need it as a
         // marker so Syntect returns a token for it.
-        if !theme.contains(CALLABLE) {
-            if let Some(callable_style) = theme.resolve(CALLABLE) {
-                // Try to fallback to the style for callables so our dynamic
-                // style gets a valid `else` option.
-                theme.insert(CALLABLE.to_string(), callable_style);
-            } else {
-                // It doesn't matter what we insert as a fallback. It will be
-                // overwritten by our dynamic style later anyhow.
-                theme.insert(CALLABLE.to_string(), Style::default());
-            }
-        }
+        insert_marker_style(&mut theme, CALLABLE);
 
-        // Insert dummy style for arguments into the theme
-        if !theme.contains(ARGUMENTS) {
-            if let Some(arguments_style) = theme.resolve(ARGUMENTS) {
-                theme.insert(ARGUMENTS.to_string(), arguments_style);
-            } else {
-                theme.insert(ARGUMENTS.to_string(), Style::default());
-            }
-        }
+        // Do the same for arguments and tilde
+        insert_marker_style(&mut theme, ARGUMENTS);
+        insert_marker_style(&mut theme, TILDE);
 
         let scope_mapping = ScopeMapping::new(&theme);
 
@@ -253,35 +251,50 @@ impl Highlighter {
 
             let ranges = h.highlight_line(line, &self.syntax_set)?;
 
+            let mut last_tilde_range: Option<Range<usize>> = None;
             for r in ranges {
                 // this is O(n) but necessary in case the command contains
                 // multi-byte characters
                 let len = r.1.chars().count();
 
                 if let Some(scope) = self.scope_mapping.decode(&r.0.foreground) {
-                    self.highlight_scope(r.1, i..i + len, scope, pwd, &mut result);
+                    let mut token = Cow::from(r.1);
+                    let mut range = i..i + len;
+
+                    if let Some(ltr) = last_tilde_range.take() {
+                        if ltr.end == range.start
+                            && (scope == ARGUMENTS || scope == CALLABLE)
+                            && !token.is_empty()
+                            && !token.as_bytes()[0].is_ascii_whitespace()
+                        {
+                            let mut new_token = "~".to_string();
+                            new_token.push_str(&token);
+                            token = Cow::from(new_token);
+                            range.start = ltr.start;
+                        } else {
+                            self.highlight_other(ltr, TILDE, &mut result);
+                        }
+                    }
+
+                    match scope {
+                        ARGUMENTS => {
+                            self.highlight_arguments(&token, range, scope, pwd, &mut result);
+                        }
+                        CALLABLE => self.highlight_callable(&token, range, pwd, &mut result),
+                        TILDE => last_tilde_range = Some(range),
+                        _ => self.highlight_other(range, scope, &mut result),
+                    }
                 }
 
                 i += len;
             }
+
+            if let Some(ltr) = last_tilde_range.take() {
+                self.highlight_other(ltr, TILDE, &mut result);
+            }
         }
 
         Ok(result)
-    }
-
-    fn highlight_scope(
-        &self,
-        token: &str,
-        range: Range<usize>,
-        scope: &str,
-        pwd: Option<&str>,
-        result: &mut Vec<Span>,
-    ) {
-        match scope {
-            ARGUMENTS => self.highlight_arguments(token, range, scope, pwd, result),
-            CALLABLE => self.highlight_callable(token, range, pwd, result),
-            _ => self.highlight_other(range, scope, result),
-        }
     }
 
     fn highlight_arguments(
@@ -292,8 +305,8 @@ impl Highlighter {
         pwd: Option<&str>,
         result: &mut Vec<Span>,
     ) {
-        // highlighting argument is only necessary (and possible) if we have a
-        // current working directory
+        // highlighting argument is only necessary if we have a current working
+        // directory
         let Some(pwd) = pwd else {
             // fallback to static styling
             if let Some(style) = resolve_static_style(scope, &self.theme) {
@@ -532,10 +545,8 @@ mod tests {
         fs::write(test_path, "test contents")?;
 
         let highlighter = Highlighter::new(&test_config())?;
-        let highlighted = highlighter.highlight(
-            r#"cp test.txt dest.txt"#,
-            Some(dir.path().to_str().unwrap()),
-        )?;
+        let highlighted =
+            highlighter.highlight("cp test.txt dest.txt", Some(dir.path().to_str().unwrap()))?;
 
         let dynamic_file_style =
             resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
@@ -570,7 +581,7 @@ mod tests {
 
         let highlighter = Highlighter::new(&test_config())?;
         let highlighted =
-            highlighter.highlight(r#"cp test.txt dest"#, Some(dir.path().to_str().unwrap()))?;
+            highlighter.highlight("cp test.txt dest", Some(dir.path().to_str().unwrap()))?;
 
         let dynamic_file_style =
             resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
@@ -596,6 +607,120 @@ mod tests {
                     style: SpanStyle::Static(dynamic_directory_style),
                 }
             ]
+        );
+
+        Ok(())
+    }
+
+    /// Test if a command starting with a tilde is highlighted correctly
+    #[test]
+    fn command_with_tilde() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+
+        let highlighter = Highlighter::new(&test_config())?;
+        let tilde_style = resolve_static_style(TILDE, &highlighter.theme).unwrap();
+        let dynamic_command_style =
+            resolve_static_style(DYNAMIC_CALLABLE_COMMAND, &highlighter.theme).unwrap();
+
+        let highlighted = highlighter.highlight("~", Some(dir.path().to_str().unwrap()))?;
+        assert_eq!(
+            highlighted,
+            vec![Span {
+                start: 0,
+                end: 1,
+                style: SpanStyle::Static(tilde_style.clone())
+            }]
+        );
+
+        let highlighted = highlighter.highlight("~/", Some(dir.path().to_str().unwrap()))?;
+        assert_eq!(
+            highlighted,
+            vec![Span {
+                start: 0,
+                end: 2,
+                style: SpanStyle::Static(dynamic_command_style)
+            }]
+        );
+
+        let highlighted = highlighter.highlight("~ echo", Some(dir.path().to_str().unwrap()))?;
+        assert_eq!(
+            highlighted,
+            vec![Span {
+                start: 0,
+                end: 1,
+                style: SpanStyle::Static(tilde_style)
+            }]
+        );
+
+        let highlighted =
+            highlighter.highlight("~doesnotexist", Some(dir.path().to_str().unwrap()))?;
+        assert_eq!(
+            highlighted,
+            vec![Span {
+                start: 0,
+                end: 13,
+                style: SpanStyle::Dynamic(DynamicStyle::Callable)
+            }]
+        );
+
+        Ok(())
+    }
+
+    /// Test if a path starting with a tilde is highlighted correctly
+    #[test]
+    fn path_with_tilde() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+
+        let highlighter = Highlighter::new(&test_config())?;
+        let tilde_style = resolve_static_style(TILDE, &highlighter.theme).unwrap();
+        let dynamic_directory_style =
+            resolve_static_style(DYNAMIC_PATH_DIRECTORY, &highlighter.theme).unwrap();
+
+        let highlighted = highlighter.highlight("ls ~", Some(dir.path().to_str().unwrap()))?;
+        assert_eq!(
+            highlighted,
+            vec![
+                Span {
+                    start: 0,
+                    end: 2,
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                },
+                Span {
+                    start: 3,
+                    end: 4,
+                    style: SpanStyle::Static(tilde_style)
+                }
+            ]
+        );
+
+        let highlighted = highlighter.highlight("ls ~/", Some(dir.path().to_str().unwrap()))?;
+        assert_eq!(
+            highlighted,
+            vec![
+                Span {
+                    start: 0,
+                    end: 2,
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                },
+                Span {
+                    start: 3,
+                    end: 5,
+                    style: SpanStyle::Static(dynamic_directory_style)
+                }
+            ]
+        );
+
+        let highlighted = highlighter.highlight(
+            "ls ~/this/path/does/not/exist",
+            Some(dir.path().to_str().unwrap()),
+        )?;
+        assert_eq!(
+            highlighted,
+            vec![Span {
+                start: 0,
+                end: 2,
+                style: SpanStyle::Dynamic(DynamicStyle::Callable)
+            }]
         );
 
         Ok(())
