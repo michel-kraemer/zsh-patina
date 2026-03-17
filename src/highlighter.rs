@@ -1,8 +1,5 @@
 use std::{
-    fs,
     ops::Range,
-    os::unix::fs::PermissionsExt,
-    path::Path,
     time::{Duration, Instant},
 };
 
@@ -17,11 +14,13 @@ use syntect::{
 
 use crate::{
     HighlightingConfig,
+    path::{PathType, is_path_executable, path_type},
     theme::{ScopeMapping, Style, Theme, ThemeSource},
 };
 
 const ARGUMENTS: &str = "meta.function-call.arguments.shell";
-const DYNAMIC_PATH: &str = "dynamic.path.shell";
+const DYNAMIC_PATH_DIRECTORY: &str = "dynamic.path.directory.shell";
+const DYNAMIC_PATH_FILE: &str = "dynamic.path.file.shell";
 
 const CALLABLE: &str = "variable.function.shell";
 const DYNAMIC_CALLABLE_ALIAS: &str = "dynamic.callable.alias.shell";
@@ -118,41 +117,6 @@ fn resolve_static_style(scope: &str, theme: &Theme) -> Option<StaticStyle> {
             bold: style.bold,
             underline: style.underline,
         })
-    }
-}
-
-/// Check if the string refers to an existing file/directory. If the path is
-/// relative, it is resolved against the provided `pwd`.
-fn is_path(path: &str, pwd: &str) -> bool {
-    let p = Path::new(path);
-    let full_path = if p.is_absolute() {
-        p.to_path_buf()
-    } else {
-        Path::new(pwd).join(p)
-    };
-    full_path.exists()
-}
-
-/// Check if the given path is an executable file. If the path is relative, it
-/// is resolved against the provided `pwd`. If the path is a directory, it is
-/// only considered executable if it ends with a slash.
-fn is_path_executable(path: &str, pwd: &str) -> bool {
-    let p = Path::new(path);
-    let full_path = if p.is_absolute() {
-        p.to_path_buf()
-    } else {
-        Path::new(pwd).join(p)
-    };
-
-    let Ok(metadata) = fs::metadata(&full_path) else {
-        return false;
-    };
-
-    let is_executable = (metadata.permissions().mode() & 0o111) != 0;
-    if metadata.is_dir() {
-        is_executable && path.ends_with('/')
-    } else {
-        is_executable
     }
 }
 
@@ -329,15 +293,8 @@ impl Highlighter {
         result: &mut Vec<Span>,
     ) {
         // highlighting argument is only necessary (and possible) if we have a
-        // current working directory and there is a dynamic style for it
-        let ppwd;
-        let dynamic_path_style;
-        if let Some(p) = pwd
-            && let Some(d) = resolve_static_style(DYNAMIC_PATH, &self.theme)
-        {
-            ppwd = p;
-            dynamic_path_style = d;
-        } else {
+        // current working directory
+        let Some(pwd) = pwd else {
             // fallback to static styling
             if let Some(style) = resolve_static_style(scope, &self.theme) {
                 result.push(Span {
@@ -360,23 +317,29 @@ impl Highlighter {
                 .position(|b| b.is_ascii_whitespace() != is_whitespace)
                 .map_or(bytes.len(), |p| start + p);
 
-            if !is_whitespace && is_path(&token[start..end], ppwd) {
+            let style = if !is_whitespace && let Some(t) = path_type(&token[start..end], pwd) {
                 // every non-whitespace sub-token that is a path should be
                 // highlighted with the dynamic path style
+                let dynamic_scope = match t {
+                    PathType::File => DYNAMIC_PATH_FILE,
+                    PathType::Directory => DYNAMIC_PATH_DIRECTORY,
+                };
+                resolve_static_style(dynamic_scope, &self.theme)
+            } else {
+                None
+            };
+
+            let style = style.or_else(|| {
+                // fallback to the normal style for this token
+                resolve_static_style(scope, &self.theme)
+            });
+
+            if let Some(style) = style {
                 result.push(Span {
                     start: range.start + start,
                     end: range.start + end,
-                    style: SpanStyle::Static(dynamic_path_style.clone()),
+                    style: SpanStyle::Static(style),
                 });
-            } else {
-                // fallback to the normal style for this token
-                if let Some(style) = resolve_static_style(scope, &self.theme) {
-                    result.push(Span {
-                        start: range.start + start,
-                        end: range.start + end,
-                        style: SpanStyle::Static(style),
-                    });
-                }
             }
 
             start = end;
@@ -536,6 +499,8 @@ impl Highlighter {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
     use anyhow::Result;
 
@@ -559,9 +524,9 @@ mod tests {
         Ok(())
     }
 
-    /// Test if a command referring to a path is highlighted correctly
+    /// Test if a command referring to a file is highlighted correctly
     #[test]
-    fn argument_is_path() -> Result<()> {
+    fn argument_is_file() -> Result<()> {
         let dir = tempfile::tempdir()?;
         let test_path = dir.path().join("test.txt");
         fs::write(test_path, "test contents")?;
@@ -572,7 +537,8 @@ mod tests {
             Some(dir.path().to_str().unwrap()),
         )?;
 
-        let dynamic_path_style = resolve_static_style(DYNAMIC_PATH, &highlighter.theme).unwrap();
+        let dynamic_file_style =
+            resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
 
         assert_eq!(
             highlighted,
@@ -585,7 +551,49 @@ mod tests {
                 Span {
                     start: 3,
                     end: 11,
-                    style: SpanStyle::Static(dynamic_path_style),
+                    style: SpanStyle::Static(dynamic_file_style),
+                }
+            ]
+        );
+
+        Ok(())
+    }
+
+    /// Test if a command referring to a directory is highlighted correctly
+    #[test]
+    fn argument_is_directory() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let test_path = dir.path().join("test.txt");
+        fs::write(test_path, "test contents")?;
+        let dest_path = dir.path().join("dest");
+        fs::create_dir(dest_path)?;
+
+        let highlighter = Highlighter::new(&test_config())?;
+        let highlighted =
+            highlighter.highlight(r#"cp test.txt dest"#, Some(dir.path().to_str().unwrap()))?;
+
+        let dynamic_file_style =
+            resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
+        let dynamic_directory_style =
+            resolve_static_style(DYNAMIC_PATH_DIRECTORY, &highlighter.theme).unwrap();
+
+        assert_eq!(
+            highlighted,
+            vec![
+                Span {
+                    start: 0,
+                    end: 2,
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                },
+                Span {
+                    start: 3,
+                    end: 11,
+                    style: SpanStyle::Static(dynamic_file_style),
+                },
+                Span {
+                    start: 12,
+                    end: 16,
+                    style: SpanStyle::Static(dynamic_directory_style),
                 }
             ]
         );

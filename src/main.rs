@@ -26,6 +26,7 @@ mod check;
 mod color;
 mod daemon;
 mod highlighter;
+mod path;
 mod theme;
 
 #[derive(Parser, Debug)]
