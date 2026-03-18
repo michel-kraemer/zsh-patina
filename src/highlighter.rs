@@ -1,5 +1,4 @@
 use std::{
-    borrow::Cow,
     ops::Range,
     time::{Duration, Instant},
 };
@@ -17,6 +16,7 @@ use crate::{
     HighlightingConfig,
     path::{PathType, is_path_executable, path_type},
     theme::{ScopeMapping, Style, Theme, ThemeSource},
+    unbackslash::{Sequence, Unbackslash},
 };
 
 const ARGUMENTS: &str = "meta.function-call.arguments.shell";
@@ -30,6 +30,7 @@ const DYNAMIC_CALLABLE_COMMAND: &str = "dynamic.callable.command.shell";
 const DYNAMIC_CALLABLE_FUNCTION: &str = "dynamic.callable.function.shell";
 const DYNAMIC_CALLABLE_MISSING: &str = "dynamic.callable.missing.shell";
 
+const CHARACTER_ESCAPE: &str = "constant.character.escape.shell";
 const TILDE: &str = "variable.language.tilde.shell";
 
 /// A span of text with a foreground color. The range is specified in terms of
@@ -70,6 +71,12 @@ pub enum DynamicStyle {
 pub enum SpanStyle {
     Static(StaticStyle),
     Dynamic(DynamicStyle),
+}
+
+struct Group<'a> {
+    char_range_in_command: Range<usize>,
+    byte_range_in_line: Range<usize>,
+    scope: &'a str,
 }
 
 /// A token with a scope, line and column number, and range in the input command
@@ -152,8 +159,9 @@ impl Highlighter {
         // marker so Syntect returns a token for it.
         insert_marker_style(&mut theme, CALLABLE);
 
-        // Do the same for arguments and tilde
+        // Do the same for other scopes
         insert_marker_style(&mut theme, ARGUMENTS);
+        insert_marker_style(&mut theme, CHARACTER_ESCAPE);
         insert_marker_style(&mut theme, TILDE);
 
         let scope_mapping = ScopeMapping::new(&theme);
@@ -251,57 +259,143 @@ impl Highlighter {
 
             let ranges = h.highlight_line(line, &self.syntax_set)?;
 
-            let mut last_tilde_range: Option<Range<usize>> = None;
+            let mut group: Option<Group> = None;
+
+            let mut bi = 0;
             for r in ranges {
+                if r.1.is_empty() {
+                    continue;
+                }
+
                 // this is O(n) but necessary in case the command contains
                 // multi-byte characters
                 let len = r.1.chars().count();
 
                 if let Some(scope) = self.scope_mapping.decode(&r.0.foreground) {
-                    let mut token = Cow::from(r.1);
-                    let mut range = i..i + len;
-
-                    if let Some(ltr) = last_tilde_range.take() {
-                        if ltr.end == range.start
-                            && (scope == ARGUMENTS || scope == CALLABLE)
-                            && !token.is_empty()
-                            && !token.as_bytes()[0].is_ascii_whitespace()
-                        {
-                            let mut new_token = "~".to_string();
-                            new_token.push_str(&token);
-                            token = Cow::from(new_token);
-                            range.start = ltr.start;
-                        } else {
-                            self.highlight_other(ltr, TILDE, &mut result);
-                        }
-                    }
+                    let range = i..i + len;
+                    let byte_range = bi..bi + r.1.len();
 
                     match scope {
                         ARGUMENTS => {
-                            self.highlight_arguments(&token, range, scope, pwd, &mut result);
+                            if let Some(group) = &mut group
+                                && group.byte_range_in_line.end == bi
+                                && (group.scope == ARGUMENTS
+                                    || group.scope == CHARACTER_ESCAPE
+                                    || group.scope == TILDE)
+                                && !r.1.as_bytes()[0].is_ascii_whitespace()
+                            {
+                                group.byte_range_in_line.end = byte_range.end;
+                                group.char_range_in_command.end = range.end;
+                                group.scope = ARGUMENTS;
+                            } else {
+                                self.flush_group(&mut group, line, pwd, &mut result);
+                                group = Some(Group {
+                                    char_range_in_command: range,
+                                    byte_range_in_line: byte_range,
+                                    scope: ARGUMENTS,
+                                });
+                            }
                         }
-                        CALLABLE => self.highlight_callable(&token, range, pwd, &mut result),
-                        TILDE => last_tilde_range = Some(range),
-                        _ => self.highlight_other(range, scope, &mut result),
+
+                        CALLABLE => {
+                            if let Some(group) = &mut group
+                                && group.byte_range_in_line.end == bi
+                                && (group.scope == CALLABLE
+                                    || group.scope == CHARACTER_ESCAPE
+                                    || group.scope == TILDE)
+                                && !r.1.as_bytes()[0].is_ascii_whitespace()
+                            {
+                                group.byte_range_in_line.end = byte_range.end;
+                                group.char_range_in_command.end = range.end;
+                                group.scope = CALLABLE;
+                            } else {
+                                self.flush_group(&mut group, line, pwd, &mut result);
+                                group = Some(Group {
+                                    char_range_in_command: range,
+                                    byte_range_in_line: byte_range,
+                                    scope: CALLABLE,
+                                });
+                            }
+                        }
+
+                        CHARACTER_ESCAPE => {
+                            if let Some(group) = &mut group
+                                && group.byte_range_in_line.end == bi
+                                && (group.scope == ARGUMENTS
+                                    || group.scope == CALLABLE
+                                    || group.scope == CHARACTER_ESCAPE
+                                    || group.scope == TILDE)
+                            {
+                                group.byte_range_in_line.end = byte_range.end;
+                                group.char_range_in_command.end = range.end;
+                            } else {
+                                self.flush_group(&mut group, line, pwd, &mut result);
+                                group = Some(Group {
+                                    char_range_in_command: range,
+                                    byte_range_in_line: byte_range,
+                                    scope: CHARACTER_ESCAPE,
+                                });
+                            }
+                        }
+
+                        TILDE => {
+                            self.flush_group(&mut group, line, pwd, &mut result);
+                            group = Some(Group {
+                                char_range_in_command: range,
+                                byte_range_in_line: byte_range,
+                                scope: TILDE,
+                            });
+                        }
+
+                        _ => {
+                            self.flush_group(&mut group, line, pwd, &mut result);
+                            self.highlight_other(range, scope, &mut result);
+                        }
                     }
                 }
 
                 i += len;
+                bi += r.1.len();
             }
 
-            if let Some(ltr) = last_tilde_range.take() {
-                self.highlight_other(ltr, TILDE, &mut result);
-            }
+            self.flush_group(&mut group, line, pwd, &mut result);
         }
 
         Ok(result)
+    }
+
+    fn flush_group(
+        &self,
+        group: &mut Option<Group>,
+        line: &str,
+        pwd: Option<&str>,
+        result: &mut Vec<Span>,
+    ) {
+        if let Some(group) = group.take() {
+            match group.scope {
+                ARGUMENTS => self.highlight_arguments(
+                    &line[group.byte_range_in_line],
+                    group.char_range_in_command,
+                    pwd,
+                    result,
+                ),
+
+                CALLABLE => self.highlight_callable(
+                    &line[group.byte_range_in_line],
+                    group.char_range_in_command,
+                    pwd,
+                    result,
+                ),
+
+                _ => self.highlight_other(group.char_range_in_command, group.scope, result),
+            }
+        }
     }
 
     fn highlight_arguments(
         &self,
         token: &str,
         range: Range<usize>,
-        scope: &str,
         pwd: Option<&str>,
         result: &mut Vec<Span>,
     ) {
@@ -309,7 +403,7 @@ impl Highlighter {
         // directory
         let Some(pwd) = pwd else {
             // fallback to static styling
-            if let Some(style) = resolve_static_style(scope, &self.theme) {
+            if let Some(style) = resolve_static_style(ARGUMENTS, &self.theme) {
                 result.push(Span {
                     start: range.start,
                     end: range.end,
@@ -322,40 +416,43 @@ impl Highlighter {
         // split the current token into sub-tokens of consecutive whitespaces or
         // consecutive non-whitespaces
         let mut start = 0;
-        let bytes = token.as_bytes();
-        while start < bytes.len() {
-            let is_whitespace = bytes[start].is_ascii_whitespace();
-            let end = bytes[start..]
-                .iter()
-                .position(|b| b.is_ascii_whitespace() != is_whitespace)
-                .map_or(bytes.len(), |p| start + p);
+        for seq in token.unbackslash_split() {
+            let (style, len) = match seq {
+                Sequence::Word {
+                    chars: w,
+                    original_len,
+                } => {
+                    let s = if let Some(t) = path_type(&w, pwd) {
+                        // every non-whitespace sequence that is a path should
+                        // be highlighted with the dynamic path style
+                        let dynamic_scope = match t {
+                            PathType::File => DYNAMIC_PATH_FILE,
+                            PathType::Directory => DYNAMIC_PATH_DIRECTORY,
+                        };
+                        resolve_static_style(dynamic_scope, &self.theme)
+                    } else {
+                        None
+                    };
+                    (s, original_len)
+                }
 
-            let style = if !is_whitespace && let Some(t) = path_type(&token[start..end], pwd) {
-                // every non-whitespace sub-token that is a path should be
-                // highlighted with the dynamic path style
-                let dynamic_scope = match t {
-                    PathType::File => DYNAMIC_PATH_FILE,
-                    PathType::Directory => DYNAMIC_PATH_DIRECTORY,
-                };
-                resolve_static_style(dynamic_scope, &self.theme)
-            } else {
-                None
+                Sequence::Whitespace(w) => (None, w.chars().count()),
             };
 
             let style = style.or_else(|| {
                 // fallback to the normal style for this token
-                resolve_static_style(scope, &self.theme)
+                resolve_static_style(ARGUMENTS, &self.theme)
             });
 
             if let Some(style) = style {
                 result.push(Span {
                     start: range.start + start,
-                    end: range.start + end,
+                    end: range.start + start + len,
                     style: SpanStyle::Static(style),
                 });
             }
 
-            start = end;
+            start += len;
         }
     }
 
@@ -368,7 +465,7 @@ impl Highlighter {
     ) {
         let style = if let Some(pwd) = pwd
             && token.contains('/')
-            && is_path_executable(token, pwd)
+            && is_path_executable(&token.unbackslash(), pwd)
         {
             // We have a current working directory and the token is a path to an
             // executable. Highlight it as a command if this style is available

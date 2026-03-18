@@ -28,6 +28,7 @@ mod daemon;
 mod highlighter;
 mod path;
 mod theme;
+mod unbackslash;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
