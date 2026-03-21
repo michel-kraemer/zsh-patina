@@ -25,7 +25,7 @@ _zsh_patina_resolve_callable() {
     fi
 }
 
-_zsh_patina_encode_path() {
+_zsh_patina_encode_string() {
     # fast path
     [[ $1 != *[%$'\t\n\r\f ']* ]] && { REPLY="$1"; return }
 
@@ -36,6 +36,20 @@ _zsh_patina_encode_path() {
     s="${s//$'\n'/%0A}"
     s="${s//$'\r'/%0D}"
     s="${s//$'\f'/%0C}"
+
+    REPLY="$s"
+}
+
+_zsh_patina_decode_string() {
+    # fast path
+    [[ $1 != *%* ]] && { REPLY="$1"; return }
+
+    local s="${1//'%0C'/$'\f'}"
+    s="${s//'%0D'/$'\r'}"
+    s="${s//'%0A'/$'\n'}"
+    s="${s//'%09'/$'\t'}"
+    s="${s//'%20'/ }"
+    s="${s//'%25'/%}"
 
     REPLY="$s"
 }
@@ -115,16 +129,24 @@ _zsh_patina() {
     while IFS= read -r -u $fd line; do
         [[ -z "$line" ]] && continue
 
-        if [[ "$line" == "-DY|"* ]]; then
-            # Strip "-DY|" prefix and split by "|"
-            local remainder="${line#-DY|}"
-            local range="${remainder%%|*}"
-            local choices_raw="${remainder#*|}"
+        if [[ "$line" == "-DY"* ]]; then
+            # Strip "-DY" prefix and split by whitespace
+            local remainder="${line#-DY}"
+            local args=(${(@s/ /)remainder})
+
+            _zsh_patina_decode_string $args[1]
+            local range_start=$REPLY
+            _zsh_patina_decode_string $args[2]
+            local range_end=$REPLY
+            _zsh_patina_decode_string $args[3]
+            local parsed_callable=$REPLY
+            _zsh_patina_decode_string $args[4]
+            local choices_raw=$REPLY
 
             # Parse choices_raw ("key:val;key:val;...") into associative array.
             # Split keys into individual characters.
             local -A choices=()
-            for entry in "${(@s[;])choices_raw}"; do
+            for entry in "${(@s/;/)choices_raw}"; do
                 local key="${entry%%:*}"
                 local value="${entry#*:}"
                 for ch in "${(@s::)key}"; do
@@ -132,15 +154,12 @@ _zsh_patina() {
                 done
             done
 
-            read -r range_start range_end <<< "$range"
-            local substring="${BUFFER:$range_start:$(( range_end - range_start ))}"
-
-            _zsh_patina_resolve_callable $substring
+            _zsh_patina_resolve_callable $parsed_callable
 
             if (( $+choices[$REPLY] )); then
-                region_highlight+=("$range ${choices[$REPLY]} memo=zsh_patina")
+                region_highlight+=("$range_start $range_end ${choices[$REPLY]} memo=zsh_patina")
             elif (( $+choices[e] )); then
-                region_highlight+=("$range ${choices[e]} memo=zsh_patina")
+                region_highlight+=("$range_start $range_end ${choices[e]} memo=zsh_patina")
             fi
         else
             region_highlight+=("$line memo=zsh_patina")
@@ -160,7 +179,7 @@ _zsh_patina() {
 
 # store and update the current working directory in an encoded form
 _zsh_patina_chpwd() {
-    _zsh_patina_encode_path $PWD
+    _zsh_patina_encode_string $PWD
     _ZSH_PATINA_ENCODED_PWD=$REPLY
 }
 

@@ -80,9 +80,9 @@ pub struct StaticStyle {
     pub underline: bool,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum DynamicStyle {
-    Callable,
+    Callable { parsed_callable: String },
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]

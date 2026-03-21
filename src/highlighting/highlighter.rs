@@ -227,7 +227,7 @@ fn mix_styles(base: &SpanStyle, mixin: &SpanStyle) -> SpanStyle {
             underline: if m.underline { true } else { b.underline },
         }),
 
-        (_, SpanStyle::Dynamic(m)) => SpanStyle::Dynamic(*m),
+        (_, SpanStyle::Dynamic(m)) => SpanStyle::Dynamic(m.clone()),
 
         // this should actually be unreachable since base should always only
         // contain static span styles
@@ -618,7 +618,9 @@ mod tests {
             vec![Span {
                 start: 0,
                 end: 4,
-                style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                    parsed_callable: "echo".to_string()
+                })
             }]
         );
         Ok(())
@@ -655,7 +657,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "cp".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -672,7 +676,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "cp".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -690,7 +696,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "cp".to_string()
+                    })
                 },
                 Span {
                     start: 5,
@@ -712,7 +720,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "cp".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -734,7 +744,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "cp".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -761,7 +773,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "cp".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -778,7 +792,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "cp".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -805,7 +821,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "cp".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -822,7 +840,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "cp".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -859,7 +879,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "cp".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -880,6 +902,7 @@ mod tests {
     /// Test if a command starting with a tilde is highlighted correctly
     #[test]
     fn command_with_tilde() -> Result<()> {
+        let home = std::env::var("HOME").unwrap();
         let dir = tempfile::tempdir()?;
         let pwd = Some(dir.path().to_str().unwrap());
 
@@ -893,7 +916,9 @@ mod tests {
             vec![Span {
                 start: 0,
                 end: 1,
-                style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                    parsed_callable: home.clone()
+                })
             }]
         );
 
@@ -913,7 +938,9 @@ mod tests {
             vec![Span {
                 start: 0,
                 end: 1,
-                style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                    parsed_callable: home.clone()
+                })
             }]
         );
 
@@ -923,7 +950,9 @@ mod tests {
             vec![Span {
                 start: 0,
                 end: 13,
-                style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                    parsed_callable: "~doesnotexist".to_string()
+                })
             }]
         );
 
@@ -933,7 +962,9 @@ mod tests {
             vec![Span {
                 start: 0,
                 end: 3,
-                style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                    parsed_callable: "~".to_string()
+                })
             }]
         );
 
@@ -943,7 +974,9 @@ mod tests {
             vec![Span {
                 start: 0,
                 end: 4,
-                style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                    parsed_callable: "~/".to_string()
+                })
             }]
         );
 
@@ -973,7 +1006,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "ls".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -990,7 +1025,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "ls".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -1012,7 +1049,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "ls".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -1029,7 +1068,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "ls".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -1046,7 +1087,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "ls".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -1063,7 +1106,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "ls".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -1080,7 +1125,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "ls".to_string()
+                    })
                 },
                 Span {
                     start: 8,
@@ -1106,7 +1153,9 @@ mod tests {
             vec![Span {
                 start: 0,
                 end: 4,
-                style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                    parsed_callable: "ls".to_string()
+                })
             }]
         );
 
@@ -1116,7 +1165,9 @@ mod tests {
             vec![Span {
                 start: 0,
                 end: 4,
-                style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                    parsed_callable: "ls".to_string()
+                })
             }]
         );
 
@@ -1183,7 +1234,9 @@ mod tests {
             vec![Span {
                 start: 0,
                 end: 10,
-                style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                    parsed_callable: "script.sh".to_string()
+                })
             }]
         );
 
@@ -1216,7 +1269,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 5,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "touch".to_string()
+                    })
                 },
                 Span {
                     start: 6,
@@ -1255,7 +1310,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "cp".to_string()
+                    })
                 },
                 Span {
                     start: 7,
@@ -1275,7 +1332,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "cp".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -1328,7 +1387,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "cp".to_string()
+                    })
                 },
                 Span {
                     start: 7,
@@ -1346,7 +1407,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "cp".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -1364,7 +1427,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "cp".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -1382,7 +1447,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "cp".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -1409,7 +1476,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "cp".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -1436,7 +1505,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "cp".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -1454,7 +1525,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "cp".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -1472,7 +1545,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "cp".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -1500,7 +1575,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "cp".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -1601,7 +1678,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "cp".to_string()
+                    })
                 },
                 Span {
                     start: 3,
@@ -1629,7 +1708,9 @@ mod tests {
                 Span {
                     start: 0,
                     end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable)
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "cp".to_string()
+                    })
                 },
                 Span {
                     start: 3,

@@ -82,7 +82,7 @@ fn format_static_style(style: &StaticStyle) -> String {
 
 /// Decode a path that was encoded by our Zsh script with percent-encoding for
 /// ASCII whitespace characters
-fn decode_path(s: &str) -> String {
+fn decode_string(s: &str) -> String {
     let bytes = s.as_bytes();
     let mut out = String::with_capacity(s.len());
     let mut i = 0;
@@ -106,6 +106,33 @@ fn decode_path(s: &str) -> String {
         }
         out.push(bytes[i] as char);
         i += 1;
+    }
+    out
+}
+
+fn encode_string(input: &str) -> String {
+    // Fast path: no encoding needed
+    if !input
+        .bytes()
+        .any(|b| matches!(b, b'%' | b' ' | b'\t' | b'\n' | b'\r' | b'\x0C'))
+    {
+        return input.to_owned();
+    }
+
+    let mut out = String::with_capacity(input.len() + input.len() / 4);
+    for b in input.bytes() {
+        match b {
+            b'%' => out.push_str("%25"),
+            b' ' => out.push_str("%20"),
+            b'\t' => out.push_str("%09"),
+            b'\n' => out.push_str("%0A"),
+            b'\r' => out.push_str("%0D"),
+            b'\x0C' => out.push_str("%0C"),
+            // Safe to cast: all encoded chars are ASCII, and multi-byte UTF-8
+            // sequences (bytes >= 0x80) pass through unchanged, so valid UTF-8
+            // in means valid UTF-8 out.
+            _ => out.push(b as char),
+        }
     }
     out
 }
@@ -155,7 +182,7 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
                     .context("Unable to parse number of lines in buffer")?;
             }
             "pwd" => {
-                pwd = Some(decode_path(value));
+                pwd = Some(decode_string(value));
             }
             _ => {}
         }
@@ -258,7 +285,7 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
                 }
             }
             SpanStyle::Dynamic(dynamic_style) => match dynamic_style {
-                DynamicStyle::Callable => {
+                DynamicStyle::Callable { parsed_callable } => {
                     let all_fss = highlighter
                         .callable_choices()
                         .iter()
@@ -271,7 +298,13 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
                     if all_fss.is_empty() {
                         None
                     } else {
-                        Some(format!("-DY|{} {}|{}\n", s.start, s.end, all_fss))
+                        Some(format!(
+                            "-DY{} {} {} {}\n",
+                            s.start,
+                            s.end,
+                            encode_string(&parsed_callable),
+                            encode_string(&all_fss)
+                        ))
                     }
                 }
             },

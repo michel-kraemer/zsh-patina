@@ -150,7 +150,9 @@ impl DynamicTokenGroup {
                     resolve_static_style(CALLABLE, theme).map(SpanStyle::Static)
                 }
             } else {
-                Some(SpanStyle::Dynamic(DynamicStyle::Callable))
+                Some(SpanStyle::Dynamic(DynamicStyle::Callable {
+                    parsed_callable: p,
+                }))
             };
 
             if let Some(span_style) = span_style {
