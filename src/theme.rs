@@ -162,17 +162,6 @@ impl Theme {
         })
     }
 
-    /// Return `true` if the theme contains a style for the given scope
-    pub fn contains(&self, scope: &str) -> bool {
-        self.scopes.contains_key(scope)
-    }
-
-    /// Insert a scope into the theme and return the previous style for the
-    /// scope if it existed
-    pub fn insert(&mut self, scope: String, style: Style) -> Option<Style> {
-        self.scopes.insert(scope, style)
-    }
-
     /// Resolve a scope to a color by looking it up in the theme. If the scope
     /// is not found, its parent scopes are tried until a match is found or
     /// there are no more parent scopes left.

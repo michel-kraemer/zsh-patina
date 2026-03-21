@@ -6,17 +6,18 @@ use std::{
 use anyhow::{Context, Result};
 use rustc_hash::FxHashMap;
 use syntect::{
-    easy::HighlightLines,
-    highlighting::Theme as SyntectTheme,
-    parsing::{ClearAmount, ParseState, ScopeStackOp, SyntaxSet},
+    highlighting::{
+        HighlightIterator, HighlightState, Highlighter as SyntectHighlighter, Theme as SyntectTheme,
+    },
+    parsing::{ClearAmount, ParseState, ScopeStack, ScopeStackOp, SyntaxSet},
     util::LinesWithEndings,
 };
 
-use super::dynamic::*;
 use super::*;
 use crate::{
     HighlightingConfig,
-    theme::{ScopeMapping, Style, Theme, ThemeSource},
+    highlighting::dynamic::DynamicTokenGroupBuilder,
+    theme::{ScopeMapping, Theme, ThemeSource},
 };
 
 /// If the command starts with a prefix keyword (e.g. `time`), returns the byte
@@ -28,131 +29,6 @@ fn find_prefix_split(command: &str) -> Option<usize> {
     } else {
         None
     }
-}
-
-fn insert_marker_style(theme: &mut Theme, scope: &str) {
-    if !theme.contains(scope) {
-        if let Some(style) = theme.resolve(scope) {
-            theme.insert(scope.to_string(), style);
-        } else {
-            theme.insert(scope.to_string(), Style::default());
-        }
-    }
-}
-
-fn insert_marker_style_with_fallback(theme: &mut Theme, scope: &str, fallbacks: &[&str]) {
-    if !theme.contains(scope) {
-        for f in fallbacks {
-            if let Some(style) = theme.resolve(f) {
-                theme.insert(scope.to_string(), style);
-                return;
-            }
-        }
-        theme.insert(scope.to_string(), Style::default());
-    }
-}
-
-pub fn update_groups(
-    scope: &str,
-    range: &Range<usize>,
-    byte_range: &Range<usize>,
-    groups: &mut Vec<DynamicTokenGroup>,
-) {
-    let Ok(dynamic_scope) = DynamicScope::try_from(scope) else {
-        return;
-    };
-
-    // try to extend last group
-    let dynamic_type = match scope {
-        ARGUMENTS
-        | STRING_QUOTED_SINGLE_ARGUMENTS
-        | STRING_QUOTED_SINGLE_ANSI_ARGUMENTS
-        | STRING_QUOTED_DOUBLE_ARGUMENTS
-        | STRING_QUOTED_BEGIN_ARGUMENTS
-        | STRING_QUOTED_END_ARGUMENTS
-        | CHARACTER_ESCAPE_ARGUMENTS
-        | TILDE_ARGUMENTS => {
-            if let Some(group) = groups.last_mut()
-                && group.range.end == range.start
-                && group.dynamic_type != DynamicType::Callable
-            {
-                group.range.end = range.end;
-                group.byte_range.end = byte_range.end;
-                group.dynamic_type = DynamicType::Arguments;
-                group
-                    .tokens
-                    .push(DynamicToken::new(range, byte_range, dynamic_scope));
-                return;
-            } else {
-                DynamicType::Arguments
-            }
-        }
-
-        CALLABLE
-        | STRING_QUOTED_SINGLE_CALLABLE
-        | STRING_QUOTED_SINGLE_ANSI_CALLABLE
-        | STRING_QUOTED_DOUBLE_CALLABLE
-        | STRING_QUOTED_BEGIN_CALLABLE
-        | STRING_QUOTED_END_CALLABLE
-        | TILDE_CALLABLE => {
-            if let Some(group) = groups.last_mut()
-                && group.range.end == range.start
-                && group.dynamic_type != DynamicType::Arguments
-            {
-                group.range.end = range.end;
-                group.byte_range.end = byte_range.end;
-                group.dynamic_type = DynamicType::Callable;
-                group
-                    .tokens
-                    .push(DynamicToken::new(range, byte_range, dynamic_scope));
-                return;
-            } else {
-                DynamicType::Callable
-            }
-        }
-
-        // parser cannot differentiate between normal unquoted character escapes
-        // and those that are at the beginning of a callable
-        CHARACTER_ESCAPE => {
-            if let Some(group) = groups.last_mut()
-                && group.range.end == range.start
-            {
-                group.range.end = range.end;
-                group.byte_range.end = byte_range.end;
-                group
-                    .tokens
-                    .push(DynamicToken::new(range, byte_range, dynamic_scope));
-                return;
-            } else {
-                DynamicType::Unknown
-            }
-        }
-
-        // this can only happen if we're inside an ANSI-quoted string, so we
-        // already know if the group is a command or arguments
-        CHARACTER_ESCAPE_QUOTED_ANSI => {
-            if let Some(group) = groups.last_mut()
-                && group.range.end == range.start
-            {
-                group.range.end = range.end;
-                group.byte_range.end = byte_range.end;
-                group
-                    .tokens
-                    .push(DynamicToken::new(range, byte_range, dynamic_scope));
-            }
-            return;
-        }
-
-        _ => return,
-    };
-
-    // create new group
-    groups.push(DynamicTokenGroup::new(
-        range,
-        byte_range,
-        dynamic_type,
-        dynamic_scope,
-    ));
 }
 
 fn mix_spans(base: Vec<Span>, mixins: Vec<Span>) -> Vec<Span> {
@@ -243,6 +119,7 @@ pub struct Highlighter {
     scope_mapping: ScopeMapping,
     syntect_theme: SyntectTheme,
     callable_choices: Vec<(String, StaticStyle)>,
+    dynamic_token_group_builder: DynamicTokenGroupBuilder,
 }
 
 impl Highlighter {
@@ -252,80 +129,8 @@ impl Highlighter {
         ))
         .expect("Unable to load shell syntax");
 
-        let mut theme = Theme::load(&config.theme)?;
-
-        // Insert dummy style for callables into the theme. We need it as a
-        // marker so Syntect returns a token for it.
-        insert_marker_style(&mut theme, CALLABLE);
-
-        // Do the same for other scopes
-        insert_marker_style(&mut theme, ARGUMENTS);
-        insert_marker_style(&mut theme, CHARACTER_ESCAPE);
-        insert_marker_style_with_fallback(
-            &mut theme,
-            CHARACTER_ESCAPE_ARGUMENTS,
-            &[CHARACTER_ESCAPE],
-        );
-        insert_marker_style_with_fallback(
-            &mut theme,
-            CHARACTER_ESCAPE_QUOTED_ANSI,
-            &[CHARACTER_ESCAPE],
-        );
-        insert_marker_style_with_fallback(&mut theme, TILDE_ARGUMENTS, &[TILDE]);
-        insert_marker_style_with_fallback(&mut theme, TILDE_CALLABLE, &[TILDE]);
-        insert_marker_style_with_fallback(
-            &mut theme,
-            STRING_QUOTED_SINGLE_CALLABLE,
-            &[STRING_QUOTED_SINGLE],
-        );
-        insert_marker_style_with_fallback(
-            &mut theme,
-            STRING_QUOTED_SINGLE_ARGUMENTS,
-            &[STRING_QUOTED_SINGLE],
-        );
-        insert_marker_style_with_fallback(
-            &mut theme,
-            STRING_QUOTED_SINGLE_ANSI_CALLABLE,
-            &[STRING_QUOTED_SINGLE_ANSI],
-        );
-        insert_marker_style_with_fallback(
-            &mut theme,
-            STRING_QUOTED_SINGLE_ANSI_ARGUMENTS,
-            &[STRING_QUOTED_SINGLE_ANSI],
-        );
-        insert_marker_style_with_fallback(
-            &mut theme,
-            STRING_QUOTED_DOUBLE_CALLABLE,
-            &[STRING_QUOTED_DOUBLE],
-        );
-        insert_marker_style_with_fallback(
-            &mut theme,
-            STRING_QUOTED_DOUBLE_ARGUMENTS,
-            &[STRING_QUOTED_DOUBLE],
-        );
-        insert_marker_style_with_fallback(
-            &mut theme,
-            STRING_QUOTED_BEGIN_CALLABLE,
-            &[STRING_QUOTED_BEGIN, STRING_QUOTED_DOUBLE],
-        );
-        insert_marker_style_with_fallback(
-            &mut theme,
-            STRING_QUOTED_BEGIN_ARGUMENTS,
-            &[STRING_QUOTED_BEGIN, STRING_QUOTED_DOUBLE],
-        );
-        insert_marker_style_with_fallback(
-            &mut theme,
-            STRING_QUOTED_END_CALLABLE,
-            &[STRING_QUOTED_END, STRING_QUOTED_DOUBLE],
-        );
-        insert_marker_style_with_fallback(
-            &mut theme,
-            STRING_QUOTED_END_ARGUMENTS,
-            &[STRING_QUOTED_END, STRING_QUOTED_DOUBLE],
-        );
-
+        let theme = Theme::load(&config.theme)?;
         let scope_mapping = ScopeMapping::new(&theme);
-
         let syntect_theme =
             theme
                 .to_syntect(&scope_mapping)
@@ -373,6 +178,7 @@ impl Highlighter {
             scope_mapping,
             syntect_theme,
             callable_choices,
+            dynamic_token_group_builder: DynamicTokenGroupBuilder::new(),
         })
     }
 
@@ -415,7 +221,10 @@ impl Highlighter {
 
         let syntax = self.syntax_set.find_syntax_by_extension("sh").unwrap();
 
-        let mut h = HighlightLines::new(syntax, &self.syntect_theme);
+        let mut parse_state = ParseState::new(syntax);
+        let syntect_highlighter = SyntectHighlighter::new(&self.syntect_theme);
+        let mut highlight_state = HighlightState::new(&syntect_highlighter, ScopeStack::new());
+
         let mut i = 0;
         let mut result = Vec::new();
         for line in LinesWithEndings::from(command.trim_ascii_end()) {
@@ -429,11 +238,10 @@ impl Highlighter {
                 break;
             }
 
-            let ranges = h.highlight_line(line, &self.syntax_set)?;
+            let ops = parse_state.parse_line(line, &self.syntax_set)?;
+            let ranges =
+                HighlightIterator::new(&mut highlight_state, &ops, line, &syntect_highlighter);
 
-            let mut groups = Vec::new();
-
-            let mut bi = 0;
             for r in ranges {
                 if r.1.is_empty() {
                     continue;
@@ -445,21 +253,18 @@ impl Highlighter {
 
                 if let Some(scope) = self.scope_mapping.decode(&r.0.foreground) {
                     let range = i..i + len;
-                    let brange = bi..bi + r.1.len();
                     if predicate(&range) {
-                        update_groups(scope, &range, &brange, &mut groups);
                         self.highlight_other(range, scope, &mut result);
                     }
                 }
 
                 i += len;
-                bi += r.1.len();
             }
 
             // highlight all groups
             if let Some(pwd) = pwd {
                 let mut mixins = Vec::new();
-                for g in groups {
+                for g in self.dynamic_token_group_builder.build(&ops, line.len()) {
                     if let Ok(group_spans) = g.highlight(line, pwd, &self.theme) {
                         mixins.extend(group_spans);
                     }
@@ -622,6 +427,50 @@ mod tests {
                     parsed_callable: "echo".to_string()
                 })
             }]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn path_with_emoji() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let test_path = dir.path().join("test😎.txt");
+        fs::write(test_path, "test contents")?;
+        let dest_path = dir.path().join("😎");
+        fs::write(dest_path, "test contents")?;
+        let pwd = Some(dir.path().to_str().unwrap());
+
+        let highlighter = Highlighter::new(&test_config())?;
+        let dynamic_file_style =
+            resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
+        let string_style = resolve_static_style(STRING_QUOTED_DOUBLE, &highlighter.theme).unwrap();
+        let dynamic_string_file_style = mix_styles(
+            &SpanStyle::Static(string_style.clone()),
+            &SpanStyle::Static(dynamic_file_style.clone()),
+        );
+
+        let highlighted = highlighter.highlight(r#"cp😎 "test😎.txt" 😎"#, pwd, |_| true)?;
+        assert_eq!(
+            highlighted,
+            vec![
+                Span {
+                    start: 0,
+                    end: 3,
+                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: "cp😎".to_string()
+                    })
+                },
+                Span {
+                    start: 4,
+                    end: 15,
+                    style: dynamic_string_file_style.clone()
+                },
+                Span {
+                    start: 16,
+                    end: 17,
+                    style: SpanStyle::Static(dynamic_file_style.clone())
+                }
+            ]
         );
         Ok(())
     }

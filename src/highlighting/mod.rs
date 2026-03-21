@@ -19,37 +19,13 @@ const DYNAMIC_CALLABLE_FUNCTION: &str = "dynamic.callable.function.shell";
 const DYNAMIC_CALLABLE_MISSING: &str = "dynamic.callable.missing.shell";
 
 const CHARACTER_ESCAPE: &str = "constant.character.escape.shell";
-const CHARACTER_ESCAPE_ARGUMENTS: &str =
-    "meta.function-call.arguments.shell constant.character.escape.shell";
-const CHARACTER_ESCAPE_QUOTED_ANSI: &str =
-    "string.quoted.single.ansi-c.shell constant.character.escape.shell";
 const TILDE: &str = "variable.language.tilde.shell";
-const TILDE_ARGUMENTS: &str = "meta.function-call.arguments.shell variable.language.tilde.shell";
-const TILDE_CALLABLE: &str = "variable.function.shell variable.language.tilde.shell";
 
 const STRING_QUOTED_SINGLE: &str = "string.quoted.single.shell";
 const STRING_QUOTED_SINGLE_ANSI: &str = "string.quoted.single.ansi-c.shell";
 const STRING_QUOTED_DOUBLE: &str = "string.quoted.double.shell";
 const STRING_QUOTED_BEGIN: &str = "punctuation.definition.string.begin.shell";
 const STRING_QUOTED_END: &str = "punctuation.definition.string.end.shell";
-const STRING_QUOTED_BEGIN_CALLABLE: &str =
-    "variable.function.shell punctuation.definition.string.begin.shell";
-const STRING_QUOTED_BEGIN_ARGUMENTS: &str =
-    "meta.function-call.arguments.shell punctuation.definition.string.begin.shell";
-const STRING_QUOTED_END_CALLABLE: &str =
-    "variable.function.shell punctuation.definition.string.end.shell";
-const STRING_QUOTED_END_ARGUMENTS: &str =
-    "meta.function-call.arguments.shell punctuation.definition.string.end.shell";
-const STRING_QUOTED_SINGLE_CALLABLE: &str = "variable.function.shell string.quoted.single.shell";
-const STRING_QUOTED_SINGLE_ARGUMENTS: &str =
-    "meta.function-call.arguments.shell string.quoted.single.shell";
-const STRING_QUOTED_SINGLE_ANSI_CALLABLE: &str =
-    "variable.function.shell string.quoted.single.ansi-c.shell";
-const STRING_QUOTED_SINGLE_ANSI_ARGUMENTS: &str =
-    "meta.function-call.arguments.shell string.quoted.single.ansi-c.shell";
-const STRING_QUOTED_DOUBLE_CALLABLE: &str = "variable.function.shell string.quoted.double.shell";
-const STRING_QUOTED_DOUBLE_ARGUMENTS: &str =
-    "meta.function-call.arguments.shell string.quoted.double.shell";
 
 /// A span of text with a foreground color. The range is specified in terms of
 /// character indices, not byte indices.
