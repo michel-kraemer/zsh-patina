@@ -14,44 +14,13 @@ pub enum DynamicScope {
     Arguments,
     Callable,
     CharacterEscape,
-    CharacterEscapeArguments,
     CharacterEscapeQuotedAnsi,
-    StringQuotedBeginArguments,
-    StringQuotedBeginCallable,
-    StringQuotedEndArguments,
-    StringQuotedEndCallable,
-    StringQuotedSingleArguments,
-    StringQuotedSingleCallable,
-    StringQuotedSingleAnsiArguments,
-    StringQuotedSingleAnsiCallable,
-    StringQuotedDoubleArguments,
-    StringQuotedDoubleCallable,
-    TildeArguments,
-    TildeCallable,
-}
-
-impl DynamicScope {
-    fn as_str(&self) -> &str {
-        match self {
-            DynamicScope::Arguments => ARGUMENTS,
-            DynamicScope::Callable => CALLABLE,
-            DynamicScope::CharacterEscape => CHARACTER_ESCAPE,
-            DynamicScope::CharacterEscapeArguments => CHARACTER_ESCAPE_ARGUMENTS,
-            DynamicScope::CharacterEscapeQuotedAnsi => CHARACTER_ESCAPE_QUOTED_ANSI,
-            DynamicScope::StringQuotedBeginArguments => STRING_QUOTED_BEGIN_ARGUMENTS,
-            DynamicScope::StringQuotedBeginCallable => STRING_QUOTED_BEGIN_CALLABLE,
-            DynamicScope::StringQuotedEndArguments => STRING_QUOTED_END_ARGUMENTS,
-            DynamicScope::StringQuotedEndCallable => STRING_QUOTED_END_CALLABLE,
-            DynamicScope::StringQuotedSingleArguments => STRING_QUOTED_SINGLE_ARGUMENTS,
-            DynamicScope::StringQuotedSingleCallable => STRING_QUOTED_SINGLE_CALLABLE,
-            DynamicScope::StringQuotedSingleAnsiArguments => STRING_QUOTED_SINGLE_ANSI_ARGUMENTS,
-            DynamicScope::StringQuotedSingleAnsiCallable => STRING_QUOTED_SINGLE_ANSI_CALLABLE,
-            DynamicScope::StringQuotedDoubleArguments => STRING_QUOTED_DOUBLE_ARGUMENTS,
-            DynamicScope::StringQuotedDoubleCallable => STRING_QUOTED_DOUBLE_CALLABLE,
-            DynamicScope::TildeArguments => TILDE_ARGUMENTS,
-            DynamicScope::TildeCallable => TILDE_CALLABLE,
-        }
-    }
+    StringQuotedBegin,
+    StringQuotedEnd,
+    StringQuotedSingle,
+    StringQuotedSingleAnsi,
+    StringQuotedDouble,
+    Tilde,
 }
 
 impl TryFrom<&str> for DynamicScope {
@@ -61,23 +30,24 @@ impl TryFrom<&str> for DynamicScope {
         match value {
             ARGUMENTS => Ok(DynamicScope::Arguments),
             CALLABLE => Ok(DynamicScope::Callable),
-            CHARACTER_ESCAPE => Ok(DynamicScope::CharacterEscape),
-            CHARACTER_ESCAPE_ARGUMENTS => Ok(DynamicScope::CharacterEscapeArguments),
+            CHARACTER_ESCAPE | CHARACTER_ESCAPE_ARGUMENTS => Ok(DynamicScope::CharacterEscape),
             CHARACTER_ESCAPE_QUOTED_ANSI => Ok(DynamicScope::CharacterEscapeQuotedAnsi),
-            STRING_QUOTED_BEGIN_ARGUMENTS => Ok(DynamicScope::StringQuotedBeginArguments),
-            STRING_QUOTED_BEGIN_CALLABLE => Ok(DynamicScope::StringQuotedBeginCallable),
-            STRING_QUOTED_END_ARGUMENTS => Ok(DynamicScope::StringQuotedEndArguments),
-            STRING_QUOTED_END_CALLABLE => Ok(DynamicScope::StringQuotedEndCallable),
-            STRING_QUOTED_SINGLE_ARGUMENTS => Ok(DynamicScope::StringQuotedSingleArguments),
-            STRING_QUOTED_SINGLE_CALLABLE => Ok(DynamicScope::StringQuotedSingleCallable),
-            STRING_QUOTED_SINGLE_ANSI_ARGUMENTS => {
-                Ok(DynamicScope::StringQuotedSingleAnsiArguments)
+            STRING_QUOTED_BEGIN_ARGUMENTS | STRING_QUOTED_BEGIN_CALLABLE => {
+                Ok(DynamicScope::StringQuotedBegin)
             }
-            STRING_QUOTED_SINGLE_ANSI_CALLABLE => Ok(DynamicScope::StringQuotedSingleAnsiCallable),
-            STRING_QUOTED_DOUBLE_ARGUMENTS => Ok(DynamicScope::StringQuotedDoubleArguments),
-            STRING_QUOTED_DOUBLE_CALLABLE => Ok(DynamicScope::StringQuotedDoubleCallable),
-            TILDE_ARGUMENTS => Ok(DynamicScope::TildeArguments),
-            TILDE_CALLABLE => Ok(DynamicScope::TildeCallable),
+            STRING_QUOTED_END_ARGUMENTS | STRING_QUOTED_END_CALLABLE => {
+                Ok(DynamicScope::StringQuotedEnd)
+            }
+            STRING_QUOTED_SINGLE_ARGUMENTS | STRING_QUOTED_SINGLE_CALLABLE => {
+                Ok(DynamicScope::StringQuotedSingle)
+            }
+            STRING_QUOTED_SINGLE_ANSI_ARGUMENTS | STRING_QUOTED_SINGLE_ANSI_CALLABLE => {
+                Ok(DynamicScope::StringQuotedSingleAnsi)
+            }
+            STRING_QUOTED_DOUBLE_ARGUMENTS | STRING_QUOTED_DOUBLE_CALLABLE => {
+                Ok(DynamicScope::StringQuotedDouble)
+            }
+            TILDE_ARGUMENTS | TILDE_CALLABLE => Ok(DynamicScope::Tilde),
             _ => bail!("Unknown dynamic scope: {value}"),
         }
     }
@@ -251,19 +221,16 @@ impl DynamicTokenGroup {
                 }
 
                 DynamicScope::Callable
-                | DynamicScope::StringQuotedSingleArguments
-                | DynamicScope::StringQuotedSingleCallable
-                | DynamicScope::StringQuotedSingleAnsiArguments
-                | DynamicScope::StringQuotedSingleAnsiCallable
-                | DynamicScope::StringQuotedDoubleArguments
-                | DynamicScope::StringQuotedDoubleCallable => {
+                | DynamicScope::StringQuotedSingle
+                | DynamicScope::StringQuotedSingleAnsi
+                | DynamicScope::StringQuotedDouble => {
                     let c = &line[t.byte_range.clone()];
                     let len = c.chars().count();
                     s.push_str(c);
                     end += len;
                 }
 
-                DynamicScope::CharacterEscapeArguments | DynamicScope::CharacterEscape => {
+                DynamicScope::CharacterEscape => {
                     let c = &line[t.byte_range.clone()];
                     let len = c.chars().count();
                     s.push_str(&c[1..]); // trim leading '\'
@@ -281,16 +248,15 @@ impl DynamicTokenGroup {
                     end += len;
                 }
 
-                DynamicScope::StringQuotedBeginArguments
-                | DynamicScope::StringQuotedBeginCallable => {
+                DynamicScope::StringQuotedBegin => {
                     end += line[t.byte_range.clone()].chars().count();
                 }
 
-                DynamicScope::StringQuotedEndArguments | DynamicScope::StringQuotedEndCallable => {
+                DynamicScope::StringQuotedEnd => {
                     end += 1;
                 }
 
-                DynamicScope::TildeArguments | DynamicScope::TildeCallable => {
+                DynamicScope::Tilde => {
                     let c = &line[t.byte_range.clone()];
 
                     // resolve tilde at the beginning of a string
