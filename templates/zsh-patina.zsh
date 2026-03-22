@@ -61,6 +61,9 @@ _zsh_patina() {
     # might reset syntax highlighting from other plugins (e.g. auto suggestions)
     region_highlight=( ${region_highlight:#*memo=zsh_patina} )
 
+    # return immediately if both pre-buffer and buffer are empty
+    [[ -z "$PREBUFFER" && -z "$BUFFER" ]] && return
+
     local socket_path
     socket_path="$HOME/.local/share/zsh-patina/daemon.sock"
 

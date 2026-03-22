@@ -310,13 +310,13 @@ Here are the results from benchmarks I ran to compare the performance of zsh-pat
 
 &nbsp; | zsh-patina | zsh-syntax-highlighting | fast-syntax-highlighting
 -|-|-|-
-first_prompt_lag_ms | **19.741** | 22.166 | 25.785
-first_command_lag_ms | **28.239** | 30.507 | 28.295
-command_lag_ms |  0.281 | 0.585 | **0.220**
-input_lag_ms | **1.256** | 9.777 | 3.159
-exit_time_ms | **16.779** | 20.262 | 24.024
+first_prompt_lag_ms | **18.787** | 22.166 | 25.785
+first_command_lag_ms | **27.423** | 30.507 | 28.295
+command_lag_ms |  **0.182** | 0.585 | 0.220
+input_lag_ms | **1.425** | 9.777 | 3.159
+exit_time_ms | **17.546** | 20.262 | 24.024
 
-Fastest times are displayed in **bold**. I'm not really sure why fast-syntax-highlighting is faster in `command_lag_ms` (the time it takes the command line to appear after pressing Enter), but I guess 61µs (a fraction of a millisecond) is within the margin of error.
+Fastest times are displayed in **bold**.
 
 **Setup:** I ran the benchmarks with a clean Zsh configuration. The only thing that was included in the `.zshrc` file was the code required to initialize the individual plugins. I ran all benchmarks 5 times to make sure the numbers are consistent. I have copied the results from the fastest run for each plugin here. The benchmarks were executed on a MacBook Pro 16″ 2023.
 
