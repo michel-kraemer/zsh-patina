@@ -1303,6 +1303,7 @@ dependencies = [
  "anyhow",
  "askama",
  "clap",
+ "dirs",
  "figment",
  "libc",
  "pretty_assertions",

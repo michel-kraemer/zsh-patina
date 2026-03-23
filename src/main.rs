@@ -1,7 +1,6 @@
 use std::{
     env, fs,
     io::{self, Read, Write},
-    path::PathBuf,
     process,
 };
 
@@ -209,7 +208,7 @@ fn list_scopes() -> Result<()> {
 }
 
 fn run() -> Result<()> {
-    let home = PathBuf::from(env::var("HOME").context("$HOME not set")?);
+    let home = dirs::home_dir().context("Unable to find home directory")?;
     let config_dir = home.join(".config/zsh-patina");
     let data_dir = home.join(".local/share/zsh-patina");
 

@@ -866,7 +866,7 @@ mod tests {
     /// Test if a command starting with a tilde is highlighted correctly
     #[test]
     fn command_with_tilde() -> Result<()> {
-        let home = std::env::var("HOME").unwrap();
+        let home = dirs::home_dir().context("Unable to find home directory")?;
         let dir = tempfile::tempdir()?;
         let pwd = Some(dir.path().to_str().unwrap());
 
@@ -881,7 +881,7 @@ mod tests {
                 start: 0,
                 end: 1,
                 style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                    parsed_callable: home.clone()
+                    parsed_callable: home.to_str().unwrap().to_owned()
                 })
             }]
         );
@@ -903,7 +903,7 @@ mod tests {
                 start: 0,
                 end: 1,
                 style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                    parsed_callable: home.clone()
+                    parsed_callable: home.to_str().unwrap().to_owned()
                 })
             }]
         );

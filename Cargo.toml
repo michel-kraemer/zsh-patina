@@ -21,6 +21,7 @@ codegen-units = 1
 anyhow = "1.0.102"
 askama = "0.15.4"
 clap = { version = "4.5.60", features = ["derive", "wrap_help"] }
+dirs = "6.0.0"
 figment = { version = "0.10.19", features = ["toml"] }
 libc = "0.2.182"
 rayon = "1.11.0"

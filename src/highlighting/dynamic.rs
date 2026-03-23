@@ -1,4 +1,4 @@
-use std::{env, ops::Range};
+use std::ops::Range;
 
 use anyhow::{Context, Result};
 use syntect::parsing::{ClearAmount, Scope, ScopeStackOp};
@@ -138,10 +138,11 @@ impl DynamicTokenGroup {
             // resolve tilde only if the whole string is a tilde or if it starts
             // with '~/', because '~foobar', for example, should not be resolved
             if *resolve_tilde && (s == "~" || s.starts_with("~/")) {
-                let home = env::var_os("HOME").context("$HOME not set")?;
+                let home = dirs::home_dir().context("Unable to find home directory")?;
                 s.replace_range(
                     0..1,
-                    home.to_str().context("Unable to convert $HOME to string")?,
+                    home.to_str()
+                        .context("Unable to convert home directory to string")?,
                 );
             }
             *resolve_tilde = false;
