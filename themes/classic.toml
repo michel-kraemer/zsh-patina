@@ -1,0 +1,50 @@
+# ANSI named-color theme inspired by fast-syntax-highlighting's default theme.
+# https://github.com/zdharma-continuum/fast-syntax-highlighting/blob/master/themes/default.ini
+
+# comments
+"comment" = "black"
+
+# strings
+"string" = "yellow"
+
+# regular expressions
+"keyword.operator.regexp" = { foreground = "blue", bold = true }
+
+# escape characters
+"constant.character.escape" = { foreground = "cyan", bold = true }
+
+# numeric file descriptors (e.g. `2> /dev/null`)
+"constant.numeric.integer.decimal.file-descriptor" = { foreground = "magenta", bold = true }
+
+# parameters
+"variable.parameter" = "cyan"
+
+# environment variables
+"variable.other" = "#87d75f"
+"punctuation.definition.variable" = "#87d75f"
+
+# commands
+"variable.function" = "green"
+
+# home directory ~
+"variable.language.tilde" = "magenta"
+
+# keywords / operators captured by patina
+"keyword" = {}
+
+# variable assignments
+"storage" = {}
+
+# support terms
+"support" = "green"
+
+# function names
+"entity.name.function" = { foreground = "red", bold = true }
+
+# braces / structural punctuation
+"punctuation.section" = { foreground = "green", bold = true }
+
+# dynamic items
+"dynamic.callable" = "green"
+"dynamic.callable.missing" = { foreground = "red", bold = true }
+"dynamic.path" = { foreground = "magenta", underline = true }
