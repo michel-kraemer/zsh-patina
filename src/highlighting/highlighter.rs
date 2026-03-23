@@ -455,6 +455,32 @@ mod tests {
         }
     }
 
+    fn static_span(start: usize, end: usize, style: &StaticStyle) -> Span {
+        Span {
+            start,
+            end,
+            style: SpanStyle::Static(style.clone()),
+        }
+    }
+
+    fn dynamic_span(start: usize, end: usize, parsed_callable: &str) -> Span {
+        Span {
+            start,
+            end,
+            style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                parsed_callable: parsed_callable.to_string(),
+            }),
+        }
+    }
+
+    fn mixed_span(start: usize, end: usize, a: &StaticStyle, b: &StaticStyle) -> Span {
+        Span {
+            start,
+            end,
+            style: mix_styles(&SpanStyle::Static(a.clone()), &SpanStyle::Static(b.clone())),
+        }
+    }
+
     /// Test if a simple `echo` command is highlighted correctly
     #[test]
     fn echo() -> Result<()> {
@@ -462,16 +488,7 @@ mod tests {
         let pwd = Some(dir.path().to_str().unwrap());
         let highlighter = Highlighter::new(&test_config())?;
         let highlighted = highlighter.highlight("echo", pwd, |_| true)?;
-        assert_eq!(
-            highlighted,
-            vec![Span {
-                start: 0,
-                end: 4,
-                style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                    parsed_callable: "echo".to_string()
-                })
-            }]
-        );
+        assert_eq!(highlighted, vec![dynamic_span(0, 4, "echo")]);
         Ok(())
     }
 
@@ -488,32 +505,14 @@ mod tests {
         let dynamic_file_style =
             resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
         let string_style = resolve_static_style(STRING_QUOTED_DOUBLE, &highlighter.theme).unwrap();
-        let dynamic_string_file_style = mix_styles(
-            &SpanStyle::Static(string_style.clone()),
-            &SpanStyle::Static(dynamic_file_style.clone()),
-        );
 
         let highlighted = highlighter.highlight(r#"cp🐑 "test🐑.txt" 🐑"#, pwd, |_| true)?;
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 3,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "cp🐑".to_string()
-                    })
-                },
-                Span {
-                    start: 4,
-                    end: 15,
-                    style: dynamic_string_file_style.clone()
-                },
-                Span {
-                    start: 16,
-                    end: 17,
-                    style: SpanStyle::Static(dynamic_file_style.clone())
-                }
+                dynamic_span(0, 3, "cp🐑"),
+                mixed_span(4, 15, &string_style, &dynamic_file_style),
+                static_span(16, 17, &dynamic_file_style),
             ]
         );
         Ok(())
@@ -535,14 +534,7 @@ mod tests {
         let callable_style = resolve_static_style(CALLABLE, &highlighter.theme).unwrap();
 
         let highlighted = highlighter.highlight("ls test.txt", pwd, |_| true)?;
-        assert_eq!(
-            highlighted,
-            vec![Span {
-                start: 0,
-                end: 2,
-                style: SpanStyle::Static(callable_style.clone())
-            }]
-        );
+        assert_eq!(highlighted, vec![static_span(0, 2, &callable_style)]);
 
         config.dynamic = DynamicConfig {
             callables: true,
@@ -551,16 +543,7 @@ mod tests {
         let highlighter = Highlighter::new(&config)?;
 
         let highlighted = highlighter.highlight("ls test.txt", pwd, |_| true)?;
-        assert_eq!(
-            highlighted,
-            vec![Span {
-                start: 0,
-                end: 2,
-                style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                    parsed_callable: "ls".to_string()
-                })
-            }]
-        );
+        assert_eq!(highlighted, vec![dynamic_span(0, 2, "ls")]);
 
         config.dynamic = DynamicConfig {
             callables: false,
@@ -574,16 +557,8 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Static(callable_style),
-                },
-                Span {
-                    start: 3,
-                    end: 11,
-                    style: SpanStyle::Static(dynamic_file_style),
-                }
+                static_span(0, 2, &callable_style),
+                static_span(3, 11, &dynamic_file_style)
             ]
         );
 
@@ -605,31 +580,13 @@ mod tests {
             resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
         let string_style = resolve_static_style(STRING_QUOTED_DOUBLE, &highlighter.theme).unwrap();
         let escape_style = resolve_static_style(CHARACTER_ESCAPE, &highlighter.theme).unwrap();
-        let dynamic_string_file_style = mix_styles(
-            &SpanStyle::Static(string_style.clone()),
-            &SpanStyle::Static(dynamic_file_style.clone()),
-        );
-        let dynamic_escape_file_style = mix_styles(
-            &SpanStyle::Static(escape_style.clone()),
-            &SpanStyle::Static(dynamic_file_style.clone()),
-        );
 
         let highlighted = highlighter.highlight("cp test.txt dest.txt", pwd, |_| true)?;
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "cp".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 11,
-                    style: SpanStyle::Static(dynamic_file_style.clone()),
-                }
+                dynamic_span(0, 2, "cp"),
+                static_span(3, 11, &dynamic_file_style),
             ]
         );
 
@@ -637,18 +594,8 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "cp".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 13,
-                    style: dynamic_string_file_style.clone(),
-                }
+                dynamic_span(0, 2, "cp"),
+                mixed_span(3, 13, &string_style, &dynamic_file_style),
             ]
         );
 
@@ -657,23 +604,9 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "cp".to_string()
-                    })
-                },
-                Span {
-                    start: 5,
-                    end: 15,
-                    style: dynamic_string_file_style.clone(),
-                },
-                Span {
-                    start: 18,
-                    end: 28,
-                    style: SpanStyle::Static(string_style.clone()),
-                }
+                dynamic_span(0, 2, "cp"),
+                mixed_span(5, 15, &string_style, &dynamic_file_style),
+                static_span(18, 28, &string_style),
             ]
         );
 
@@ -681,23 +614,9 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "cp".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 14,
-                    style: SpanStyle::Static(string_style.clone()),
-                },
-                Span {
-                    start: 15,
-                    end: 25,
-                    style: SpanStyle::Static(string_style.clone()),
-                }
+                dynamic_span(0, 2, "cp"),
+                static_span(3, 14, &string_style),
+                static_span(15, 25, &string_style),
             ]
         );
 
@@ -705,28 +624,10 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "cp".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 5,
-                    style: SpanStyle::Static(dynamic_file_style.clone()),
-                },
-                Span {
-                    start: 5,
-                    end: 12,
-                    style: dynamic_string_file_style.clone(),
-                },
-                Span {
-                    start: 12,
-                    end: 13,
-                    style: SpanStyle::Static(dynamic_file_style.clone()),
-                }
+                dynamic_span(0, 2, "cp"),
+                static_span(3, 5, &dynamic_file_style),
+                mixed_span(5, 12, &string_style, &dynamic_file_style),
+                static_span(12, 13, &dynamic_file_style),
             ]
         );
 
@@ -734,18 +635,8 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "cp".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 15,
-                    style: dynamic_string_file_style.clone(),
-                },
+                dynamic_span(0, 2, "cp"),
+                mixed_span(3, 15, &string_style, &dynamic_file_style),
             ]
         );
 
@@ -753,28 +644,10 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "cp".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 7,
-                    style: SpanStyle::Static(dynamic_file_style.clone()),
-                },
-                Span {
-                    start: 7,
-                    end: 9,
-                    style: dynamic_escape_file_style.clone(),
-                },
-                Span {
-                    start: 9,
-                    end: 14,
-                    style: SpanStyle::Static(dynamic_file_style.clone()),
-                },
+                dynamic_span(0, 2, "cp"),
+                static_span(3, 7, &dynamic_file_style),
+                mixed_span(7, 9, &escape_style, &dynamic_file_style),
+                static_span(9, 14, &dynamic_file_style),
             ]
         );
 
@@ -782,18 +655,8 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "cp".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 13,
-                    style: dynamic_string_file_style.clone(),
-                }
+                dynamic_span(0, 2, "cp"),
+                mixed_span(3, 13, &string_style, &dynamic_file_style),
             ]
         );
 
@@ -801,18 +664,8 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "cp".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 14,
-                    style: dynamic_string_file_style.clone(),
-                }
+                dynamic_span(0, 2, "cp"),
+                mixed_span(3, 14, &string_style, &dynamic_file_style),
             ]
         );
 
@@ -840,23 +693,9 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "cp".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 11,
-                    style: SpanStyle::Static(dynamic_file_style),
-                },
-                Span {
-                    start: 12,
-                    end: 16,
-                    style: SpanStyle::Static(dynamic_directory_style),
-                }
+                dynamic_span(0, 2, "cp"),
+                static_span(3, 11, &dynamic_file_style),
+                static_span(12, 16, &dynamic_directory_style),
             ]
         );
 
@@ -874,70 +713,22 @@ mod tests {
             resolve_static_style(DYNAMIC_CALLABLE_COMMAND, &highlighter.theme).unwrap();
 
         let highlighted = highlighter.highlight("~", pwd, |_| true)?;
-        assert_eq!(
-            highlighted,
-            vec![Span {
-                start: 0,
-                end: 1,
-                style: SpanStyle::Static(dynamic_command_style.clone())
-            }]
-        );
+        assert_eq!(highlighted, vec![static_span(0, 1, &dynamic_command_style)]);
 
         let highlighted = highlighter.highlight("~/", pwd, |_| true)?;
-        assert_eq!(
-            highlighted,
-            vec![Span {
-                start: 0,
-                end: 2,
-                style: SpanStyle::Static(dynamic_command_style.clone())
-            }]
-        );
+        assert_eq!(highlighted, vec![static_span(0, 2, &dynamic_command_style)]);
 
         let highlighted = highlighter.highlight("~ echo", pwd, |_| true)?;
-        assert_eq!(
-            highlighted,
-            vec![Span {
-                start: 0,
-                end: 1,
-                style: SpanStyle::Static(dynamic_command_style.clone())
-            }]
-        );
+        assert_eq!(highlighted, vec![static_span(0, 1, &dynamic_command_style)]);
 
         let highlighted = highlighter.highlight("~doesnotexist", pwd, |_| true)?;
-        assert_eq!(
-            highlighted,
-            vec![Span {
-                start: 0,
-                end: 13,
-                style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                    parsed_callable: "~doesnotexist".to_string()
-                })
-            }]
-        );
+        assert_eq!(highlighted, vec![dynamic_span(0, 13, "~doesnotexist")]);
 
         let highlighted = highlighter.highlight(r#""~""#, pwd, |_| true)?;
-        assert_eq!(
-            highlighted,
-            vec![Span {
-                start: 0,
-                end: 3,
-                style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                    parsed_callable: "~".to_string()
-                })
-            }]
-        );
+        assert_eq!(highlighted, vec![dynamic_span(0, 3, "~")]);
 
         let highlighted = highlighter.highlight(r#""~/""#, pwd, |_| true)?;
-        assert_eq!(
-            highlighted,
-            vec![Span {
-                start: 0,
-                end: 4,
-                style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                    parsed_callable: "~/".to_string()
-                })
-            }]
-        );
+        assert_eq!(highlighted, vec![dynamic_span(0, 4, "~/")]);
 
         Ok(())
     }
@@ -957,27 +748,13 @@ mod tests {
             resolve_static_style(DYNAMIC_PATH_DIRECTORY, &highlighter.theme).unwrap();
         let dynamic_file_style =
             resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
-        let dynamic_tilde_directory_style = mix_styles(
-            &SpanStyle::Static(tilde_style.clone()),
-            &SpanStyle::Static(dynamic_directory_style.clone()),
-        );
 
         let highlighted = highlighter.highlight("ls ~", pwd, |_| true)?;
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "ls".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 4,
-                    style: dynamic_tilde_directory_style.clone()
-                }
+                dynamic_span(0, 2, "ls"),
+                mixed_span(3, 4, &tilde_style, &dynamic_directory_style),
             ]
         );
 
@@ -985,23 +762,9 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "ls".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 4,
-                    style: dynamic_tilde_directory_style.clone()
-                },
-                Span {
-                    start: 4,
-                    end: 5,
-                    style: SpanStyle::Static(dynamic_directory_style.clone())
-                }
+                dynamic_span(0, 2, "ls"),
+                mixed_span(3, 4, &tilde_style, &dynamic_directory_style),
+                static_span(4, 5, &dynamic_directory_style),
             ]
         );
 
@@ -1009,124 +772,41 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "ls".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 4,
-                    style: dynamic_tilde_directory_style.clone()
-                },
-                Span {
-                    start: 4,
-                    end: 5,
-                    style: SpanStyle::Static(dynamic_directory_style)
-                },
-                Span {
-                    start: 6,
-                    end: 14,
-                    style: SpanStyle::Static(dynamic_file_style)
-                }
+                dynamic_span(0, 2, "ls"),
+                mixed_span(3, 4, &tilde_style, &dynamic_directory_style),
+                static_span(4, 5, &dynamic_directory_style),
+                static_span(6, 14, &dynamic_file_style),
             ]
         );
 
         let highlighted = highlighter.highlight(r#"ls "~/""#, pwd, |_| true)?;
         assert_eq!(
             highlighted,
-            vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "ls".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 7,
-                    style: SpanStyle::Static(string_style.clone())
-                }
-            ]
+            vec![dynamic_span(0, 2, "ls"), static_span(3, 7, &string_style),]
         );
 
         let highlighted = highlighter.highlight("ls '~/'", pwd, |_| true)?;
         assert_eq!(
             highlighted,
-            vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "ls".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 7,
-                    style: SpanStyle::Static(string_style.clone())
-                }
-            ]
+            vec![dynamic_span(0, 2, "ls"), static_span(3, 7, &string_style),]
         );
 
         let highlighted = highlighter.highlight("ls $'~/'", pwd, |_| true)?;
         assert_eq!(
             highlighted,
-            vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "ls".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 8,
-                    style: SpanStyle::Static(string_style.clone())
-                }
-            ]
+            vec![dynamic_span(0, 2, "ls"), static_span(3, 8, &string_style),]
         );
 
         let highlighted = highlighter.highlight("ls ~/this/path/does/not/exist", pwd, |_| true)?;
         assert_eq!(
             highlighted,
-            vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "ls".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 4,
-                    style: SpanStyle::Static(tilde_style.clone())
-                }
-            ]
+            vec![dynamic_span(0, 2, "ls"), static_span(3, 4, &tilde_style),]
         );
 
         let highlighted = highlighter.highlight("ls test/~/", pwd, |_| true)?;
         assert_eq!(
             highlighted,
-            vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "ls".to_string()
-                    })
-                },
-                Span {
-                    start: 8,
-                    end: 9,
-                    style: SpanStyle::Static(tilde_style.clone())
-                }
-            ]
+            vec![dynamic_span(0, 2, "ls"), static_span(8, 9, &tilde_style),]
         );
 
         Ok(())
@@ -1148,23 +828,9 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 3,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "foo".to_string()
-                    })
-                },
-                Span {
-                    start: 4,
-                    end: 12,
-                    style: SpanStyle::Static(dynamic_file_style.clone()),
-                },
-                Span {
-                    start: 12,
-                    end: 15,
-                    style: SpanStyle::Static(parameter_style.clone()),
-                }
+                dynamic_span(0, 3, "foo"),
+                static_span(4, 12, &dynamic_file_style),
+                static_span(12, 15, &parameter_style),
             ]
         );
 
@@ -1188,23 +854,9 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 4,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "echo".to_string()
-                    })
-                },
-                Span {
-                    start: 11,
-                    end: 12,
-                    style: SpanStyle::Static(redirection_style.clone()),
-                },
-                Span {
-                    start: 13,
-                    end: 21,
-                    style: SpanStyle::Static(dynamic_file_style.clone()),
-                }
+                dynamic_span(0, 4, "echo"),
+                static_span(11, 12, &redirection_style),
+                static_span(13, 21, &dynamic_file_style),
             ]
         );
 
@@ -1212,23 +864,9 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 4,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "echo".to_string()
-                    })
-                },
-                Span {
-                    start: 10,
-                    end: 11,
-                    style: SpanStyle::Static(redirection_style.clone()),
-                },
-                Span {
-                    start: 11,
-                    end: 19,
-                    style: SpanStyle::Static(dynamic_file_style.clone()),
-                }
+                dynamic_span(0, 4, "echo"),
+                static_span(10, 11, &redirection_style),
+                static_span(11, 19, &dynamic_file_style),
             ]
         );
 
@@ -1236,28 +874,10 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 4,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "echo".to_string()
-                    })
-                },
-                Span {
-                    start: 5,
-                    end: 11,
-                    style: SpanStyle::Static(env_var_style.clone()),
-                },
-                Span {
-                    start: 16,
-                    end: 17,
-                    style: SpanStyle::Static(redirection_style.clone()),
-                },
-                Span {
-                    start: 17,
-                    end: 25,
-                    style: SpanStyle::Static(dynamic_file_style.clone()),
-                }
+                dynamic_span(0, 4, "echo"),
+                static_span(5, 11, &env_var_style),
+                static_span(16, 17, &redirection_style),
+                static_span(17, 25, &dynamic_file_style),
             ]
         );
 
@@ -1265,28 +885,10 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 4,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "echo".to_string()
-                    })
-                },
-                Span {
-                    start: 10,
-                    end: 14,
-                    style: SpanStyle::Static(env_var_style.clone()),
-                },
-                Span {
-                    start: 14,
-                    end: 15,
-                    style: SpanStyle::Static(redirection_style.clone()),
-                },
-                Span {
-                    start: 15,
-                    end: 23,
-                    style: SpanStyle::Static(dynamic_file_style.clone()),
-                }
+                dynamic_span(0, 4, "echo"),
+                static_span(10, 14, &env_var_style),
+                static_span(14, 15, &redirection_style),
+                static_span(15, 23, &dynamic_file_style),
             ]
         );
 
@@ -1301,28 +903,10 @@ mod tests {
         let highlighter = Highlighter::new(&test_config())?;
 
         let highlighted = highlighter.highlight("\"ls\"", pwd, |_| true)?;
-        assert_eq!(
-            highlighted,
-            vec![Span {
-                start: 0,
-                end: 4,
-                style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                    parsed_callable: "ls".to_string()
-                })
-            }]
-        );
+        assert_eq!(highlighted, vec![dynamic_span(0, 4, "ls")]);
 
         let highlighted = highlighter.highlight("l\"s\"", pwd, |_| true)?;
-        assert_eq!(
-            highlighted,
-            vec![Span {
-                start: 0,
-                end: 4,
-                style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                    parsed_callable: "ls".to_string()
-                })
-            }]
-        );
+        assert_eq!(highlighted, vec![dynamic_span(0, 4, "ls")]);
 
         let file_path = dir.path().join("script.sh");
         fs::write(&file_path, "#!/bin/sh")?;
@@ -1334,11 +918,7 @@ mod tests {
         let highlighted = highlighter.highlight("\"./script.sh\"", pwd, |_| true)?;
         assert_eq!(
             highlighted,
-            vec![Span {
-                start: 0,
-                end: 13,
-                style: SpanStyle::Static(dynamic_callable_style.clone())
-            }]
+            vec![static_span(0, 13, &dynamic_callable_style)]
         );
 
         let directory_path = dir.path().join("foo/bar");
@@ -1347,11 +927,7 @@ mod tests {
         let highlighted = highlighter.highlight("foo/\"bar\"/", pwd, |_| true)?;
         assert_eq!(
             highlighted,
-            vec![Span {
-                start: 0,
-                end: 10,
-                style: SpanStyle::Static(dynamic_callable_style)
-            }]
+            vec![static_span(0, 10, &dynamic_callable_style)]
         );
 
         Ok(())
@@ -1376,66 +952,28 @@ mod tests {
             resolve_static_style(DYNAMIC_CALLABLE_COMMAND, &highlighter.theme).unwrap();
         let dynamic_file_style =
             resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
-        let dynamic_escape_file_style = mix_styles(
-            &SpanStyle::Static(escape_style.clone()),
-            &SpanStyle::Static(dynamic_file_style.clone()),
-        );
 
         let highlighted = highlighter.highlight(r"\script.sh", pwd, |_| true)?;
-        assert_eq!(
-            highlighted,
-            vec![Span {
-                start: 0,
-                end: 10,
-                style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                    parsed_callable: "script.sh".to_string()
-                })
-            }]
-        );
+        assert_eq!(highlighted, vec![dynamic_span(0, 10, "script.sh")]);
 
         let highlighted = highlighter.highlight(r"\./script.sh", pwd, |_| true)?;
         assert_eq!(
             highlighted,
-            vec![Span {
-                start: 0,
-                end: 12,
-                style: SpanStyle::Static(dynamic_callable_style.clone())
-            }]
+            vec![static_span(0, 12, &dynamic_callable_style)]
         );
 
         // parser cannot differentiate between normal unquoted character escapes
         // and those that are at the beginning of a callable
         let highlighted = highlighter.highlight(r"\s", pwd, |_| true)?;
-        assert_eq!(
-            highlighted,
-            vec![Span {
-                start: 0,
-                end: 2,
-                style: SpanStyle::Static(escape_style.clone())
-            }]
-        );
+        assert_eq!(highlighted, vec![static_span(0, 2, &escape_style)]);
 
         let highlighted = highlighter.highlight(r"touch \test.txt", pwd, |_| true)?;
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 5,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "touch".to_string()
-                    })
-                },
-                Span {
-                    start: 6,
-                    end: 8,
-                    style: dynamic_escape_file_style.clone()
-                },
-                Span {
-                    start: 8,
-                    end: 15,
-                    style: SpanStyle::Static(dynamic_file_style.clone())
-                }
+                dynamic_span(0, 5, "touch"),
+                mixed_span(6, 8, &escape_style, &dynamic_file_style),
+                static_span(8, 15, &dynamic_file_style),
             ]
         );
 
@@ -1451,28 +989,11 @@ mod tests {
         let dynamic_file_style =
             resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
         let escape_style = resolve_static_style(CHARACTER_ESCAPE, &highlighter.theme).unwrap();
-        let dynamic_escape_file_style = mix_styles(
-            &SpanStyle::Static(escape_style.clone()),
-            &SpanStyle::Static(dynamic_file_style.clone()),
-        );
 
         let highlighted = highlighter.highlight(r"cp test\u2580.txt dest.txt", pwd, |_| true)?;
         assert_eq!(
             highlighted,
-            vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "cp".to_string()
-                    })
-                },
-                Span {
-                    start: 7,
-                    end: 9,
-                    style: SpanStyle::Static(escape_style.clone())
-                }
-            ]
+            vec![dynamic_span(0, 2, "cp"), static_span(7, 9, &escape_style),]
         );
 
         let test_path = dir.path().join("testu2580.txt");
@@ -1482,28 +1003,10 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "cp".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 7,
-                    style: SpanStyle::Static(dynamic_file_style.clone())
-                },
-                Span {
-                    start: 7,
-                    end: 9,
-                    style: dynamic_escape_file_style.clone()
-                },
-                Span {
-                    start: 9,
-                    end: 17,
-                    style: SpanStyle::Static(dynamic_file_style.clone())
-                }
+                dynamic_span(0, 2, "cp"),
+                static_span(3, 7, &dynamic_file_style),
+                mixed_span(7, 9, &escape_style, &dynamic_file_style),
+                static_span(9, 17, &dynamic_file_style),
             ]
         );
 
@@ -1524,72 +1027,25 @@ mod tests {
             resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
         let string_style = resolve_static_style(STRING_QUOTED_DOUBLE, &highlighter.theme).unwrap();
         let escape_style = resolve_static_style(CHARACTER_ESCAPE, &highlighter.theme).unwrap();
-        let dynamic_string_file_style = mix_styles(
-            &SpanStyle::Static(string_style.clone()),
-            &SpanStyle::Static(dynamic_file_style.clone()),
-        );
-        let dynamic_escape_file_style = mix_styles(
-            &SpanStyle::Static(escape_style.clone()),
-            &SpanStyle::Static(dynamic_file_style.clone()),
-        );
 
         let highlighted = highlighter.highlight(r"cp test\u2580.txt dest.txt", pwd, |_| true)?;
         assert_eq!(
             highlighted,
-            vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "cp".to_string()
-                    })
-                },
-                Span {
-                    start: 7,
-                    end: 9,
-                    style: SpanStyle::Static(escape_style.clone())
-                }
-            ]
+            vec![dynamic_span(0, 2, "cp"), static_span(7, 9, &escape_style),]
         );
 
         let highlighted =
             highlighter.highlight(r#"cp "test\u2580.txt" dest.txt"#, pwd, |_| true)?;
         assert_eq!(
             highlighted,
-            vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "cp".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 19,
-                    style: SpanStyle::Static(string_style.clone())
-                }
-            ]
+            vec![dynamic_span(0, 2, "cp"), static_span(3, 19, &string_style),]
         );
 
         let highlighted =
             highlighter.highlight(r#"cp 'test\u2580.txt' dest.txt"#, pwd, |_| true)?;
         assert_eq!(
             highlighted,
-            vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "cp".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 19,
-                    style: SpanStyle::Static(string_style.clone())
-                }
-            ]
+            vec![dynamic_span(0, 2, "cp"), static_span(3, 19, &string_style),]
         );
 
         let highlighted =
@@ -1597,28 +1053,10 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "cp".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 9,
-                    style: dynamic_string_file_style.clone(),
-                },
-                Span {
-                    start: 9,
-                    end: 15,
-                    style: dynamic_escape_file_style.clone()
-                },
-                Span {
-                    start: 15,
-                    end: 20,
-                    style: dynamic_string_file_style.clone(),
-                }
+                dynamic_span(0, 2, "cp"),
+                mixed_span(3, 9, &string_style, &dynamic_file_style),
+                mixed_span(9, 15, &escape_style, &dynamic_file_style),
+                mixed_span(15, 20, &string_style, &dynamic_file_style),
             ]
         );
 
@@ -1626,68 +1064,24 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "cp".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 7,
-                    style: SpanStyle::Static(dynamic_file_style.clone())
-                },
-                Span {
-                    start: 7,
-                    end: 11,
-                    style: dynamic_escape_file_style.clone()
-                },
-                Span {
-                    start: 11,
-                    end: 16,
-                    style: SpanStyle::Static(dynamic_file_style.clone())
-                }
+                dynamic_span(0, 2, "cp"),
+                static_span(3, 7, &dynamic_file_style),
+                mixed_span(7, 11, &escape_style, &dynamic_file_style),
+                static_span(11, 16, &dynamic_file_style),
             ]
         );
 
         let highlighted = highlighter.highlight(r#"cp "test\ \ 1.txt" dest.txt"#, pwd, |_| true)?;
         assert_eq!(
             highlighted,
-            vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "cp".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 18,
-                    style: SpanStyle::Static(string_style.clone())
-                }
-            ]
+            vec![dynamic_span(0, 2, "cp"), static_span(3, 18, &string_style),]
         );
 
         let highlighted =
             highlighter.highlight(r#"cp $'test\ \ 1.txt' dest.txt"#, pwd, |_| true)?;
         assert_eq!(
             highlighted,
-            vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "cp".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 19,
-                    style: SpanStyle::Static(string_style.clone())
-                }
-            ]
+            vec![dynamic_span(0, 2, "cp"), static_span(3, 19, &string_style),]
         );
 
         let highlighted =
@@ -1695,28 +1089,10 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "cp".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 9,
-                    style: dynamic_string_file_style.clone()
-                },
-                Span {
-                    start: 9,
-                    end: 17,
-                    style: dynamic_escape_file_style.clone()
-                },
-                Span {
-                    start: 17,
-                    end: 23,
-                    style: dynamic_string_file_style.clone()
-                }
+                dynamic_span(0, 2, "cp"),
+                mixed_span(3, 9, &string_style, &dynamic_file_style),
+                mixed_span(9, 17, &escape_style, &dynamic_file_style),
+                mixed_span(17, 23, &string_style, &dynamic_file_style),
             ]
         );
 
@@ -1725,38 +1101,12 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "cp".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 7,
-                    style: SpanStyle::Static(dynamic_file_style.clone())
-                },
-                Span {
-                    start: 7,
-                    end: 9,
-                    style: dynamic_string_file_style.clone()
-                },
-                Span {
-                    start: 9,
-                    end: 17,
-                    style: dynamic_escape_file_style.clone()
-                },
-                Span {
-                    start: 17,
-                    end: 18,
-                    style: dynamic_string_file_style.clone()
-                },
-                Span {
-                    start: 18,
-                    end: 23,
-                    style: SpanStyle::Static(dynamic_file_style.clone())
-                }
+                dynamic_span(0, 2, "cp"),
+                static_span(3, 7, &dynamic_file_style),
+                mixed_span(7, 9, &string_style, &dynamic_file_style),
+                mixed_span(9, 17, &escape_style, &dynamic_file_style),
+                mixed_span(17, 18, &string_style, &dynamic_file_style),
+                static_span(18, 23, &dynamic_file_style),
             ]
         );
 
@@ -1781,22 +1131,14 @@ mod tests {
             highlighter.highlight(r"$'sub/test\xF0\x9F\x98\x8E.sh'", pwd, |_| true)?;
         assert_eq!(
             highlighted,
-            vec![Span {
-                start: 0,
-                end: 30,
-                style: SpanStyle::Static(dynamic_command_style.clone())
-            }]
+            vec![static_span(0, 30, &dynamic_command_style)]
         );
 
         let highlighted =
             highlighter.highlight(r"$'sub/test\xF0\237\x98\x8E.sh'", pwd, |_| true)?;
         assert_eq!(
             highlighted,
-            vec![Span {
-                start: 0,
-                end: 30,
-                style: SpanStyle::Static(dynamic_command_style.clone())
-            }]
+            vec![static_span(0, 30, &dynamic_command_style)]
         );
 
         Ok(())
@@ -1814,42 +1156,16 @@ mod tests {
             resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
         let string_style = resolve_static_style(STRING_QUOTED_DOUBLE, &highlighter.theme).unwrap();
         let escape_style = resolve_static_style(CHARACTER_ESCAPE, &highlighter.theme).unwrap();
-        let dynamic_string_file_style = mix_styles(
-            &SpanStyle::Static(string_style.clone()),
-            &SpanStyle::Static(dynamic_file_style.clone()),
-        );
-        let dynamic_escape_file_style = mix_styles(
-            &SpanStyle::Static(escape_style.clone()),
-            &SpanStyle::Static(dynamic_file_style.clone()),
-        );
 
         let highlighted =
             highlighter.highlight(r"cp $'test\xF0\x9F\x98\x8E.txt' dest.txt", pwd, |_| true)?;
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "cp".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 9,
-                    style: dynamic_string_file_style.clone(),
-                },
-                Span {
-                    start: 9,
-                    end: 25,
-                    style: dynamic_escape_file_style.clone(),
-                },
-                Span {
-                    start: 25,
-                    end: 30,
-                    style: dynamic_string_file_style.clone(),
-                }
+                dynamic_span(0, 2, "cp"),
+                mixed_span(3, 9, &string_style, &dynamic_file_style),
+                mixed_span(9, 25, &escape_style, &dynamic_file_style),
+                mixed_span(25, 30, &string_style, &dynamic_file_style),
             ]
         );
 
@@ -1858,28 +1174,10 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "cp".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 9,
-                    style: dynamic_string_file_style.clone(),
-                },
-                Span {
-                    start: 9,
-                    end: 25,
-                    style: dynamic_escape_file_style.clone(),
-                },
-                Span {
-                    start: 25,
-                    end: 30,
-                    style: dynamic_string_file_style.clone(),
-                }
+                dynamic_span(0, 2, "cp"),
+                mixed_span(3, 9, &string_style, &dynamic_file_style),
+                mixed_span(9, 25, &escape_style, &dynamic_file_style),
+                mixed_span(25, 30, &string_style, &dynamic_file_style),
             ]
         );
 
@@ -1908,64 +1206,16 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 3,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "foo".to_string()
-                    })
-                },
-                Span {
-                    start: 10,
-                    end: 13,
-                    style: SpanStyle::Static(parameter_style.clone()),
-                },
-                Span {
-                    start: 14,
-                    end: 51,
-                    style: SpanStyle::Static(string_style.clone()),
-                },
-                Span {
-                    start: 52,
-                    end: 54,
-                    style: SpanStyle::Static(operator_style.clone()),
-                },
-                Span {
-                    start: 55,
-                    end: 60,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "touch".to_string()
-                    })
-                },
-                Span {
-                    start: 61,
-                    end: 69,
-                    style: SpanStyle::Static(dynamic_file_style.clone()),
-                }
+                dynamic_span(0, 3, "foo"),
+                static_span(10, 13, &parameter_style),
+                static_span(14, 51, &string_style),
+                static_span(52, 54, &operator_style),
+                dynamic_span(55, 60, "touch"),
+                static_span(61, 69, &dynamic_file_style),
             ]
         );
 
         Ok(())
-    }
-
-    fn static_span(
-        start: usize,
-        end: usize,
-        fg: Option<&str>,
-        bg: Option<&str>,
-        bold: bool,
-        underline: bool,
-    ) -> Span {
-        Span {
-            start,
-            end,
-            style: SpanStyle::Static(StaticStyle {
-                foreground_color: fg.map(String::from),
-                background_color: bg.map(String::from),
-                bold,
-                underline,
-            }),
-        }
     }
 
     #[test]
@@ -1986,18 +1236,8 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "ls".to_string()
-                    })
-                },
-                Span {
-                    start: 11,
-                    end: 18,
-                    style: SpanStyle::Static(env_var_style.clone())
-                }
+                dynamic_span(0, 2, "ls"),
+                static_span(11, 18, &env_var_style),
             ]
         );
 
@@ -2005,23 +1245,9 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "ls".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 12,
-                    style: SpanStyle::Static(env_var_style.clone())
-                },
-                Span {
-                    start: 21,
-                    end: 29,
-                    style: SpanStyle::Static(dynamic_file_style.clone())
-                }
+                dynamic_span(0, 2, "ls"),
+                static_span(3, 12, &env_var_style),
+                static_span(21, 29, &dynamic_file_style),
             ]
         );
 
@@ -2030,23 +1256,9 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "ls".to_string()
-                    })
-                },
-                Span {
-                    start: 11,
-                    end: 20,
-                    style: SpanStyle::Static(env_var_style.clone())
-                },
-                Span {
-                    start: 29,
-                    end: 37,
-                    style: SpanStyle::Static(dynamic_file_style.clone())
-                }
+                dynamic_span(0, 2, "ls"),
+                static_span(11, 20, &env_var_style),
+                static_span(29, 37, &dynamic_file_style),
             ]
         );
 
@@ -2071,30 +1283,10 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "ls".to_string()
-                    })
-                },
-                Span {
-                    start: 11,
-                    end: 13,
-                    style: SpanStyle::Static(env_var_style.clone())
-                },
-                Span {
-                    start: 13,
-                    end: 17,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "echo".to_string()
-                    })
-                },
-                Span {
-                    start: 24,
-                    end: 25,
-                    style: SpanStyle::Static(env_var_style.clone())
-                }
+                dynamic_span(0, 2, "ls"),
+                static_span(11, 13, &env_var_style),
+                dynamic_span(13, 17, "echo"),
+                static_span(24, 25, &env_var_style),
             ]
         );
 
@@ -2105,35 +1297,11 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "ls".to_string()
-                    })
-                },
-                Span {
-                    start: 11,
-                    end: 13,
-                    style: SpanStyle::Static(env_var_style.clone())
-                },
-                Span {
-                    start: 13,
-                    end: 17,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "echo".to_string()
-                    })
-                },
-                Span {
-                    start: 18,
-                    end: 24,
-                    style: SpanStyle::Static(dynamic_file_style.clone())
-                },
-                Span {
-                    start: 24,
-                    end: 25,
-                    style: SpanStyle::Static(env_var_style.clone())
-                }
+                dynamic_span(0, 2, "ls"),
+                static_span(11, 13, &env_var_style),
+                dynamic_span(13, 17, "echo"),
+                static_span(18, 24, &dynamic_file_style),
+                static_span(24, 25, &env_var_style),
             ]
         );
 
@@ -2147,49 +1315,37 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                Span {
-                    start: 0,
-                    end: 2,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "ls".to_string()
-                    })
-                },
-                Span {
-                    start: 3,
-                    end: 11,
-                    style: SpanStyle::Static(dynamic_file_style.clone())
-                },
-                Span {
-                    start: 20,
-                    end: 22,
-                    style: SpanStyle::Static(env_var_style.clone())
-                },
-                Span {
-                    start: 22,
-                    end: 26,
-                    style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: "echo".to_string()
-                    })
-                },
-                Span {
-                    start: 27,
-                    end: 33,
-                    style: SpanStyle::Static(dynamic_file_style.clone())
-                },
-                Span {
-                    start: 33,
-                    end: 34,
-                    style: SpanStyle::Static(env_var_style.clone())
-                },
-                Span {
-                    start: 35,
-                    end: 44,
-                    style: SpanStyle::Static(dynamic_file_style.clone())
-                },
+                dynamic_span(0, 2, "ls"),
+                static_span(3, 11, &dynamic_file_style),
+                static_span(20, 22, &env_var_style),
+                dynamic_span(22, 26, "echo"),
+                static_span(27, 33, &dynamic_file_style),
+                static_span(33, 34, &env_var_style),
+                static_span(35, 44, &dynamic_file_style),
             ]
         );
 
         Ok(())
+    }
+
+    fn static_span_with(
+        start: usize,
+        end: usize,
+        fg: Option<&str>,
+        bg: Option<&str>,
+        bold: bool,
+        underline: bool,
+    ) -> Span {
+        Span {
+            start,
+            end,
+            style: SpanStyle::Static(StaticStyle {
+                foreground_color: fg.map(String::from),
+                background_color: bg.map(String::from),
+                bold,
+                underline,
+            }),
+        }
     }
 
     /// Both base and mixins are empty
@@ -2201,20 +1357,20 @@ mod tests {
     /// No mixins: base spans are returned as-is
     #[test]
     fn mix_spans_no_mixins() {
-        let base = vec![static_span(0, 5, Some("red"), None, false, false)];
+        let base = vec![static_span_with(0, 5, Some("red"), None, false, false)];
         assert_eq!(mix_spans(base.clone(), vec![]), base);
     }
 
     /// A mixin that doesn't overlap any base span is still kept
     #[test]
     fn mix_spans_non_overlapping_mixin_kept() {
-        let base = vec![static_span(0, 3, Some("red"), None, false, false)];
-        let mixins = vec![static_span(5, 8, Some("blue"), None, false, false)];
+        let base = vec![static_span_with(0, 3, Some("red"), None, false, false)];
+        let mixins = vec![static_span_with(5, 8, Some("blue"), None, false, false)];
         assert_eq!(
             mix_spans(base, mixins),
             vec![
-                static_span(0, 3, Some("red"), None, false, false),
-                static_span(5, 8, Some("blue"), None, false, false),
+                static_span_with(0, 3, Some("red"), None, false, false),
+                static_span_with(5, 8, Some("blue"), None, false, false),
             ]
         );
     }
@@ -2222,26 +1378,26 @@ mod tests {
     /// A mixin that fully covers a base span: the entire base is overridden
     #[test]
     fn mix_spans_mixin_fully_covers_base() {
-        let base = vec![static_span(2, 6, Some("red"), None, false, false)];
-        let mixins = vec![static_span(2, 6, Some("blue"), None, true, false)];
+        let base = vec![static_span_with(2, 6, Some("red"), None, false, false)];
+        let mixins = vec![static_span_with(2, 6, Some("blue"), None, true, false)];
         assert_eq!(
             mix_spans(base, mixins),
-            vec![static_span(2, 6, Some("blue"), None, true, false)]
+            vec![static_span_with(2, 6, Some("blue"), None, true, false)]
         );
     }
 
     /// A mixin that partially overlaps the start of a base span
     #[test]
     fn mix_spans_mixin_overlaps_start() {
-        let base = vec![static_span(2, 8, Some("red"), None, false, false)];
-        let mixins = vec![static_span(0, 4, Some("blue"), None, false, false)];
+        let base = vec![static_span_with(2, 8, Some("red"), None, false, false)];
+        let mixins = vec![static_span_with(0, 4, Some("blue"), None, false, false)];
         assert_eq!(
             mix_spans(base, mixins),
             vec![
                 // mixin before base + intersection merged (same style)
-                static_span(0, 4, Some("blue"), None, false, false),
+                static_span_with(0, 4, Some("blue"), None, false, false),
                 // remainder of base (4..8)
-                static_span(4, 8, Some("red"), None, false, false),
+                static_span_with(4, 8, Some("red"), None, false, false),
             ]
         );
     }
@@ -2249,15 +1405,15 @@ mod tests {
     /// A mixin that partially overlaps the end of a base span
     #[test]
     fn mix_spans_mixin_overlaps_end() {
-        let base = vec![static_span(0, 5, Some("red"), None, false, false)];
-        let mixins = vec![static_span(3, 8, Some("blue"), None, false, false)];
+        let base = vec![static_span_with(0, 5, Some("red"), None, false, false)];
+        let mixins = vec![static_span_with(3, 8, Some("blue"), None, false, false)];
         assert_eq!(
             mix_spans(base, mixins),
             vec![
                 // base before overlap (0..3)
-                static_span(0, 3, Some("red"), None, false, false),
+                static_span_with(0, 3, Some("red"), None, false, false),
                 // intersection + mixin after base merged (same style)
-                static_span(3, 8, Some("blue"), None, false, false),
+                static_span_with(3, 8, Some("blue"), None, false, false),
             ]
         );
     }
@@ -2265,17 +1421,24 @@ mod tests {
     /// A mixin fully contained within a base span splits it into three parts
     #[test]
     fn mix_spans_mixin_inside_base() {
-        let base = vec![static_span(0, 10, Some("red"), Some("white"), false, false)];
-        let mixins = vec![static_span(3, 7, None, Some("black"), true, false)];
+        let base = vec![static_span_with(
+            0,
+            10,
+            Some("red"),
+            Some("white"),
+            false,
+            false,
+        )];
+        let mixins = vec![static_span_with(3, 7, None, Some("black"), true, false)];
         assert_eq!(
             mix_spans(base, mixins),
             vec![
                 // base before overlap
-                static_span(0, 3, Some("red"), Some("white"), false, false),
+                static_span_with(0, 3, Some("red"), Some("white"), false, false),
                 // intersection: mixin bg overrides, mixin bold overrides, base fg kept (mixin fg is None)
-                static_span(3, 7, Some("red"), Some("black"), true, false),
+                static_span_with(3, 7, Some("red"), Some("black"), true, false),
                 // base after overlap
-                static_span(7, 10, Some("red"), Some("white"), false, false),
+                static_span_with(7, 10, Some("red"), Some("white"), false, false),
             ]
         );
     }
@@ -2283,19 +1446,19 @@ mod tests {
     /// Multiple mixins overlapping a single base span
     #[test]
     fn mix_spans_multiple_mixins_one_base() {
-        let base = vec![static_span(0, 10, Some("red"), None, false, false)];
+        let base = vec![static_span_with(0, 10, Some("red"), None, false, false)];
         let mixins = vec![
-            static_span(1, 3, Some("green"), None, false, false),
-            static_span(5, 7, Some("blue"), None, false, false),
+            static_span_with(1, 3, Some("green"), None, false, false),
+            static_span_with(5, 7, Some("blue"), None, false, false),
         ];
         assert_eq!(
             mix_spans(base, mixins),
             vec![
-                static_span(0, 1, Some("red"), None, false, false),
-                static_span(1, 3, Some("green"), None, false, false),
-                static_span(3, 5, Some("red"), None, false, false),
-                static_span(5, 7, Some("blue"), None, false, false),
-                static_span(7, 10, Some("red"), None, false, false),
+                static_span_with(0, 1, Some("red"), None, false, false),
+                static_span_with(1, 3, Some("green"), None, false, false),
+                static_span_with(3, 5, Some("red"), None, false, false),
+                static_span_with(5, 7, Some("blue"), None, false, false),
+                static_span_with(7, 10, Some("red"), None, false, false),
             ]
         );
     }
@@ -2303,13 +1466,20 @@ mod tests {
     /// Mixin with None fg preserves base fg; mixin with Some bg overrides
     #[test]
     fn mix_spans_style_merge_none_preserved() {
-        let base = vec![static_span(0, 4, Some("red"), Some("white"), true, false)];
-        let mixins = vec![static_span(0, 4, None, Some("black"), false, true)];
+        let base = vec![static_span_with(
+            0,
+            4,
+            Some("red"),
+            Some("white"),
+            true,
+            false,
+        )];
+        let mixins = vec![static_span_with(0, 4, None, Some("black"), false, true)];
         assert_eq!(
             mix_spans(base, mixins),
             vec![
                 // fg: base (mixin is None), bg: mixin, bold: base (mixin is false), underline: mixin (true)
-                static_span(0, 4, Some("red"), Some("black"), true, true),
+                static_span_with(0, 4, Some("red"), Some("black"), true, true),
             ]
         );
     }
@@ -2318,16 +1488,16 @@ mod tests {
     #[test]
     fn mix_spans_mixin_between_bases() {
         let base = vec![
-            static_span(0, 3, Some("red"), None, false, false),
-            static_span(7, 10, Some("green"), None, false, false),
+            static_span_with(0, 3, Some("red"), None, false, false),
+            static_span_with(7, 10, Some("green"), None, false, false),
         ];
-        let mixins = vec![static_span(4, 6, Some("blue"), None, false, false)];
+        let mixins = vec![static_span_with(4, 6, Some("blue"), None, false, false)];
         assert_eq!(
             mix_spans(base, mixins),
             vec![
-                static_span(0, 3, Some("red"), None, false, false),
-                static_span(4, 6, Some("blue"), None, false, false),
-                static_span(7, 10, Some("green"), None, false, false),
+                static_span_with(0, 3, Some("red"), None, false, false),
+                static_span_with(4, 6, Some("blue"), None, false, false),
+                static_span_with(7, 10, Some("green"), None, false, false),
             ]
         );
     }
@@ -2336,19 +1506,19 @@ mod tests {
     #[test]
     fn mix_spans_mixin_spans_two_bases() {
         let base = vec![
-            static_span(0, 4, Some("red"), None, false, false),
-            static_span(6, 10, Some("green"), None, false, false),
+            static_span_with(0, 4, Some("red"), None, false, false),
+            static_span_with(6, 10, Some("green"), None, false, false),
         ];
-        let mixins = vec![static_span(2, 8, Some("blue"), None, false, false)];
+        let mixins = vec![static_span_with(2, 8, Some("blue"), None, false, false)];
         assert_eq!(
             mix_spans(base, mixins),
             vec![
                 // base[0] before overlap
-                static_span(0, 2, Some("red"), None, false, false),
+                static_span_with(0, 2, Some("red"), None, false, false),
                 // base[0] ∩ mixin + gap + base[1] ∩ mixin merged (same style)
-                static_span(2, 8, Some("blue"), None, false, false),
+                static_span_with(2, 8, Some("blue"), None, false, false),
                 // base[1] after overlap
-                static_span(8, 10, Some("green"), None, false, false),
+                static_span_with(8, 10, Some("green"), None, false, false),
             ]
         );
     }
@@ -2357,8 +1527,8 @@ mod tests {
     #[test]
     fn mix_spans_no_base() {
         let mixins = vec![
-            static_span(0, 3, Some("blue"), None, false, false),
-            static_span(5, 8, Some("green"), None, false, false),
+            static_span_with(0, 3, Some("blue"), None, false, false),
+            static_span_with(5, 8, Some("green"), None, false, false),
         ];
         assert_eq!(mix_spans(vec![], mixins.clone()), mixins,);
     }
