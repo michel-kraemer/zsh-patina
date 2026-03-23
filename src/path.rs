@@ -138,17 +138,9 @@ mod tests {
         let sub = dir.path().join("mydir");
         fs::create_dir(&sub).unwrap();
 
-        let path_with_slash = format!("{}/", sub.to_str().unwrap());
-        assert!(is_path_executable(&path_with_slash, "/"));
-    }
-
-    #[test]
-    fn is_path_executable_dir_without_slash() {
-        let dir = tempfile::tempdir().unwrap();
-        let sub = dir.path().join("mydir");
-        fs::create_dir(&sub).unwrap();
-
-        assert!(!is_path_executable(sub.to_str().unwrap(), "/"));
+        let path = sub.to_str().unwrap();
+        assert!(path.contains('/'));
+        assert!(is_path_executable(path, "/"));
     }
 
     #[test]

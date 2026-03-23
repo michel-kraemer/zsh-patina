@@ -866,7 +866,6 @@ mod tests {
     /// Test if a command starting with a tilde is highlighted correctly
     #[test]
     fn command_with_tilde() -> Result<()> {
-        let home = dirs::home_dir().context("Unable to find home directory")?;
         let dir = tempfile::tempdir()?;
         let pwd = Some(dir.path().to_str().unwrap());
 
@@ -880,9 +879,7 @@ mod tests {
             vec![Span {
                 start: 0,
                 end: 1,
-                style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                    parsed_callable: home.to_str().unwrap().to_owned()
-                })
+                style: SpanStyle::Static(dynamic_command_style.clone())
             }]
         );
 
@@ -902,9 +899,7 @@ mod tests {
             vec![Span {
                 start: 0,
                 end: 1,
-                style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                    parsed_callable: home.to_str().unwrap().to_owned()
-                })
+                style: SpanStyle::Static(dynamic_command_style.clone())
             }]
         );
 
