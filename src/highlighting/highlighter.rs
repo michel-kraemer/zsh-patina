@@ -140,6 +140,7 @@ impl Highlighter {
             theme
                 .to_syntect(&scope_mapping)
                 .with_context(|| match &config.theme {
+                    ThemeSource::Classic => "Failed to parse classic theme".to_string(),
                     ThemeSource::Lavender => "Failed to parse lavender theme".to_string(),
                     ThemeSource::Nord => "Failed to parse nord theme".to_string(),
                     ThemeSource::Patina => "Failed to parse default theme".to_string(),

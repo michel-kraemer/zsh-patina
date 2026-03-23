@@ -22,6 +22,7 @@ use crate::color::Color;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ThemeSource {
+    Classic,
     Lavender,
     Nord,
     Patina,
@@ -36,6 +37,7 @@ impl Serialize for ThemeSource {
         S: Serializer,
     {
         match self {
+            ThemeSource::Classic => serializer.serialize_str("classic"),
             ThemeSource::Lavender => serializer.serialize_str("lavender"),
             ThemeSource::Nord => serializer.serialize_str("nord"),
             ThemeSource::Patina => serializer.serialize_str("patina"),
@@ -53,6 +55,7 @@ impl<'de> Deserialize<'de> for ThemeSource {
     {
         let s = String::deserialize(deserializer)?;
         match s.as_str() {
+            "classic" => Ok(ThemeSource::Classic),
             "lavender" => Ok(ThemeSource::Lavender),
             "nord" => Ok(ThemeSource::Nord),
             "patina" => Ok(ThemeSource::Patina),
@@ -71,6 +74,7 @@ impl<'de> Deserialize<'de> for ThemeSource {
 impl Display for ThemeSource {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
+            ThemeSource::Classic => write!(f, "classic"),
             ThemeSource::Lavender => write!(f, "lavender"),
             ThemeSource::Nord => write!(f, "nord"),
             ThemeSource::Patina => write!(f, "patina"),
@@ -186,6 +190,8 @@ impl Theme {
         visited.push(source.clone());
 
         let mut theme: Theme = match source {
+            ThemeSource::Classic => toml::from_slice(include_bytes!("../themes/classic.toml"))
+                .context("Unable to load classic theme")?,
             ThemeSource::Lavender => toml::from_slice(include_bytes!("../themes/lavender.toml"))
                 .context("Unable to load lavender theme")?,
             ThemeSource::Nord => toml::from_slice(include_bytes!("../themes/nord.toml"))

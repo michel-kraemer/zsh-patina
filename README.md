@@ -174,10 +174,11 @@ The following built-in themes are available:
 
 | Theme | Description |
 |-------|-------------|
-| `patina` | The **default** theme with a balanced color palette |
-| `lavender` | A variant with magenta/lavender tones |
+| `patina` | The **default** theme with a balanced color palette. |
+| `classic` | ANSI color theme inspired by [fast-syntax-highlighting's default theme](https://github.com/zdharma-continuum/fast-syntax-highlighting/blob/master/themes/default.ini).
+| `lavender` | A variant with magenta/lavender tones. |
 | `nord` | An arctic, north-bluish color palette. Based on [Nord](https://www.nordtheme.com/). |
-| `simple` | A minimal theme with fewer colors |
+| `simple` | A minimal theme with fewer colors. |
 | `tokyonight` | Celebrates the lights of downtown Tokyo at night. Originally by [enkia](https://github.com/tokyo-night/tokyo-night-vscode-theme). |
 
 To load a custom theme from a file, use the `file:` prefix:
