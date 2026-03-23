@@ -8,11 +8,13 @@ use serde::{
 use crate::theme::ThemeSource;
 
 #[derive(Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     pub highlighting: HighlightingConfig,
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct HighlightingConfig {
     /// Either the name of a built-in theme (`"simple"`, `"patina"`,
     /// `"lavender"`) or a string in the form `"file:mytheme.toml"` pointing to
