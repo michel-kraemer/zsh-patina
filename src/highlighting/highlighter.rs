@@ -474,6 +474,7 @@ mod tests {
     use std::{
         fs::{self, Permissions},
         os::unix::fs::PermissionsExt,
+        path::PathBuf,
     };
 
     use crate::config::DynamicConfig;
@@ -481,6 +482,7 @@ mod tests {
     use super::*;
     use anyhow::Result;
     use pretty_assertions::assert_eq;
+    use tempfile::TempDir;
 
     fn test_config() -> HighlightingConfig {
         HighlightingConfig {
@@ -489,64 +491,114 @@ mod tests {
         }
     }
 
-    fn static_span(start: usize, end: usize, style: &StaticStyle) -> Span {
-        Span {
-            start,
-            end,
-            style: SpanStyle::Static(style.clone()),
+    struct TestCfg {
+        highlighter: Highlighter,
+        _homedir: TempDir,
+        tempdir: TempDir,
+        pwd: String,
+    }
+
+    impl TestCfg {
+        fn highlight(&self, command: &str) -> Result<Vec<Span>> {
+            self.highlighter
+                .highlight(command, Some(&self.pwd), |_| true)
+        }
+
+        fn touch_file(&self, name: &str) -> Result<PathBuf> {
+            let test_path = self.tempdir.path().join(name);
+            fs::write(&test_path, "test contents")?;
+            Ok(test_path)
+        }
+
+        fn create_dir(&self, name: &str) -> Result<PathBuf> {
+            let dest_path = self.tempdir.path().join(name);
+            fs::create_dir_all(&dest_path)?;
+            Ok(dest_path)
+        }
+
+        fn touch_script(&self, name: &str) -> Result<PathBuf> {
+            let file_path = self.tempdir.path().join(name);
+            fs::write(&file_path, "#!/bin/sh")?;
+            fs::set_permissions(&file_path, Permissions::from_mode(0o755))?;
+            Ok(file_path)
+        }
+
+        fn static_span(&self, start: usize, end: usize, scope: &str) -> Result<Span> {
+            let style = resolve_static_style(scope, &self.highlighter.theme)
+                .with_context(|| format!("Unable to resolve style for scope {scope}"))?;
+            Ok(Span {
+                start,
+                end,
+                style: SpanStyle::Static(style),
+            })
+        }
+
+        fn dynamic_span(&self, start: usize, end: usize, parsed_callable: &str) -> Span {
+            Span {
+                start,
+                end,
+                style: SpanStyle::Dynamic(DynamicStyle::Callable {
+                    parsed_callable: parsed_callable.to_string(),
+                }),
+            }
+        }
+
+        fn mixed_span(&self, start: usize, end: usize, a: &str, b: &str) -> Result<Span> {
+            let a_style = resolve_static_style(a, &self.highlighter.theme)
+                .with_context(|| format!("Unable to resolve style for scope {a}"))?;
+            let b_style = resolve_static_style(b, &self.highlighter.theme)
+                .with_context(|| format!("Unable to resolve style for scope {b}"))?;
+            Ok(Span {
+                start,
+                end,
+                style: mix_styles(&SpanStyle::Static(a_style), &SpanStyle::Static(b_style)),
+            })
         }
     }
 
-    fn dynamic_span(start: usize, end: usize, parsed_callable: &str) -> Span {
-        Span {
-            start,
-            end,
-            style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                parsed_callable: parsed_callable.to_string(),
-            }),
-        }
+    fn test_cfg() -> Result<TestCfg> {
+        test_cfg_with(test_config())
     }
 
-    fn mixed_span(start: usize, end: usize, a: &StaticStyle, b: &StaticStyle) -> Span {
-        Span {
-            start,
-            end,
-            style: mix_styles(&SpanStyle::Static(a.clone()), &SpanStyle::Static(b.clone())),
-        }
+    fn test_cfg_with(config: HighlightingConfig) -> Result<TestCfg> {
+        let dir = tempfile::tempdir()?;
+        let homedir = tempfile::tempdir()?;
+        let pwd = dir.path().to_str().unwrap().to_owned();
+
+        let highlighter = HighlighterBuilder::new(&config)
+            .home_dir(homedir.path().to_str().unwrap().to_owned())
+            .build()?;
+
+        Ok(TestCfg {
+            highlighter,
+            _homedir: homedir,
+            tempdir: dir,
+            pwd,
+        })
     }
 
     /// Test if a simple `echo` command is highlighted correctly
     #[test]
     fn echo() -> Result<()> {
-        let dir = tempfile::tempdir()?;
-        let pwd = Some(dir.path().to_str().unwrap());
-        let highlighter = HighlighterBuilder::new(&test_config()).build()?;
-        let highlighted = highlighter.highlight("echo", pwd, |_| true)?;
-        assert_eq!(highlighted, vec![dynamic_span(0, 4, "echo")]);
+        let cfg = test_cfg()?;
+        let highlighted = cfg.highlight("echo")?;
+        assert_eq!(highlighted, vec![cfg.dynamic_span(0, 4, "echo")]);
         Ok(())
     }
 
     #[test]
     fn path_with_emoji() -> Result<()> {
-        let dir = tempfile::tempdir()?;
-        let test_path = dir.path().join("test🐑.txt");
-        fs::write(test_path, "test contents")?;
-        let dest_path = dir.path().join("🐑");
-        fs::write(dest_path, "test contents")?;
-        let pwd = Some(dir.path().to_str().unwrap());
+        let cfg = test_cfg()?;
+        cfg.touch_file("test🐑.txt")?;
+        cfg.touch_file("🐑")?;
 
-        let highlighter = HighlighterBuilder::new(&test_config()).build()?;
-        let dynamic_file_style =
-            resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
-        let string_style = resolve_static_style(STRING_QUOTED_DOUBLE, &highlighter.theme).unwrap();
-
-        let highlighted = highlighter.highlight(r#"cp🐑 "test🐑.txt" 🐑"#, pwd, |_| true)?;
+        let highlighted = cfg.highlight(r#"cp🐑 "test🐑.txt" 🐑"#)?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 3, "cp🐑"),
-                mixed_span(4, 15, &string_style, &dynamic_file_style),
-                static_span(16, 17, &dynamic_file_style),
+                cfg.dynamic_span(0, 3, "cp🐑"),
+                cfg.mixed_span(4, 15, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(16, 17, DYNAMIC_PATH_FILE)?,
             ]
         );
         Ok(())
@@ -554,45 +606,39 @@ mod tests {
 
     #[test]
     fn dynamic_highlighting_disabled() -> Result<()> {
-        let dir = tempfile::tempdir()?;
-        let test_path = dir.path().join("test.txt");
-        fs::write(test_path, "test contents")?;
-        let pwd = Some(dir.path().to_str().unwrap());
-
         let mut config = test_config();
         config.dynamic = DynamicConfig {
             callables: false,
             paths: false,
         };
-        let highlighter = HighlighterBuilder::new(&config).build()?;
-        let callable_style = resolve_static_style(CALLABLE, &highlighter.theme).unwrap();
+        let mut cfg = test_cfg_with(config)?;
+        cfg.touch_file("test.txt")?;
 
-        let highlighted = highlighter.highlight("ls test.txt", pwd, |_| true)?;
-        assert_eq!(highlighted, vec![static_span(0, 2, &callable_style)]);
+        let highlighted = cfg.highlight("ls test.txt")?;
+        assert_eq!(highlighted, vec![cfg.static_span(0, 2, CALLABLE)?]);
 
+        let mut config = test_config();
         config.dynamic = DynamicConfig {
             callables: true,
             paths: false,
         };
-        let highlighter = HighlighterBuilder::new(&config).build()?;
+        cfg.highlighter = HighlighterBuilder::new(&config).build()?;
 
-        let highlighted = highlighter.highlight("ls test.txt", pwd, |_| true)?;
-        assert_eq!(highlighted, vec![dynamic_span(0, 2, "ls")]);
+        let highlighted = cfg.highlight("ls test.txt")?;
+        assert_eq!(highlighted, vec![cfg.dynamic_span(0, 2, "ls")]);
 
         config.dynamic = DynamicConfig {
             callables: false,
             paths: true,
         };
-        let highlighter = HighlighterBuilder::new(&config).build()?;
-        let dynamic_file_style =
-            resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
+        cfg.highlighter = HighlighterBuilder::new(&config).build()?;
 
-        let highlighted = highlighter.highlight("ls test.txt", pwd, |_| true)?;
+        let highlighted = cfg.highlight("ls test.txt")?;
         assert_eq!(
             highlighted,
             vec![
-                static_span(0, 2, &callable_style),
-                static_span(3, 11, &dynamic_file_style)
+                cfg.static_span(0, 2, CALLABLE)?,
+                cfg.static_span(3, 11, DYNAMIC_PATH_FILE)?
             ]
         );
 
@@ -602,104 +648,94 @@ mod tests {
     /// Test if a command referring to a file is highlighted correctly
     #[test]
     fn argument_is_file() -> Result<()> {
-        let dir = tempfile::tempdir()?;
-        let test_path = dir.path().join("test.txt");
-        fs::write(test_path, "test contents")?;
-        let test_path1 = dir.path().join("test 1.txt");
-        fs::write(test_path1, "test contents")?;
-        let pwd = Some(dir.path().to_str().unwrap());
+        let cfg = test_cfg()?;
+        cfg.touch_file("test.txt")?;
+        cfg.touch_file("test 1.txt")?;
 
-        let highlighter = HighlighterBuilder::new(&test_config()).build()?;
-        let dynamic_file_style =
-            resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
-        let string_style = resolve_static_style(STRING_QUOTED_DOUBLE, &highlighter.theme).unwrap();
-        let escape_style = resolve_static_style(CHARACTER_ESCAPE, &highlighter.theme).unwrap();
-
-        let highlighted = highlighter.highlight("cp test.txt dest.txt", pwd, |_| true)?;
+        let highlighted = cfg.highlight("cp test.txt dest.txt")?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "cp"),
-                static_span(3, 11, &dynamic_file_style),
+                cfg.dynamic_span(0, 2, "cp"),
+                cfg.static_span(3, 11, DYNAMIC_PATH_FILE)?,
             ]
         );
 
-        let highlighted = highlighter.highlight(r#"cp "test.txt" dest.txt"#, pwd, |_| true)?;
+        let highlighted = cfg.highlight(r#"cp "test.txt" dest.txt"#)?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "cp"),
-                mixed_span(3, 13, &string_style, &dynamic_file_style),
+                cfg.dynamic_span(0, 2, "cp"),
+                cfg.mixed_span(3, 13, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
             ]
         );
 
-        let highlighted =
-            highlighter.highlight(r#"cp   "test.txt"   "dest.txt""#, pwd, |_| true)?;
+        let highlighted = cfg.highlight(r#"cp   "test.txt"   "dest.txt""#)?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "cp"),
-                mixed_span(5, 15, &string_style, &dynamic_file_style),
-                static_span(18, 28, &string_style),
+                cfg.dynamic_span(0, 2, "cp"),
+                cfg.mixed_span(5, 15, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(18, 28, STRING_QUOTED_DOUBLE)?,
             ]
         );
 
-        let highlighted = highlighter.highlight(r#"cp " test.txt" "dest.txt""#, pwd, |_| true)?;
+        let highlighted = cfg.highlight(r#"cp " test.txt" "dest.txt""#)?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "cp"),
-                static_span(3, 14, &string_style),
-                static_span(15, 25, &string_style),
+                cfg.dynamic_span(0, 2, "cp"),
+                cfg.static_span(3, 14, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(15, 25, STRING_QUOTED_DOUBLE)?,
             ]
         );
 
-        let highlighted = highlighter.highlight(r#"cp te"st.tx"t dest.txt"#, pwd, |_| true)?;
+        let highlighted = cfg.highlight(r#"cp te"st.tx"t dest.txt"#)?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "cp"),
-                static_span(3, 5, &dynamic_file_style),
-                mixed_span(5, 12, &string_style, &dynamic_file_style),
-                static_span(12, 13, &dynamic_file_style),
+                cfg.dynamic_span(0, 2, "cp"),
+                cfg.static_span(3, 5, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(5, 12, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(12, 13, DYNAMIC_PATH_FILE)?,
             ]
         );
 
-        let highlighted = highlighter.highlight(r#"cp "test 1.txt" dest.txt"#, pwd, |_| true)?;
+        let highlighted = cfg.highlight(r#"cp "test 1.txt" dest.txt"#)?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "cp"),
-                mixed_span(3, 15, &string_style, &dynamic_file_style),
+                cfg.dynamic_span(0, 2, "cp"),
+                cfg.mixed_span(3, 15, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
             ]
         );
 
-        let highlighted = highlighter.highlight(r#"cp test\ 1.txt dest.txt"#, pwd, |_| true)?;
+        let highlighted = cfg.highlight(r#"cp test\ 1.txt dest.txt"#)?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "cp"),
-                static_span(3, 7, &dynamic_file_style),
-                mixed_span(7, 9, &escape_style, &dynamic_file_style),
-                static_span(9, 14, &dynamic_file_style),
+                cfg.dynamic_span(0, 2, "cp"),
+                cfg.static_span(3, 7, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(7, 9, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(9, 14, DYNAMIC_PATH_FILE)?,
             ]
         );
 
-        let highlighted = highlighter.highlight(r#"cp 'test.txt' dest.txt"#, pwd, |_| true)?;
+        let highlighted = cfg.highlight(r#"cp 'test.txt' dest.txt"#)?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "cp"),
-                mixed_span(3, 13, &string_style, &dynamic_file_style),
+                cfg.dynamic_span(0, 2, "cp"),
+                cfg.mixed_span(3, 13, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
             ]
         );
 
-        let highlighted = highlighter.highlight(r#"cp $'test.txt' dest.txt"#, pwd, |_| true)?;
+        let highlighted = cfg.highlight(r#"cp $'test.txt' dest.txt"#)?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "cp"),
-                mixed_span(3, 14, &string_style, &dynamic_file_style),
+                cfg.dynamic_span(0, 2, "cp"),
+                cfg.mixed_span(3, 14, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
             ]
         );
 
@@ -709,27 +745,18 @@ mod tests {
     /// Test if a command referring to a directory is highlighted correctly
     #[test]
     fn argument_is_directory() -> Result<()> {
-        let dir = tempfile::tempdir()?;
-        let test_path = dir.path().join("test.txt");
-        fs::write(test_path, "test contents")?;
-        let dest_path = dir.path().join("dest");
-        fs::create_dir(dest_path)?;
-        let pwd = Some(dir.path().to_str().unwrap());
+        let cfg = test_cfg()?;
+        cfg.touch_file("test.txt")?;
+        cfg.create_dir("dest")?;
 
-        let highlighter = HighlighterBuilder::new(&test_config()).build()?;
-        let highlighted = highlighter.highlight("cp test.txt dest", pwd, |_| true)?;
-
-        let dynamic_file_style =
-            resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
-        let dynamic_directory_style =
-            resolve_static_style(DYNAMIC_PATH_DIRECTORY, &highlighter.theme).unwrap();
+        let highlighted = cfg.highlight("cp test.txt dest")?;
 
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "cp"),
-                static_span(3, 11, &dynamic_file_style),
-                static_span(12, 16, &dynamic_directory_style),
+                cfg.dynamic_span(0, 2, "cp"),
+                cfg.static_span(3, 11, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(12, 16, DYNAMIC_PATH_DIRECTORY)?,
             ]
         );
 
@@ -739,33 +766,34 @@ mod tests {
     /// Test if a command starting with a tilde is highlighted correctly
     #[test]
     fn command_with_tilde() -> Result<()> {
-        let dir = tempfile::tempdir()?;
-        let pwd = Some(dir.path().to_str().unwrap());
-        let home_dir = tempfile::tempdir()?;
+        let cfg = test_cfg()?;
 
-        let highlighter = HighlighterBuilder::new(&test_config())
-            .home_dir(home_dir.path().to_str().unwrap().to_owned())
-            .build()?;
-        let dynamic_command_style =
-            resolve_static_style(DYNAMIC_CALLABLE_COMMAND, &highlighter.theme).unwrap();
+        let highlighted = cfg.highlight("~")?;
+        assert_eq!(
+            highlighted,
+            vec![cfg.static_span(0, 1, DYNAMIC_CALLABLE_COMMAND)?]
+        );
 
-        let highlighted = highlighter.highlight("~", pwd, |_| true)?;
-        assert_eq!(highlighted, vec![static_span(0, 1, &dynamic_command_style)]);
+        let highlighted = cfg.highlight("~/")?;
+        assert_eq!(
+            highlighted,
+            vec![cfg.static_span(0, 2, DYNAMIC_CALLABLE_COMMAND)?]
+        );
 
-        let highlighted = highlighter.highlight("~/", pwd, |_| true)?;
-        assert_eq!(highlighted, vec![static_span(0, 2, &dynamic_command_style)]);
+        let highlighted = cfg.highlight("~ echo")?;
+        assert_eq!(
+            highlighted,
+            vec![cfg.static_span(0, 1, DYNAMIC_CALLABLE_COMMAND)?]
+        );
 
-        let highlighted = highlighter.highlight("~ echo", pwd, |_| true)?;
-        assert_eq!(highlighted, vec![static_span(0, 1, &dynamic_command_style)]);
+        let highlighted = cfg.highlight("~doesnotexist")?;
+        assert_eq!(highlighted, vec![cfg.dynamic_span(0, 13, "~doesnotexist")]);
 
-        let highlighted = highlighter.highlight("~doesnotexist", pwd, |_| true)?;
-        assert_eq!(highlighted, vec![dynamic_span(0, 13, "~doesnotexist")]);
+        let highlighted = cfg.highlight(r#""~""#)?;
+        assert_eq!(highlighted, vec![cfg.dynamic_span(0, 3, "~")]);
 
-        let highlighted = highlighter.highlight(r#""~""#, pwd, |_| true)?;
-        assert_eq!(highlighted, vec![dynamic_span(0, 3, "~")]);
-
-        let highlighted = highlighter.highlight(r#""~/""#, pwd, |_| true)?;
-        assert_eq!(highlighted, vec![dynamic_span(0, 4, "~/")]);
+        let highlighted = cfg.highlight(r#""~/""#)?;
+        assert_eq!(highlighted, vec![cfg.dynamic_span(0, 4, "~/")]);
 
         Ok(())
     }
@@ -773,80 +801,82 @@ mod tests {
     /// Test if a path starting with a tilde is highlighted correctly
     #[test]
     fn path_with_tilde() -> Result<()> {
-        let dir = tempfile::tempdir()?;
-        let test_path = dir.path().join("test.txt");
-        fs::write(test_path, "test contents")?;
-        let pwd = Some(dir.path().to_str().unwrap());
-        let home_dir = tempfile::tempdir()?;
+        let cfg = test_cfg()?;
+        cfg.touch_file("test.txt")?;
 
-        let highlighter = HighlighterBuilder::new(&test_config())
-            .home_dir(home_dir.path().to_str().unwrap().to_owned())
-            .build()?;
-        let tilde_style = resolve_static_style(TILDE_VARIABLE, &highlighter.theme).unwrap();
-        let string_style = resolve_static_style(STRING_QUOTED_DOUBLE, &highlighter.theme).unwrap();
-        let dynamic_directory_style =
-            resolve_static_style(DYNAMIC_PATH_DIRECTORY, &highlighter.theme).unwrap();
-        let dynamic_file_style =
-            resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
-
-        let highlighted = highlighter.highlight("ls ~", pwd, |_| true)?;
+        let highlighted = cfg.highlight("ls ~")?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "ls"),
-                mixed_span(3, 4, &tilde_style, &dynamic_directory_style),
+                cfg.dynamic_span(0, 2, "ls"),
+                cfg.mixed_span(3, 4, TILDE_VARIABLE, DYNAMIC_PATH_DIRECTORY)?,
             ]
         );
 
-        let highlighted = highlighter.highlight("ls ~/", pwd, |_| true)?;
+        let highlighted = cfg.highlight("ls ~/")?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "ls"),
-                mixed_span(3, 4, &tilde_style, &dynamic_directory_style),
-                static_span(4, 5, &dynamic_directory_style),
+                cfg.dynamic_span(0, 2, "ls"),
+                cfg.mixed_span(3, 4, TILDE_VARIABLE, DYNAMIC_PATH_DIRECTORY)?,
+                cfg.static_span(4, 5, DYNAMIC_PATH_DIRECTORY)?,
             ]
         );
 
-        let highlighted = highlighter.highlight("ls ~/ test.txt", pwd, |_| true)?;
+        let highlighted = cfg.highlight("ls ~/ test.txt")?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "ls"),
-                mixed_span(3, 4, &tilde_style, &dynamic_directory_style),
-                static_span(4, 5, &dynamic_directory_style),
-                static_span(6, 14, &dynamic_file_style),
+                cfg.dynamic_span(0, 2, "ls"),
+                cfg.mixed_span(3, 4, TILDE_VARIABLE, DYNAMIC_PATH_DIRECTORY)?,
+                cfg.static_span(4, 5, DYNAMIC_PATH_DIRECTORY)?,
+                cfg.static_span(6, 14, DYNAMIC_PATH_FILE)?,
             ]
         );
 
-        let highlighted = highlighter.highlight(r#"ls "~/""#, pwd, |_| true)?;
+        let highlighted = cfg.highlight(r#"ls "~/""#)?;
         assert_eq!(
             highlighted,
-            vec![dynamic_span(0, 2, "ls"), static_span(3, 7, &string_style),]
+            vec![
+                cfg.dynamic_span(0, 2, "ls"),
+                cfg.static_span(3, 7, STRING_QUOTED_DOUBLE)?
+            ]
         );
 
-        let highlighted = highlighter.highlight("ls '~/'", pwd, |_| true)?;
+        let highlighted = cfg.highlight("ls '~/'")?;
         assert_eq!(
             highlighted,
-            vec![dynamic_span(0, 2, "ls"), static_span(3, 7, &string_style),]
+            vec![
+                cfg.dynamic_span(0, 2, "ls"),
+                cfg.static_span(3, 7, STRING_QUOTED_DOUBLE)?
+            ]
         );
 
-        let highlighted = highlighter.highlight("ls $'~/'", pwd, |_| true)?;
+        let highlighted = cfg.highlight("ls $'~/'")?;
         assert_eq!(
             highlighted,
-            vec![dynamic_span(0, 2, "ls"), static_span(3, 8, &string_style),]
+            vec![
+                cfg.dynamic_span(0, 2, "ls"),
+                cfg.static_span(3, 8, STRING_QUOTED_DOUBLE)?
+            ]
         );
 
-        let highlighted = highlighter.highlight("ls ~/this/path/does/not/exist", pwd, |_| true)?;
+        let highlighted = cfg.highlight("ls ~/this/path/does/not/exist")?;
         assert_eq!(
             highlighted,
-            vec![dynamic_span(0, 2, "ls"), static_span(3, 4, &tilde_style),]
+            vec![
+                cfg.dynamic_span(0, 2, "ls"),
+                cfg.static_span(3, 4, TILDE_VARIABLE)?,
+            ]
         );
 
-        let highlighted = highlighter.highlight("ls test/~/", pwd, |_| true)?;
+        let highlighted = cfg.highlight("ls test/~/")?;
         assert_eq!(
             highlighted,
-            vec![dynamic_span(0, 2, "ls"), static_span(8, 9, &tilde_style),]
+            vec![
+                cfg.dynamic_span(0, 2, "ls"),
+                cfg.static_span(8, 9, TILDE_VARIABLE)?
+            ]
         );
 
         Ok(())
@@ -854,23 +884,16 @@ mod tests {
 
     #[test]
     fn path_followed_by_parameter() -> Result<()> {
-        let dir = tempfile::tempdir()?;
-        let test_path = dir.path().join("test.txt");
-        fs::write(test_path, "test contents")?;
-        let pwd = Some(dir.path().to_str().unwrap());
+        let cfg = test_cfg()?;
+        cfg.touch_file("test.txt")?;
 
-        let highlighter = HighlighterBuilder::new(&test_config()).build()?;
-        let dynamic_file_style =
-            resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
-        let parameter_style = resolve_static_style(PARAMETER, &highlighter.theme).unwrap();
-
-        let highlighted = highlighter.highlight("foo test.txt -C", pwd, |_| true)?;
+        let highlighted = cfg.highlight("foo test.txt -C")?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 3, "foo"),
-                static_span(4, 12, &dynamic_file_style),
-                static_span(12, 15, &parameter_style),
+                cfg.dynamic_span(0, 3, "foo"),
+                cfg.static_span(4, 12, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(12, 15, PARAMETER)?,
             ]
         );
 
@@ -879,56 +902,48 @@ mod tests {
 
     #[test]
     fn redirection() -> Result<()> {
-        let dir = tempfile::tempdir()?;
-        let test_path = dir.path().join("test.txt");
-        fs::write(test_path, "test contents")?;
-        let pwd = Some(dir.path().to_str().unwrap());
+        let cfg = test_cfg()?;
+        cfg.touch_file("test.txt")?;
 
-        let highlighter = HighlighterBuilder::new(&test_config()).build()?;
-        let dynamic_file_style =
-            resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
-        let redirection_style = resolve_static_style(REDIRECTION, &highlighter.theme).unwrap();
-        let env_var_style = resolve_static_style(ENVIRONMENT_VARIABLE, &highlighter.theme).unwrap();
-
-        let highlighted = highlighter.highlight("echo hello > test.txt", pwd, |_| true)?;
+        let highlighted = cfg.highlight("echo hello > test.txt")?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 4, "echo"),
-                static_span(11, 12, &redirection_style),
-                static_span(13, 21, &dynamic_file_style),
+                cfg.dynamic_span(0, 4, "echo"),
+                cfg.static_span(11, 12, REDIRECTION)?,
+                cfg.static_span(13, 21, DYNAMIC_PATH_FILE)?,
             ]
         );
 
-        let highlighted = highlighter.highlight("echo hello>test.txt", pwd, |_| true)?;
+        let highlighted = cfg.highlight("echo hello>test.txt")?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 4, "echo"),
-                static_span(10, 11, &redirection_style),
-                static_span(11, 19, &dynamic_file_style),
+                cfg.dynamic_span(0, 4, "echo"),
+                cfg.static_span(10, 11, REDIRECTION)?,
+                cfg.static_span(11, 19, DYNAMIC_PATH_FILE)?,
             ]
         );
 
-        let highlighted = highlighter.highlight("echo ${FOO}hello>test.txt", pwd, |_| true)?;
+        let highlighted = cfg.highlight("echo ${FOO}hello>test.txt")?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 4, "echo"),
-                static_span(5, 11, &env_var_style),
-                static_span(16, 17, &redirection_style),
-                static_span(17, 25, &dynamic_file_style),
+                cfg.dynamic_span(0, 4, "echo"),
+                cfg.static_span(5, 11, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(16, 17, REDIRECTION)?,
+                cfg.static_span(17, 25, DYNAMIC_PATH_FILE)?,
             ]
         );
 
-        let highlighted = highlighter.highlight("echo hello$FOO>test.txt", pwd, |_| true)?;
+        let highlighted = cfg.highlight("echo hello$FOO>test.txt")?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 4, "echo"),
-                static_span(10, 14, &env_var_style),
-                static_span(14, 15, &redirection_style),
-                static_span(15, 23, &dynamic_file_style),
+                cfg.dynamic_span(0, 4, "echo"),
+                cfg.static_span(10, 14, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(14, 15, REDIRECTION)?,
+                cfg.static_span(15, 23, DYNAMIC_PATH_FILE)?,
             ]
         );
 
@@ -937,37 +952,28 @@ mod tests {
 
     #[test]
     fn double_quoted_callable() -> Result<()> {
-        let dir = tempfile::tempdir()?;
-        let pwd = Some(dir.path().to_str().unwrap());
+        let cfg = test_cfg()?;
 
-        let highlighter = HighlighterBuilder::new(&test_config()).build()?;
+        let highlighted = cfg.highlight("\"ls\"")?;
+        assert_eq!(highlighted, vec![cfg.dynamic_span(0, 4, "ls")]);
 
-        let highlighted = highlighter.highlight("\"ls\"", pwd, |_| true)?;
-        assert_eq!(highlighted, vec![dynamic_span(0, 4, "ls")]);
+        let highlighted = cfg.highlight("l\"s\"")?;
+        assert_eq!(highlighted, vec![cfg.dynamic_span(0, 4, "ls")]);
 
-        let highlighted = highlighter.highlight("l\"s\"", pwd, |_| true)?;
-        assert_eq!(highlighted, vec![dynamic_span(0, 4, "ls")]);
+        cfg.touch_script("script.sh")?;
 
-        let file_path = dir.path().join("script.sh");
-        fs::write(&file_path, "#!/bin/sh")?;
-        fs::set_permissions(&file_path, Permissions::from_mode(0o755))?;
-
-        let dynamic_callable_style =
-            resolve_static_style(DYNAMIC_CALLABLE_COMMAND, &highlighter.theme).unwrap();
-
-        let highlighted = highlighter.highlight("\"./script.sh\"", pwd, |_| true)?;
+        let highlighted = cfg.highlight("\"./script.sh\"")?;
         assert_eq!(
             highlighted,
-            vec![static_span(0, 13, &dynamic_callable_style)]
+            vec![cfg.static_span(0, 13, DYNAMIC_CALLABLE_COMMAND)?]
         );
 
-        let directory_path = dir.path().join("foo/bar");
-        fs::create_dir_all(&directory_path)?;
+        cfg.create_dir("foo/bar")?;
 
-        let highlighted = highlighter.highlight("foo/\"bar\"/", pwd, |_| true)?;
+        let highlighted = cfg.highlight("foo/\"bar\"/")?;
         assert_eq!(
             highlighted,
-            vec![static_span(0, 10, &dynamic_callable_style)]
+            vec![cfg.static_span(0, 10, DYNAMIC_CALLABLE_COMMAND)?]
         );
 
         Ok(())
@@ -975,45 +981,32 @@ mod tests {
 
     #[test]
     fn escape_unquoted_at_beginning() -> Result<()> {
-        let dir = tempfile::tempdir()?;
-        let test_path = dir.path().join("test.txt");
-        fs::write(test_path, "test contents")?;
-        let script_path = dir.path().join("script.sh");
-        fs::write(&script_path, "#!/bin/sh")?;
-        fs::set_permissions(&script_path, Permissions::from_mode(0o755))?;
-        let s_path = dir.path().join("s");
-        fs::write(&s_path, "#!/bin/sh")?;
-        fs::set_permissions(&s_path, Permissions::from_mode(0o755))?;
-        let pwd = Some(dir.path().to_str().unwrap());
+        let cfg = test_cfg()?;
+        cfg.touch_file("test.txt")?;
+        cfg.touch_script("script.sh")?;
+        cfg.touch_script("s")?;
 
-        let highlighter = HighlighterBuilder::new(&test_config()).build()?;
-        let escape_style = resolve_static_style(CHARACTER_ESCAPE, &highlighter.theme).unwrap();
-        let dynamic_callable_style =
-            resolve_static_style(DYNAMIC_CALLABLE_COMMAND, &highlighter.theme).unwrap();
-        let dynamic_file_style =
-            resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
+        let highlighted = cfg.highlight(r"\script.sh")?;
+        assert_eq!(highlighted, vec![cfg.dynamic_span(0, 10, "script.sh")]);
 
-        let highlighted = highlighter.highlight(r"\script.sh", pwd, |_| true)?;
-        assert_eq!(highlighted, vec![dynamic_span(0, 10, "script.sh")]);
-
-        let highlighted = highlighter.highlight(r"\./script.sh", pwd, |_| true)?;
+        let highlighted = cfg.highlight(r"\./script.sh")?;
         assert_eq!(
             highlighted,
-            vec![static_span(0, 12, &dynamic_callable_style)]
+            vec![cfg.static_span(0, 12, DYNAMIC_CALLABLE_COMMAND)?]
         );
 
         // parser cannot differentiate between normal unquoted character escapes
         // and those that are at the beginning of a callable
-        let highlighted = highlighter.highlight(r"\s", pwd, |_| true)?;
-        assert_eq!(highlighted, vec![static_span(0, 2, &escape_style)]);
+        let highlighted = cfg.highlight(r"\s")?;
+        assert_eq!(highlighted, vec![cfg.static_span(0, 2, CHARACTER_ESCAPE)?]);
 
-        let highlighted = highlighter.highlight(r"touch \test.txt", pwd, |_| true)?;
+        let highlighted = cfg.highlight(r"touch \test.txt")?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 5, "touch"),
-                mixed_span(6, 8, &escape_style, &dynamic_file_style),
-                static_span(8, 15, &dynamic_file_style),
+                cfg.dynamic_span(0, 5, "touch"),
+                cfg.mixed_span(6, 8, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(8, 15, DYNAMIC_PATH_FILE)?,
             ]
         );
 
@@ -1022,31 +1015,27 @@ mod tests {
 
     #[test]
     fn path_with_escape_unquoted() -> Result<()> {
-        let dir = tempfile::tempdir()?;
-        let pwd = Some(dir.path().to_str().unwrap());
+        let cfg = test_cfg()?;
 
-        let highlighter = HighlighterBuilder::new(&test_config()).build()?;
-        let dynamic_file_style =
-            resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
-        let escape_style = resolve_static_style(CHARACTER_ESCAPE, &highlighter.theme).unwrap();
-
-        let highlighted = highlighter.highlight(r"cp test\u2580.txt dest.txt", pwd, |_| true)?;
-        assert_eq!(
-            highlighted,
-            vec![dynamic_span(0, 2, "cp"), static_span(7, 9, &escape_style),]
-        );
-
-        let test_path = dir.path().join("testu2580.txt");
-        fs::write(test_path, "test contents")?;
-
-        let highlighted = highlighter.highlight(r"cp test\u2580.txt dest.txt", pwd, |_| true)?;
+        let highlighted = cfg.highlight(r"cp test\u2580.txt dest.txt")?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "cp"),
-                static_span(3, 7, &dynamic_file_style),
-                mixed_span(7, 9, &escape_style, &dynamic_file_style),
-                static_span(9, 17, &dynamic_file_style),
+                cfg.dynamic_span(0, 2, "cp"),
+                cfg.static_span(7, 9, CHARACTER_ESCAPE)?
+            ]
+        );
+
+        cfg.touch_file("testu2580.txt")?;
+
+        let highlighted = cfg.highlight(r"cp test\u2580.txt dest.txt")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 2, "cp"),
+                cfg.static_span(3, 7, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(7, 9, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(9, 17, DYNAMIC_PATH_FILE)?,
             ]
         );
 
@@ -1055,98 +1044,98 @@ mod tests {
 
     #[test]
     fn path_with_escape_quoted() -> Result<()> {
-        let dir = tempfile::tempdir()?;
-        let test_path = dir.path().join("test▀.txt");
-        fs::write(test_path, "test contents")?;
-        let test_path1 = dir.path().join("test  1.txt");
-        fs::write(test_path1, "test contents")?;
-        let pwd = Some(dir.path().to_str().unwrap());
+        let cfg = test_cfg()?;
+        cfg.touch_file("test▀.txt")?;
+        cfg.touch_file("test  1.txt")?;
 
-        let highlighter = HighlighterBuilder::new(&test_config()).build()?;
-        let dynamic_file_style =
-            resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
-        let string_style = resolve_static_style(STRING_QUOTED_DOUBLE, &highlighter.theme).unwrap();
-        let escape_style = resolve_static_style(CHARACTER_ESCAPE, &highlighter.theme).unwrap();
-
-        let highlighted = highlighter.highlight(r"cp test\u2580.txt dest.txt", pwd, |_| true)?;
-        assert_eq!(
-            highlighted,
-            vec![dynamic_span(0, 2, "cp"), static_span(7, 9, &escape_style),]
-        );
-
-        let highlighted =
-            highlighter.highlight(r#"cp "test\u2580.txt" dest.txt"#, pwd, |_| true)?;
-        assert_eq!(
-            highlighted,
-            vec![dynamic_span(0, 2, "cp"), static_span(3, 19, &string_style),]
-        );
-
-        let highlighted =
-            highlighter.highlight(r#"cp 'test\u2580.txt' dest.txt"#, pwd, |_| true)?;
-        assert_eq!(
-            highlighted,
-            vec![dynamic_span(0, 2, "cp"), static_span(3, 19, &string_style),]
-        );
-
-        let highlighted =
-            highlighter.highlight(r#"cp $'test\u2580.txt' dest.txt"#, pwd, |_| true)?;
+        let highlighted = cfg.highlight(r"cp test\u2580.txt dest.txt")?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "cp"),
-                mixed_span(3, 9, &string_style, &dynamic_file_style),
-                mixed_span(9, 15, &escape_style, &dynamic_file_style),
-                mixed_span(15, 20, &string_style, &dynamic_file_style),
+                cfg.dynamic_span(0, 2, "cp"),
+                cfg.static_span(7, 9, CHARACTER_ESCAPE)?
             ]
         );
 
-        let highlighted = highlighter.highlight(r#"cp test\ \ 1.txt dest.txt"#, pwd, |_| true)?;
+        let highlighted = cfg.highlight(r#"cp "test\u2580.txt" dest.txt"#)?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "cp"),
-                static_span(3, 7, &dynamic_file_style),
-                mixed_span(7, 11, &escape_style, &dynamic_file_style),
-                static_span(11, 16, &dynamic_file_style),
+                cfg.dynamic_span(0, 2, "cp"),
+                cfg.static_span(3, 19, STRING_QUOTED_DOUBLE)?
             ]
         );
 
-        let highlighted = highlighter.highlight(r#"cp "test\ \ 1.txt" dest.txt"#, pwd, |_| true)?;
-        assert_eq!(
-            highlighted,
-            vec![dynamic_span(0, 2, "cp"), static_span(3, 18, &string_style),]
-        );
-
-        let highlighted =
-            highlighter.highlight(r#"cp $'test\ \ 1.txt' dest.txt"#, pwd, |_| true)?;
-        assert_eq!(
-            highlighted,
-            vec![dynamic_span(0, 2, "cp"), static_span(3, 19, &string_style),]
-        );
-
-        let highlighted =
-            highlighter.highlight(r#"cp $'test\x20\x201.txt' dest.txt"#, pwd, |_| true)?;
+        let highlighted = cfg.highlight(r#"cp 'test\u2580.txt' dest.txt"#)?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "cp"),
-                mixed_span(3, 9, &string_style, &dynamic_file_style),
-                mixed_span(9, 17, &escape_style, &dynamic_file_style),
-                mixed_span(17, 23, &string_style, &dynamic_file_style),
+                cfg.dynamic_span(0, 2, "cp"),
+                cfg.static_span(3, 19, STRING_QUOTED_DOUBLE)?
             ]
         );
 
-        let highlighted =
-            highlighter.highlight(r#"cp test$'\x20\x20'1.txt dest.txt"#, pwd, |_| true)?;
+        let highlighted = cfg.highlight(r#"cp $'test\u2580.txt' dest.txt"#)?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "cp"),
-                static_span(3, 7, &dynamic_file_style),
-                mixed_span(7, 9, &string_style, &dynamic_file_style),
-                mixed_span(9, 17, &escape_style, &dynamic_file_style),
-                mixed_span(17, 18, &string_style, &dynamic_file_style),
-                static_span(18, 23, &dynamic_file_style),
+                cfg.dynamic_span(0, 2, "cp"),
+                cfg.mixed_span(3, 9, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(9, 15, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(15, 20, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight(r#"cp test\ \ 1.txt dest.txt"#)?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 2, "cp"),
+                cfg.static_span(3, 7, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(7, 11, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(11, 16, DYNAMIC_PATH_FILE)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight(r#"cp "test\ \ 1.txt" dest.txt"#)?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 2, "cp"),
+                cfg.static_span(3, 18, STRING_QUOTED_DOUBLE)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight(r#"cp $'test\ \ 1.txt' dest.txt"#)?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 2, "cp"),
+                cfg.static_span(3, 19, STRING_QUOTED_DOUBLE)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight(r#"cp $'test\x20\x201.txt' dest.txt"#)?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 2, "cp"),
+                cfg.mixed_span(3, 9, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(9, 17, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(17, 23, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight(r#"cp test$'\x20\x20'1.txt dest.txt"#)?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 2, "cp"),
+                cfg.static_span(3, 7, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(7, 9, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(9, 17, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(17, 18, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(18, 23, DYNAMIC_PATH_FILE)?,
             ]
         );
 
@@ -1155,30 +1144,22 @@ mod tests {
 
     #[test]
     fn command_with_multibyte_escape() -> Result<()> {
-        let dir = tempfile::tempdir()?;
-        let subdir = dir.path().join("sub");
-        fs::create_dir_all(&subdir)?;
+        let cfg = test_cfg()?;
+        let subdir = cfg.create_dir("sub")?;
         let test_path = subdir.join("test😎.sh");
         fs::write(&test_path, "#!/bin/sh")?;
         fs::set_permissions(&test_path, Permissions::from_mode(0o755))?;
-        let pwd = Some(dir.path().to_str().unwrap());
 
-        let highlighter = HighlighterBuilder::new(&test_config()).build()?;
-        let dynamic_command_style =
-            resolve_static_style(DYNAMIC_CALLABLE_COMMAND, &highlighter.theme).unwrap();
-
-        let highlighted =
-            highlighter.highlight(r"$'sub/test\xF0\x9F\x98\x8E.sh'", pwd, |_| true)?;
+        let highlighted = cfg.highlight(r"$'sub/test\xF0\x9F\x98\x8E.sh'")?;
         assert_eq!(
             highlighted,
-            vec![static_span(0, 30, &dynamic_command_style)]
+            vec![cfg.static_span(0, 30, DYNAMIC_CALLABLE_COMMAND)?]
         );
 
-        let highlighted =
-            highlighter.highlight(r"$'sub/test\xF0\237\x98\x8E.sh'", pwd, |_| true)?;
+        let highlighted = cfg.highlight(r"$'sub/test\xF0\237\x98\x8E.sh'")?;
         assert_eq!(
             highlighted,
-            vec![static_span(0, 30, &dynamic_command_style)]
+            vec![cfg.static_span(0, 30, DYNAMIC_CALLABLE_COMMAND)?]
         );
 
         Ok(())
@@ -1186,38 +1167,28 @@ mod tests {
 
     #[test]
     fn path_with_multibyte_escape() -> Result<()> {
-        let dir = tempfile::tempdir()?;
-        let test_path = dir.path().join("test😎.txt");
-        fs::write(test_path, "test contents")?;
-        let pwd = Some(dir.path().to_str().unwrap());
+        let cfg = test_cfg()?;
+        cfg.touch_file("test😎.txt")?;
 
-        let highlighter = HighlighterBuilder::new(&test_config()).build()?;
-        let dynamic_file_style =
-            resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
-        let string_style = resolve_static_style(STRING_QUOTED_DOUBLE, &highlighter.theme).unwrap();
-        let escape_style = resolve_static_style(CHARACTER_ESCAPE, &highlighter.theme).unwrap();
-
-        let highlighted =
-            highlighter.highlight(r"cp $'test\xF0\x9F\x98\x8E.txt' dest.txt", pwd, |_| true)?;
+        let highlighted = cfg.highlight(r"cp $'test\xF0\x9F\x98\x8E.txt' dest.txt")?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "cp"),
-                mixed_span(3, 9, &string_style, &dynamic_file_style),
-                mixed_span(9, 25, &escape_style, &dynamic_file_style),
-                mixed_span(25, 30, &string_style, &dynamic_file_style),
+                cfg.dynamic_span(0, 2, "cp"),
+                cfg.mixed_span(3, 9, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(9, 25, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(25, 30, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
             ]
         );
 
-        let highlighted =
-            highlighter.highlight(r"cp $'test\xF0\237\x98\x8E.txt' dest.txt", pwd, |_| true)?;
+        let highlighted = cfg.highlight(r"cp $'test\xF0\237\x98\x8E.txt' dest.txt")?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "cp"),
-                mixed_span(3, 9, &string_style, &dynamic_file_style),
-                mixed_span(9, 25, &escape_style, &dynamic_file_style),
-                mixed_span(25, 30, &string_style, &dynamic_file_style),
+                cfg.dynamic_span(0, 2, "cp"),
+                cfg.mixed_span(3, 9, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(9, 25, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(25, 30, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
             ]
         );
 
@@ -1226,32 +1197,21 @@ mod tests {
 
     #[test]
     fn multiline() -> Result<()> {
-        let dir = tempfile::tempdir()?;
-        let test_path = dir.path().join("test.txt");
-        fs::write(test_path, "test contents")?;
-        let pwd = Some(dir.path().to_str().unwrap());
+        let cfg = test_cfg()?;
+        cfg.touch_file("test.txt")?;
 
-        let highlighter = HighlighterBuilder::new(&test_config()).build()?;
-        let parameter_style = resolve_static_style(PARAMETER, &highlighter.theme).unwrap();
-        let dynamic_file_style =
-            resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
-        let string_style = resolve_static_style(STRING_QUOTED_DOUBLE, &highlighter.theme).unwrap();
-        let operator_style = resolve_static_style(OPERATOR_LOGICAL, &highlighter.theme).unwrap();
-
-        let highlighted = highlighter.highlight(
+        let highlighted = cfg.highlight(
             "foo commit -m \"This is\na multi-line commit\nmessage\" && touch test.txt",
-            pwd,
-            |_| true,
         )?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 3, "foo"),
-                static_span(10, 13, &parameter_style),
-                static_span(14, 51, &string_style),
-                static_span(52, 54, &operator_style),
-                dynamic_span(55, 60, "touch"),
-                static_span(61, 69, &dynamic_file_style),
+                cfg.dynamic_span(0, 3, "foo"),
+                cfg.static_span(10, 13, PARAMETER)?,
+                cfg.static_span(14, 51, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(52, 54, OPERATOR_LOGICAL)?,
+                cfg.dynamic_span(55, 60, "touch"),
+                cfg.static_span(61, 69, DYNAMIC_PATH_FILE)?,
             ]
         );
 
@@ -1260,45 +1220,36 @@ mod tests {
 
     #[test]
     fn path_with_env_variable() -> Result<()> {
-        let dir = tempfile::tempdir()?;
-        let test_path = dir.path().join("test.txt");
-        fs::write(test_path, "test contents")?;
-        let env_path = dir.path().join("test.txt$FOOBAR");
-        fs::write(env_path, "test contents")?;
-        let pwd = Some(dir.path().to_str().unwrap());
+        let cfg = test_cfg()?;
+        cfg.touch_file("test.txt")?;
+        cfg.touch_file("test.txt$FOOBAR")?;
 
-        let highlighter = HighlighterBuilder::new(&test_config()).build()?;
-        let env_var_style = resolve_static_style(ENVIRONMENT_VARIABLE, &highlighter.theme).unwrap();
-        let dynamic_file_style =
-            resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
-
-        let highlighted = highlighter.highlight(r"ls test.txt$FOOBAR", pwd, |_| true)?;
+        let highlighted = cfg.highlight(r"ls test.txt$FOOBAR")?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "ls"),
-                static_span(11, 18, &env_var_style),
+                cfg.dynamic_span(0, 2, "ls"),
+                cfg.static_span(11, 18, ENVIRONMENT_VARIABLE)?,
             ]
         );
 
-        let highlighted = highlighter.highlight(r"ls ${FOOBAR}test.txt test.txt", pwd, |_| true)?;
+        let highlighted = cfg.highlight(r"ls ${FOOBAR}test.txt test.txt")?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "ls"),
-                static_span(3, 12, &env_var_style),
-                static_span(21, 29, &dynamic_file_style),
+                cfg.dynamic_span(0, 2, "ls"),
+                cfg.static_span(3, 12, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(21, 29, DYNAMIC_PATH_FILE)?,
             ]
         );
 
-        let highlighted =
-            highlighter.highlight(r"ls test.txt${FOOBAR}test.txt test.txt", pwd, |_| true)?;
+        let highlighted = cfg.highlight(r"ls test.txt${FOOBAR}test.txt test.txt")?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "ls"),
-                static_span(11, 20, &env_var_style),
-                static_span(29, 37, &dynamic_file_style),
+                cfg.dynamic_span(0, 2, "ls"),
+                cfg.static_span(11, 20, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(29, 37, DYNAMIC_PATH_FILE)?,
             ]
         );
 
@@ -1307,61 +1258,48 @@ mod tests {
 
     #[test]
     fn path_with_command_substitution() -> Result<()> {
-        let dir = tempfile::tempdir()?;
-        let test_path = dir.path().join("test.txt");
-        fs::write(test_path, "test contents")?;
-        let env_path = dir.path().join("test.txtFOOBAR");
-        fs::write(env_path, "test contents")?;
-        let pwd = Some(dir.path().to_str().unwrap());
+        let cfg = test_cfg()?;
+        cfg.touch_file("test.txt")?;
+        cfg.touch_file("test.txtFOOBAR")?;
 
-        let highlighter = HighlighterBuilder::new(&test_config()).build()?;
-        let env_var_style = resolve_static_style(ENVIRONMENT_VARIABLE, &highlighter.theme).unwrap();
-        let dynamic_file_style =
-            resolve_static_style(DYNAMIC_PATH_FILE, &highlighter.theme).unwrap();
-
-        let highlighted = highlighter.highlight(r"ls test.txt$(echo FOOBAR)", pwd, |_| true)?;
+        let highlighted = cfg.highlight(r"ls test.txt$(echo FOOBAR)")?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "ls"),
-                static_span(11, 13, &env_var_style),
-                dynamic_span(13, 17, "echo"),
-                static_span(24, 25, &env_var_style),
+                cfg.dynamic_span(0, 2, "ls"),
+                cfg.static_span(11, 13, ENVIRONMENT_VARIABLE)?,
+                cfg.dynamic_span(13, 17, "echo"),
+                cfg.static_span(24, 25, ENVIRONMENT_VARIABLE)?,
             ]
         );
 
-        let test_path = dir.path().join("FOOBAR");
-        fs::write(test_path, "test contents")?;
+        cfg.touch_file("FOOBAR")?;
 
-        let highlighted = highlighter.highlight(r"ls test.txt$(echo FOOBAR)", pwd, |_| true)?;
+        let highlighted = cfg.highlight(r"ls test.txt$(echo FOOBAR)")?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "ls"),
-                static_span(11, 13, &env_var_style),
-                dynamic_span(13, 17, "echo"),
-                static_span(18, 24, &dynamic_file_style),
-                static_span(24, 25, &env_var_style),
+                cfg.dynamic_span(0, 2, "ls"),
+                cfg.static_span(11, 13, ENVIRONMENT_VARIABLE)?,
+                cfg.dynamic_span(13, 17, "echo"),
+                cfg.static_span(18, 24, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(24, 25, ENVIRONMENT_VARIABLE)?,
             ]
         );
 
-        let test2_path = dir.path().join("test2.txt");
-        fs::write(test2_path, "test contents")?;
+        cfg.touch_file("test2.txt")?;
 
-        let highlighted =
-            highlighter.highlight(r"ls test.txt test.txt$(echo FOOBAR) test2.txt", pwd, |_| {
-                true
-            })?;
+        let highlighted = cfg.highlight(r"ls test.txt test.txt$(echo FOOBAR) test2.txt")?;
         assert_eq!(
             highlighted,
             vec![
-                dynamic_span(0, 2, "ls"),
-                static_span(3, 11, &dynamic_file_style),
-                static_span(20, 22, &env_var_style),
-                dynamic_span(22, 26, "echo"),
-                static_span(27, 33, &dynamic_file_style),
-                static_span(33, 34, &env_var_style),
-                static_span(35, 44, &dynamic_file_style),
+                cfg.dynamic_span(0, 2, "ls"),
+                cfg.static_span(3, 11, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(20, 22, ENVIRONMENT_VARIABLE)?,
+                cfg.dynamic_span(22, 26, "echo"),
+                cfg.static_span(27, 33, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(33, 34, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(35, 44, DYNAMIC_PATH_FILE)?,
             ]
         );
 
