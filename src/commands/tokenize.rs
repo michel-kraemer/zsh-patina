@@ -119,6 +119,53 @@ pub fn tokenize(config: &Config, input_file: &Option<String>) -> Result<()> {
 
         writeln!(stdout)?;
     }
+
+    let options = textwrap::Options::with_termwidth().initial_indent("      ");
+    let note = textwrap::wrap(
+        "Dynamic scopes (`dynamic.xxx`) are not applied as they can only be \
+        resolved dynamically during runtime on your shell. Callables (aliases, \
+        builtins, commands, and functions) will therefore show the \
+        `variable.function.shell` style instead.",
+        &options,
+    );
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(Color::White)).set_bold(true))?;
+    write!(stdout, "Note:")?;
+    for (i, line) in note.into_iter().enumerate() {
+        let line = if i == 0 { &line[5..] } else { &line };
+
+        let mut start = 0;
+        while let Some(open) = line[start..].find('`') {
+            let open = start + open;
+            if let Some(close) = line[open + 1..].find('`') {
+                let close = open + 1 + close + 1;
+
+                // write text before backticks
+                if open > start {
+                    stdout.reset()?;
+                    write!(stdout, "{}", &line[start..open])?;
+                }
+
+                // write text inside backticks
+                stdout.set_color(ColorSpec::new().set_fg(Some(Color::Rgb(160, 160, 160))))?;
+                write!(stdout, "{}", &line[open..close])?;
+
+                start = close;
+            } else {
+                // write rest as normal
+                stdout.reset()?;
+                write!(stdout, "{}", &line[start..])?;
+                break;
+            }
+        }
+
+        if start < line.len() {
+            stdout.reset()?;
+            write!(stdout, "{}", &line[start..])?;
+        }
+        writeln!(stdout)?;
+    }
+
     stdout.reset()?;
 
     Ok(())
