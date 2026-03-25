@@ -66,33 +66,37 @@ zinit light michel-kraemer/zsh-patina
 
 ### flake.nix (for Nix users)
 
-A flake is provided to make the executable the plugins requires available in /nix/store
+A flake is provided to make the executable the plugin requires available in `/nix/store`.
 
-1. Add this flake to your flake inputs
-```nix
-inputs = {
-  nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-  zsh-patina = {
-    url = "github:michel-kraemer/zsh-patina";
-    inputs.nixpkgs.follows = "nixpkgs";
-  };
-}
-```
+1. Add this flake to your flake inputs:
 
-2. Add the executable to your systemPackages, making it available in your PATH (optional)
-```nix
-environment.systemPackages = [
-  inputs.zsh-patina.packages.${pkgs.stdenv.hostPlatform.system}.default
-];
-```
+   ```nix
+   inputs = {
+     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+     zsh-patina = {
+       url = "github:michel-kraemer/zsh-patina";
+       inputs.nixpkgs.follows = "nixpkgs";
+     };
+   }
+   ```
 
-3. Activate the plugin in your .zshrc
-```shell
-# If you added zsh-patina in systemPackages
-eval "$(zsh-patina activate)"
-# Reference the executable direcly
-eval "$(${inputs.zsh-patina.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/zsh-patina activate)"
-```
+2. Add the executable to your `systemPackages`, making it available in your PATH (optional):
+
+   ```nix
+   environment.systemPackages = [
+     inputs.zsh-patina.packages.${pkgs.stdenv.hostPlatform.system}.default
+   ];
+   ```
+
+3. Activate the plugin in your `.zshrc` file:
+
+   ```shell
+   # If you've added zsh-patina to systemPackages
+   eval "$(zsh-patina activate)"
+
+   # Reference the executable direcly
+   eval "$(${inputs.zsh-patina.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/zsh-patina activate)"
+   ```
 
 ### Pre-compiled binaries (for everyone)
 
