@@ -186,7 +186,7 @@ _zsh_patina() {
     # behaviour).
     local entry range_start range_end ch
 
-    local -a new_regions
+    local new_regions=("${region_highlight[@]}") # preserve existing highlighting
     local line
     while IFS= read -r -u $fd line; do
         [[ -z "$line" ]] && continue
@@ -228,8 +228,8 @@ _zsh_patina() {
         fi
     done
 
-    # performance: set region highlight once at the end instead of updating it
-    # on every region
+    # performance: set region_highlight once at the end rather than updating it
+    # for every region
     region_highlight=("${new_regions[@]}")
 
     # close socket connection
