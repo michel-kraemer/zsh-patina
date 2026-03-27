@@ -236,6 +236,7 @@ The following built-in themes are available:
 | `lavender` | A variant with magenta/lavender tones. |
 | `nord` | An arctic, north-bluish color palette. Based on [Nord](https://www.nordtheme.com/). |
 | `simple` | A minimal theme with fewer colors. |
+| `solarized` | Precision colors for machines and people. Originally by [Ethan Schoonover](https://ethanschoonover.com/solarized/).
 | `tokyonight` | Celebrates the lights of downtown Tokyo at night. Originally by [enkia](https://github.com/tokyo-night/tokyo-night-vscode-theme). |
 
 To load a custom theme from a file, use the `file:` prefix:

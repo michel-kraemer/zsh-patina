@@ -1,0 +1,37 @@
+# This theme is based on Solarized (Copyright (c) 2011 Ethan Schoonover,
+# released under the MIT license, https://ethanschoonover.com/solarized/)
+
+"comment" = "#586e75"
+
+"constant" = "#6c71c4"
+"constant.character" = "#dc322f"
+
+"entity" = "#b58900"
+
+"keyword" = "#859900"
+"keyword.operator.arithmetic" = "#657b83"
+"keyword.operator.assignment" = "#657b83"
+
+"punctuation.definition.string" = "#839496"
+"punctuation.definition.variable" = "#859900"
+"punctuation.section" = "#657b83"
+"punctuation.section.brackets" = "#268bd2"
+"punctuation.separator.continuation" = "#dc322f"
+
+"source" = "#839496"
+
+"storage" = "#93a1a1"
+"storage.type" = "#268bd2"
+
+"string" = "#2aa198"
+
+"support" = "#859900"
+
+"variable" = "#268bd2"
+"variable.function" = "#b58900"
+"variable.language" = "#d33682"
+
+# dynamic items
+"dynamic.callable" = "#b58900"
+"dynamic.callable.missing" = "#dc322f"
+"dynamic.path" = { underline = true }

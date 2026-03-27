@@ -27,6 +27,7 @@ pub enum ThemeSource {
     Nord,
     Patina,
     Simple,
+    Solarized,
     TokyoNight,
     File(String),
 }
@@ -36,15 +37,7 @@ impl Serialize for ThemeSource {
     where
         S: Serializer,
     {
-        match self {
-            ThemeSource::Classic => serializer.serialize_str("classic"),
-            ThemeSource::Lavender => serializer.serialize_str("lavender"),
-            ThemeSource::Nord => serializer.serialize_str("nord"),
-            ThemeSource::Patina => serializer.serialize_str("patina"),
-            ThemeSource::Simple => serializer.serialize_str("simple"),
-            ThemeSource::TokyoNight => serializer.serialize_str("tokyonight"),
-            ThemeSource::File(path) => serializer.serialize_str(&format!("file:{path}")),
-        }
+        serializer.serialize_str(&self.to_string())
     }
 }
 
@@ -60,6 +53,7 @@ impl<'de> Deserialize<'de> for ThemeSource {
             "nord" => Ok(ThemeSource::Nord),
             "patina" => Ok(ThemeSource::Patina),
             "simple" => Ok(ThemeSource::Simple),
+            "solarized" => Ok(ThemeSource::Solarized),
             "tokyonight" => Ok(ThemeSource::TokyoNight),
             _ if s.starts_with("file:") => Ok(ThemeSource::File(
                 shellexpand::full(&s[5..])
@@ -79,6 +73,7 @@ impl Display for ThemeSource {
             ThemeSource::Nord => write!(f, "nord"),
             ThemeSource::Patina => write!(f, "patina"),
             ThemeSource::Simple => write!(f, "simple"),
+            ThemeSource::Solarized => write!(f, "solarized"),
             ThemeSource::TokyoNight => write!(f, "tokyonight"),
             ThemeSource::File(path) => write!(f, "file:{path}"),
         }
@@ -215,6 +210,8 @@ impl Theme {
             ThemeSource::Patina => toml::from_slice(include_bytes!("../themes/patina.toml"))
                 .context("Unable to load default theme")?,
             ThemeSource::Simple => toml::from_slice(include_bytes!("../themes/simple.toml"))
+                .context("Unable to load simple theme")?,
+            ThemeSource::Solarized => toml::from_slice(include_bytes!("../themes/solarized.toml"))
                 .context("Unable to load simple theme")?,
             ThemeSource::TokyoNight => {
                 toml::from_slice(include_bytes!("../themes/tokyonight.toml"))

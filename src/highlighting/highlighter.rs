@@ -177,6 +177,7 @@ impl Highlighter {
                     ThemeSource::Nord => "Failed to parse nord theme".to_string(),
                     ThemeSource::Patina => "Failed to parse default theme".to_string(),
                     ThemeSource::Simple => "Failed to parse simple theme".to_string(),
+                    ThemeSource::Solarized => "Failed to parse solarized theme".to_string(),
                     ThemeSource::TokyoNight => "Failed to parse tokyonight theme".to_string(),
                     ThemeSource::File(path) => format!("Failed to parse theme file `{path}'"),
                 })?;
