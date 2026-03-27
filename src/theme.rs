@@ -134,9 +134,25 @@ impl<'de> Deserialize<'de> for Style {
                 M: MapAccess<'de>,
             {
                 #[derive(Deserialize)]
+                #[serde(untagged)]
+                enum StrOrInteger {
+                    Str(String),
+                    Int(i64),
+                }
+
+                impl StrOrInteger {
+                    fn into_string(self) -> String {
+                        match self {
+                            StrOrInteger::Str(s) => s,
+                            StrOrInteger::Int(i) => i.to_string(),
+                        }
+                    }
+                }
+
+                #[derive(Deserialize)]
                 struct Helper {
-                    foreground: Option<toml::Value>,
-                    background: Option<toml::Value>,
+                    foreground: Option<StrOrInteger>,
+                    background: Option<StrOrInteger>,
                     #[serde(default)]
                     bold: bool,
                     #[serde(default)]
@@ -149,13 +165,13 @@ impl<'de> Deserialize<'de> for Style {
                     foreground: h
                         .foreground
                         .map(|fg| {
-                            Color::try_from(fg.to_string().as_str()).map_err(M::Error::custom)
+                            Color::try_from(fg.into_string().as_str()).map_err(M::Error::custom)
                         })
                         .transpose()?,
                     background: h
                         .background
                         .map(|bg| {
-                            Color::try_from(bg.to_string().as_str()).map_err(M::Error::custom)
+                            Color::try_from(bg.into_string().as_str()).map_err(M::Error::custom)
                         })
                         .transpose()?,
                     bold: h.bold,
@@ -405,5 +421,151 @@ mod tests {
             keyword_style.foreground,
             Some(Color::try_from("magenta").unwrap())
         );
+    }
+
+    #[test]
+    fn all_ways_deserialize() {
+        let theme = Theme::load(&test_theme("all-ways.toml")).unwrap();
+
+        // single color as string or int
+        assert_eq!(theme.resolve("a").unwrap().foreground, Some(Color::Red));
+        assert_eq!(
+            theme.resolve("b").unwrap().foreground,
+            Some(Color::Rgb(255, 0, 0))
+        );
+        assert_eq!(
+            theme.resolve("c").unwrap().foreground,
+            Some(Color::Ansi256(1))
+        );
+        assert_eq!(
+            theme.resolve("d").unwrap().foreground,
+            Some(Color::Ansi256(1))
+        );
+
+        // foreground only
+        assert_eq!(theme.resolve("e").unwrap().foreground, Some(Color::Red));
+        assert_eq!(
+            theme.resolve("f").unwrap().foreground,
+            Some(Color::Rgb(255, 0, 0))
+        );
+        assert_eq!(
+            theme.resolve("g").unwrap().foreground,
+            Some(Color::Ansi256(1))
+        );
+        assert_eq!(
+            theme.resolve("h").unwrap().foreground,
+            Some(Color::Ansi256(1))
+        );
+
+        // background only
+        assert_eq!(theme.resolve("i").unwrap().background, Some(Color::Red));
+        assert_eq!(
+            theme.resolve("j").unwrap().background,
+            Some(Color::Rgb(255, 0, 0))
+        );
+        assert_eq!(
+            theme.resolve("k").unwrap().background,
+            Some(Color::Ansi256(1))
+        );
+        assert_eq!(
+            theme.resolve("l").unwrap().background,
+            Some(Color::Ansi256(1))
+        );
+
+        // foreground and background
+        assert_eq!(
+            theme.resolve("m").unwrap().foreground,
+            Some(Color::Ansi256(1))
+        );
+        assert_eq!(theme.resolve("m").unwrap().background, Some(Color::Red));
+        assert_eq!(
+            theme.resolve("n").unwrap().foreground,
+            Some(Color::Ansi256(1))
+        );
+        assert_eq!(
+            theme.resolve("n").unwrap().background,
+            Some(Color::Rgb(255, 0, 0))
+        );
+        assert_eq!(theme.resolve("o").unwrap().foreground, Some(Color::Red));
+        assert_eq!(
+            theme.resolve("o").unwrap().background,
+            Some(Color::Ansi256(1))
+        );
+        assert_eq!(
+            theme.resolve("p").unwrap().foreground,
+            Some(Color::Rgb(255, 0, 0))
+        );
+        assert_eq!(
+            theme.resolve("p").unwrap().background,
+            Some(Color::Ansi256(1))
+        );
+
+        // + bold
+        assert_eq!(
+            theme.resolve("q").unwrap().foreground,
+            Some(Color::Ansi256(1))
+        );
+        assert_eq!(theme.resolve("q").unwrap().background, Some(Color::Red));
+        assert!(theme.resolve("q").unwrap().bold);
+        assert_eq!(
+            theme.resolve("r").unwrap().foreground,
+            Some(Color::Ansi256(1))
+        );
+        assert_eq!(
+            theme.resolve("r").unwrap().background,
+            Some(Color::Rgb(255, 0, 0))
+        );
+        assert!(theme.resolve("r").unwrap().bold);
+        assert_eq!(theme.resolve("s").unwrap().foreground, Some(Color::Red));
+        assert_eq!(
+            theme.resolve("s").unwrap().background,
+            Some(Color::Ansi256(1))
+        );
+        assert!(theme.resolve("s").unwrap().bold);
+        assert_eq!(
+            theme.resolve("t").unwrap().foreground,
+            Some(Color::Rgb(255, 0, 0))
+        );
+        assert_eq!(
+            theme.resolve("t").unwrap().background,
+            Some(Color::Ansi256(1))
+        );
+        assert!(theme.resolve("t").unwrap().bold);
+
+        // + bold + underline
+        assert_eq!(
+            theme.resolve("u").unwrap().foreground,
+            Some(Color::Ansi256(1))
+        );
+        assert_eq!(theme.resolve("u").unwrap().background, Some(Color::Red));
+        assert!(theme.resolve("u").unwrap().bold);
+        assert!(theme.resolve("u").unwrap().underline);
+        assert_eq!(
+            theme.resolve("v").unwrap().foreground,
+            Some(Color::Ansi256(1))
+        );
+        assert_eq!(
+            theme.resolve("v").unwrap().background,
+            Some(Color::Rgb(255, 0, 0))
+        );
+        assert!(theme.resolve("v").unwrap().bold);
+        assert!(theme.resolve("v").unwrap().underline);
+        assert_eq!(theme.resolve("w").unwrap().foreground, Some(Color::Red));
+        assert_eq!(
+            theme.resolve("w").unwrap().background,
+            Some(Color::Ansi256(1))
+        );
+        assert!(theme.resolve("w").unwrap().bold);
+        assert!(theme.resolve("w").unwrap().underline);
+        assert_eq!(
+            theme.resolve("x").unwrap().foreground,
+            Some(Color::Rgb(255, 0, 0))
+        );
+        assert_eq!(
+            theme.resolve("x").unwrap().background,
+            Some(Color::Ansi256(1))
+        );
+        assert!(theme.resolve("x").unwrap().bold);
+        assert!(theme.resolve("x").unwrap().underline);
     }
 }
