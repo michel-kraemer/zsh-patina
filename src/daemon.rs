@@ -337,10 +337,10 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
     let mut total_len = 0;
     let mut line_lengths = Vec::new();
     let mut cursor_line = 0;
+    let mut cursor_line_found = false;
     for i in 0..buffer_line_count {
         let mut line = String::new();
         reader.read_line(&mut line).context("Unable to read line")?;
-        lines.push_str(&line);
 
         // this is O(n) but necessary in case the command contains
         // multi-byte characters
@@ -349,10 +349,17 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
         // determine in which line we are currently
         if (total_len..total_len + line_len).contains(&cursor) {
             cursor_line = i;
+            cursor_line_found = true;
         }
 
-        line_lengths.push(line_len);
-        total_len += line_len;
+        if !cursor_line_found || i < cursor_line.saturating_add(term_rows) {
+            lines.push_str(&line);
+            line_lengths.push(line_len);
+            total_len += line_len;
+        } else {
+            // no need to store lines that are outside the terminal window, but
+            // we still need to read them from the client
+        }
     }
 
     // check if the client version matches ours
