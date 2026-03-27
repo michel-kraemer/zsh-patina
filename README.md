@@ -376,11 +376,11 @@ Here are the results from benchmarks I ran to compare the performance of zsh-pat
 
 &nbsp; | zsh-patina | zsh-syntax-highlighting | fast-syntax-highlighting
 -|-|-|-
-first_prompt_lag_ms | **18.787** | 22.166 | 25.785
-first_command_lag_ms | **27.423** | 30.507 | 28.295
-command_lag_ms |  **0.182** | 0.585 | 0.220
-input_lag_ms | **1.425** | 9.777 | 3.159
-exit_time_ms | **17.546** | 20.262 | 24.024
+first_prompt_lag_ms | **17.680** | 23.389 | 26.164
+first_command_lag_ms | **26.090** | 31.771 | 28.601
+command_lag_ms |  **0.197** | 0.528 | 0.240
+input_lag_ms | **1.394** | 8.385 | 3.643
+exit_time_ms | **17.725** | 19.934 | 24.095
 
 Fastest times are displayed in **bold**.
 
