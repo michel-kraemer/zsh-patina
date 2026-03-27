@@ -1,0 +1,31 @@
+# All ways to specify colors
+
+"a" = "red"
+"b" = "#f00"
+"c" = "1"
+"d" = "1"
+
+"e" = { foreground = "red" }
+"f" = { foreground = "#f00" }
+"g" = { foreground = "1" }
+"h" = { foreground = 1 }
+
+"i" = { background = "red" }
+"j" = { background = "#f00" }
+"k" = { background = "1" }
+"l" = { background = 1 }
+
+"m" = { foreground = 1, background = "red" }
+"n" = { foreground = "1", background = "#f00" }
+"o" = { foreground = "red", background = "1" }
+"p" = { foreground = "#f00", background = 1 }
+
+"q" = { foreground = 1, background = "red", bold = true }
+"r" = { foreground = "1", background = "#f00", bold = true }
+"s" = { foreground = "red", background = "1", bold = true }
+"t" = { foreground = "#f00", background = 1, bold = true }
+
+"u" = { foreground = 1, background = "red", bold = true, underline = true }
+"v" = { foreground = "1", background = "#f00", bold = true, underline = true }
+"w" = { foreground = "red", background = "1", bold = true, underline = true }
+"x" = { foreground = "#f00", background = 1, bold = true, underline = true }
