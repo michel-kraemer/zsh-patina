@@ -18,7 +18,7 @@ Besides normal static highlighting, zsh-patina is able to dynamically detect whe
   * [Homebrew (for macOS)](#homebrew-for-macos)
   * [Cargo (for Rust developers)](#cargo-for-rust-developers)
   * [Zinit (for Zinit users)](#zinit-for-zinit-users)
-  * [AUR (for ArchLinux users)](#aur-for-archlinux-users)
+  * [AUR (for Arch Linux users)](#aur-for-arch-linux-users)
   * [flake.nix (for Nix users)](#flakenix-for-nix-users)
   * [Pre-compiled binaries (for everyone)](#pre-compiled-binaries-for-everyone)
   * [Build from source (for the brave ones)](#build-from-source-for-the-brave-ones)
@@ -82,7 +82,7 @@ zinit ice as"program" from"gh-r" pick"zsh-patina-*/zsh-patina" atload'eval "$(zs
 zinit light michel-kraemer/zsh-patina
 ```
 
-### AUR (for ArchLinux users)
+### AUR (for Arch Linux users)
 
 1. Install zsh-patina:
 
