@@ -14,3 +14,5 @@ Bash.sublime-syntax:
 * `constant.character.escape.shell` scope:
   * Added `\uNNNN` and `\UNNNNNNNN` escape sequences
   * Limited `\xNN` escape sequence to two hex characters
+* Add `keyword.control.repeat.shell` scope
+* Add `repeat-args` context

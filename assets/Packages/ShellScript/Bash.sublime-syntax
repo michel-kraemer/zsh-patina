@@ -181,6 +181,9 @@ contexts:
     - match: \bbreak{{keyword_boundary_end}}
       scope: keyword.control.flow.break.shell
       set: [cmd-post, cmd-args]
+    - match: \brepeat{{keyword_boundary_end}}
+      scope: keyword.control.repeat.shell
+      set: [cmd-post, repeat-args]
 
   case-preamble:
     - match: \bin(?=[^\w_-])
@@ -262,6 +265,21 @@ contexts:
         - include: arithmetic
         - match: \bin\b
           scope: keyword.control.in.shell
+
+  repeat-args:
+    - match: ""
+      set:
+        - meta_scope: meta.group.repeat.shell
+        - include: expression
+        - match: (?=\S)
+          set:
+            - match: \bdo{{keyword_boundary_end}}
+              scope: keyword.control.do.shell
+              set: [main, cmd-post]
+            - match: (?=\S)
+              set: [main, cmd-post]
+            - match: ""
+              pop: true
 
   expansion-and-string:
     - include: string
