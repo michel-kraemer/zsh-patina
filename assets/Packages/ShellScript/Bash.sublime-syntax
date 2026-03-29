@@ -183,7 +183,10 @@ contexts:
       set: [cmd-post, cmd-args]
     - match: \brepeat{{keyword_boundary_end}}
       scope: keyword.control.repeat.shell
-      set: [cmd-post, repeat-args]
+      set:
+        - include: expression
+        - match: (?=\S)
+          pop: true
     - match: \btime{{keyword_boundary_end}}
       scope: keyword.control.flow.time.shell
     - match: \bnocorrect{{keyword_boundary_end}}
@@ -269,18 +272,6 @@ contexts:
         - include: arithmetic
         - match: \bin\b
           scope: keyword.control.in.shell
-
-  repeat-args:
-    - match: ""
-      set:
-        - include: expression
-        - match: (?=\S)
-          set:
-            - match: \bdo{{keyword_boundary_end}}
-              scope: keyword.control.do.shell
-              set: [main]
-            - match: (?=\S)
-              set: [main]
 
   expansion-and-string:
     - include: string

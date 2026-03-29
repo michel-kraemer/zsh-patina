@@ -15,6 +15,5 @@ Bash.sublime-syntax:
   * Added `\uNNNN` and `\UNNNNNNNN` escape sequences
   * Limited `\xNN` escape sequence to two hex characters
 * Add `keyword.control.repeat.shell` scope
-* Add `repeat-args` context
 * Add `keyword.control.flow.time.shell` scope
 * Add `keyword.control.flow.nocorrect.shell` scope
