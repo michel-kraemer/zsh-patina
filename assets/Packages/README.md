@@ -19,3 +19,5 @@ Bash.sublime-syntax:
 * Add `keyword.control.flow.nocorrect.shell` scope
 * Add `keyword.control.select.shell` scope
 * Add `select-args` context
+* Add `keyword.control.foreach.shell` and `keyword.control.end.shell` scopes
+* Add `foreach-args` context

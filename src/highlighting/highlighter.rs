@@ -1458,6 +1458,54 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn foreach() -> Result<()> {
+        let cfg = test_cfg()?;
+
+        let highlighted = cfg.highlight(r"foreach x (a b c); echo $x; end")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 7, CONTROL_FOREACH)?,
+                cfg.static_span(17, 18, OPERATOR_LOGICAL_CONTINUE)?,
+                cfg.dynamic_span(19, 23, "echo"),
+                cfg.static_span(24, 26, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(26, 27, OPERATOR_LOGICAL_CONTINUE)?,
+                cfg.static_span(28, 31, CONTROL_END)?,
+            ]
+        );
+
+        // newlines instead of semicolons
+        let highlighted = cfg.highlight("foreach x (a b c)\necho $x\nend")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 7, CONTROL_FOREACH)?,
+                cfg.dynamic_span(18, 22, "echo"),
+                cfg.static_span(23, 25, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(26, 29, CONTROL_END)?,
+            ]
+        );
+
+        // foreach with break
+        let highlighted = cfg.highlight("foreach x (a b c);echo $x; break ; end")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 7, CONTROL_FOREACH)?,
+                cfg.static_span(17, 18, OPERATOR_LOGICAL_CONTINUE)?,
+                cfg.dynamic_span(18, 22, "echo"),
+                cfg.static_span(23, 25, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(25, 26, OPERATOR_LOGICAL_CONTINUE)?,
+                cfg.static_span(27, 32, CONTROL_BREAK)?,
+                cfg.static_span(33, 34, OPERATOR_LOGICAL_CONTINUE)?,
+                cfg.static_span(35, 38, CONTROL_END)?,
+            ]
+        );
+
+        Ok(())
+    }
+
     fn static_span_with(
         start: usize,
         end: usize,

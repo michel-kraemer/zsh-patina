@@ -194,6 +194,12 @@ contexts:
     - match: \bselect{{keyword_boundary_end}}
       scope: keyword.control.select.shell
       set: [cmd-post, select-args]
+    - match: \bforeach{{keyword_boundary_end}}
+      scope: keyword.control.foreach.shell
+      set: [cmd-post, foreach-args]
+    - match: \bend{{keyword_boundary_end}}
+      scope: keyword.control.end.shell
+      set: [cmd-post, cmd-args]
 
   case-preamble:
     - match: \bin(?=[^\w_-])
@@ -285,6 +291,12 @@ contexts:
         - include: arithmetic
         - match: \bin\b
           scope: keyword.control.in.shell
+
+  foreach-args:
+    - match: ""
+      set:
+        - meta_scope: meta.group.foreach.shell
+        - include: cmd-args-boilerplate
 
   expansion-and-string:
     - include: string

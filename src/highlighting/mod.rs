@@ -41,7 +41,11 @@ const CONTROL_DO: &str = "keyword.control.do.shell";
 #[cfg(test)]
 const CONTROL_DONE: &str = "keyword.control.done.shell";
 #[cfg(test)]
+const CONTROL_END: &str = "keyword.control.end.shell";
+#[cfg(test)]
 const CONTROL_ESAC: &str = "keyword.control.esac.shell";
+#[cfg(test)]
+const CONTROL_FOREACH: &str = "keyword.control.foreach.shell";
 #[cfg(test)]
 const CONTROL_IN: &str = "keyword.control.in.shell";
 #[cfg(test)]
