@@ -400,7 +400,7 @@ mod tests {
         let theme = Theme::load(&ThemeSource::CatppuccinFrappe).unwrap();
         assert_eq!(
             theme.resolve("comment").unwrap().foreground,
-            Some(Color::try_from("#737994").unwrap())
+            Some(Color::try_from("#949cbb").unwrap())
         );
         assert_eq!(
             theme.resolve("keyword").unwrap().foreground,
@@ -420,7 +420,7 @@ mod tests {
         let theme = Theme::load(&ThemeSource::CatppuccinLatte).unwrap();
         assert_eq!(
             theme.resolve("comment").unwrap().foreground,
-            Some(Color::try_from("#9ca0b0").unwrap())
+            Some(Color::try_from("#7c7f93").unwrap())
         );
         assert_eq!(
             theme.resolve("keyword").unwrap().foreground,
@@ -440,7 +440,7 @@ mod tests {
         let theme = Theme::load(&ThemeSource::CatppuccinMacchiato).unwrap();
         assert_eq!(
             theme.resolve("comment").unwrap().foreground,
-            Some(Color::try_from("#6e738d").unwrap())
+            Some(Color::try_from("#939ab7").unwrap())
         );
         assert_eq!(
             theme.resolve("keyword").unwrap().foreground,
@@ -460,7 +460,7 @@ mod tests {
         let theme = Theme::load(&ThemeSource::CatppuccinMocha).unwrap();
         assert_eq!(
             theme.resolve("comment").unwrap().foreground,
-            Some(Color::try_from("#6c7086").unwrap())
+            Some(Color::try_from("#9399b2").unwrap())
         );
         assert_eq!(
             theme.resolve("keyword").unwrap().foreground,

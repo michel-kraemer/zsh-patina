@@ -2,7 +2,7 @@
 # under the MIT license, https://github.com/catppuccin/catppuccin)
 
 # comments
-"comment" = "#9ca0b0"
+"comment" = "#7c7f93"
 
 # strings
 "string" = "#40a02b"
@@ -11,40 +11,48 @@
 "keyword.operator.regexp" = "#ea76cb"
 
 # escape characters
-"constant.character.escape" = "#fe640b"
+"constant.character" = "#ea76cb"
 
-# numeric file descriptors
-"constant.numeric.integer.decimal.file-descriptor" = "#fe640b"
+# constants in general
+"constant" = "#fe640b"
 
 # parameters
-"variable.parameter" = "#ea76cb"
+"variable.parameter" = "#e64553"
 
 # environment variables
-"variable.other" = "#fe640b"
-"punctuation.definition.variable" = "#fe640b"
+"variable.other" = "#d20f39"
+"punctuation.definition.variable" = "#d20f39"
 
 # commands
 "variable.function" = "#1e66f5"
 
 # home directory ~
-"variable.language.tilde" = "#8839ef"
+"variable.language.tilde" = "#d20f39"
 
 # keywords
 "keyword" = "#8839ef"
 
+# general foreground color
+"source" = "#4c4f69"
+
 # variable assignments
-"storage" = "#8839ef"
+"storage" = "#df8e1d"
+"storage.modifier" = "#8839ef"
 
 # support terms (e.g. double braces, let)
-"support" = "#179299"
+"support" = "#1e66f5"
+"keyword.operator" = "#179299"
 
 # function names
 "entity.name.function" = "#1e66f5"
 
 # braces
-"punctuation.section" = "#209fb5"
+"punctuation.section" = "#7c7f93"
+
+# terminators (e.g. ";;" after a case item)
+"punctuation.terminator" = "#7c7f93"
 
 # dynamic items
-"dynamic.callable" = "#40a02b"
+"dynamic.callable" = "#1e66f5"
 "dynamic.callable.missing" = "#d20f39"
 "dynamic.path" = { underline = true }
