@@ -31,11 +31,25 @@ const STRING_QUOTED_END: &str = "punctuation.definition.string.end.shell";
 const REDIRECTION: &str = "keyword.operator.assignment.redirection.shell";
 
 #[cfg(test)]
+const CONTROL_DO: &str = "keyword.control.do.shell";
+#[cfg(test)]
+const CONTROL_DONE: &str = "keyword.control.done.shell";
+#[cfg(test)]
+const CONTROL_NOCORRECT: &str = "keyword.control.flow.nocorrect.shell";
+#[cfg(test)]
+const CONTROL_REPEAT: &str = "keyword.control.flow.repeat.shell";
+#[cfg(test)]
+const CONTROL_TIME: &str = "keyword.control.flow.time.shell";
+#[cfg(test)]
 const ENVIRONMENT_VARIABLE: &str = "variable.other.readwrite.shell";
 #[cfg(test)]
-const PARAMETER: &str = "variable.parameter.option.shell";
+const OPERATOR_ARITHMETIC: &str = "keyword.operator.arithmetic.shell";
 #[cfg(test)]
-const OPERATOR_LOGICAL: &str = "keyword.operator.logical.and.shell";
+const OPERATOR_LOGICAL_AND: &str = "keyword.operator.logical.and.shell";
+#[cfg(test)]
+const OPERATOR_LOGICAL_CONTINUE: &str = "keyword.operator.logical.continue.shell";
+#[cfg(test)]
+const PARAMETER: &str = "variable.parameter.option.shell";
 
 /// A span of text with a foreground color. The range is specified in terms of
 /// character indices, not byte indices.

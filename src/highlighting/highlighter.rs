@@ -1168,7 +1168,7 @@ mod tests {
                 cfg.dynamic_span(0, 3, "foo"),
                 cfg.static_span(10, 13, PARAMETER)?,
                 cfg.static_span(14, 51, STRING_QUOTED_DOUBLE)?,
-                cfg.static_span(52, 54, OPERATOR_LOGICAL)?,
+                cfg.static_span(52, 54, OPERATOR_LOGICAL_AND)?,
                 cfg.dynamic_span(55, 60, "touch"),
                 cfg.static_span(61, 69, DYNAMIC_PATH_FILE)?,
             ]
@@ -1259,6 +1259,101 @@ mod tests {
                 cfg.static_span(27, 33, DYNAMIC_PATH_FILE)?,
                 cfg.static_span(33, 34, ENVIRONMENT_VARIABLE)?,
                 cfg.static_span(35, 44, DYNAMIC_PATH_FILE)?,
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn repeat() -> Result<()> {
+        let cfg = test_cfg()?;
+
+        let highlighted = cfg.highlight(r"repeat 5 echo Hello")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 6, CONTROL_REPEAT)?,
+                cfg.dynamic_span(9, 13, "echo"),
+            ]
+        );
+
+        // arbitrary expressions
+        let highlighted = cfg.highlight(r"repeat 1+9/2 echo Hello")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 6, CONTROL_REPEAT)?,
+                cfg.static_span(8, 9, OPERATOR_ARITHMETIC)?,
+                cfg.static_span(10, 11, OPERATOR_ARITHMETIC)?,
+                cfg.dynamic_span(13, 17, "echo"),
+            ]
+        );
+
+        // arbitrary expressions
+        let highlighted = cfg.highlight(r"repeat 1 do; echo Hello; done")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 6, CONTROL_REPEAT)?,
+                cfg.static_span(9, 12, CONTROL_DO)?,
+                cfg.dynamic_span(13, 17, "echo"),
+                cfg.static_span(23, 24, OPERATOR_LOGICAL_CONTINUE)?,
+                cfg.static_span(25, 29, CONTROL_DONE)?,
+            ]
+        );
+
+        // missing number should still work
+        let highlighted = cfg.highlight(r"repeat echo Hello")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 6, CONTROL_REPEAT)?,
+                cfg.dynamic_span(7, 11, "echo"),
+            ]
+        );
+
+        let highlighted = cfg.highlight(r"repeat do; echo Hello; done")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 6, CONTROL_REPEAT)?,
+                cfg.static_span(7, 10, CONTROL_DO)?,
+                cfg.dynamic_span(11, 15, "echo"),
+                cfg.static_span(21, 22, OPERATOR_LOGICAL_CONTINUE)?,
+                cfg.static_span(23, 27, CONTROL_DONE)?,
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn time() -> Result<()> {
+        let cfg = test_cfg()?;
+
+        let highlighted = cfg.highlight(r"time sleep 2")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 4, CONTROL_TIME)?,
+                cfg.dynamic_span(5, 10, "sleep"),
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn nocorrect() -> Result<()> {
+        let cfg = test_cfg()?;
+
+        let highlighted = cfg.highlight(r"nocorrect slep 2")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 9, CONTROL_NOCORRECT)?,
+                cfg.dynamic_span(10, 14, "slep"),
             ]
         );
 
