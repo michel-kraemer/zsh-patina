@@ -23,6 +23,10 @@ use crate::color::Color;
 
 #[derive(Clone, PartialEq, Eq, EnumIter, Debug)]
 pub enum ThemeSource {
+    CatppuccinFrappe,
+    CatppuccinLatte,
+    CatppuccinMacchiato,
+    CatppuccinMocha,
     Classic,
     Lavender,
     Nord,
@@ -49,6 +53,10 @@ impl<'de> Deserialize<'de> for ThemeSource {
     {
         let s = String::deserialize(deserializer)?;
         match s.as_str() {
+            "catppuccin-frappe" => Ok(ThemeSource::CatppuccinFrappe),
+            "catppuccin-latte" => Ok(ThemeSource::CatppuccinLatte),
+            "catppuccin-macchiato" => Ok(ThemeSource::CatppuccinMacchiato),
+            "catppuccin-mocha" => Ok(ThemeSource::CatppuccinMocha),
             "classic" => Ok(ThemeSource::Classic),
             "lavender" => Ok(ThemeSource::Lavender),
             "nord" => Ok(ThemeSource::Nord),
@@ -69,6 +77,10 @@ impl<'de> Deserialize<'de> for ThemeSource {
 impl Display for ThemeSource {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
+            ThemeSource::CatppuccinFrappe => write!(f, "catppuccin-frappe"),
+            ThemeSource::CatppuccinLatte => write!(f, "catppuccin-latte"),
+            ThemeSource::CatppuccinMacchiato => write!(f, "catppuccin-macchiato"),
+            ThemeSource::CatppuccinMocha => write!(f, "catppuccin-mocha"),
             ThemeSource::Classic => write!(f, "classic"),
             ThemeSource::Lavender => write!(f, "lavender"),
             ThemeSource::Nord => write!(f, "nord"),
@@ -218,6 +230,22 @@ impl Theme {
         visited.push(source.clone());
 
         let mut theme: Theme = match source {
+            ThemeSource::CatppuccinFrappe => {
+                toml::from_slice(include_bytes!("../themes/catppuccin-frappe.toml"))
+                    .context("Unable to load catppuccin-frappe theme")?
+            }
+            ThemeSource::CatppuccinLatte => {
+                toml::from_slice(include_bytes!("../themes/catppuccin-latte.toml"))
+                    .context("Unable to load catppuccin-latte theme")?
+            }
+            ThemeSource::CatppuccinMacchiato => {
+                toml::from_slice(include_bytes!("../themes/catppuccin-macchiato.toml"))
+                    .context("Unable to load catppuccin-macchiato theme")?
+            }
+            ThemeSource::CatppuccinMocha => {
+                toml::from_slice(include_bytes!("../themes/catppuccin-mocha.toml"))
+                    .context("Unable to load catppuccin-mocha theme")?
+            }
             ThemeSource::Classic => toml::from_slice(include_bytes!("../themes/classic.toml"))
                 .context("Unable to load classic theme")?,
             ThemeSource::Lavender => toml::from_slice(include_bytes!("../themes/lavender.toml"))
@@ -365,6 +393,86 @@ mod tests {
     fn load_builtin_without_metadata() {
         let theme = Theme::load(&ThemeSource::Patina).unwrap();
         assert!(theme.resolve("comment").is_some());
+    }
+
+    #[test]
+    fn load_catppuccin_frappe() {
+        let theme = Theme::load(&ThemeSource::CatppuccinFrappe).unwrap();
+        assert_eq!(
+            theme.resolve("comment").unwrap().foreground,
+            Some(Color::try_from("#949cbb").unwrap())
+        );
+        assert_eq!(
+            theme.resolve("keyword").unwrap().foreground,
+            Some(Color::try_from("#ca9ee6").unwrap())
+        );
+        assert_eq!(
+            theme
+                .resolve("dynamic.callable.missing")
+                .unwrap()
+                .foreground,
+            Some(Color::try_from("#e78284").unwrap())
+        );
+    }
+
+    #[test]
+    fn load_catppuccin_latte() {
+        let theme = Theme::load(&ThemeSource::CatppuccinLatte).unwrap();
+        assert_eq!(
+            theme.resolve("comment").unwrap().foreground,
+            Some(Color::try_from("#7c7f93").unwrap())
+        );
+        assert_eq!(
+            theme.resolve("keyword").unwrap().foreground,
+            Some(Color::try_from("#8839ef").unwrap())
+        );
+        assert_eq!(
+            theme
+                .resolve("dynamic.callable.missing")
+                .unwrap()
+                .foreground,
+            Some(Color::try_from("#d20f39").unwrap())
+        );
+    }
+
+    #[test]
+    fn load_catppuccin_macchiato() {
+        let theme = Theme::load(&ThemeSource::CatppuccinMacchiato).unwrap();
+        assert_eq!(
+            theme.resolve("comment").unwrap().foreground,
+            Some(Color::try_from("#939ab7").unwrap())
+        );
+        assert_eq!(
+            theme.resolve("keyword").unwrap().foreground,
+            Some(Color::try_from("#c6a0f6").unwrap())
+        );
+        assert_eq!(
+            theme
+                .resolve("dynamic.callable.missing")
+                .unwrap()
+                .foreground,
+            Some(Color::try_from("#ed8796").unwrap())
+        );
+    }
+
+    #[test]
+    fn load_catppuccin_mocha() {
+        let theme = Theme::load(&ThemeSource::CatppuccinMocha).unwrap();
+        assert_eq!(
+            theme.resolve("comment").unwrap().foreground,
+            Some(Color::try_from("#9399b2").unwrap())
+        );
+        assert_eq!(
+            theme.resolve("keyword").unwrap().foreground,
+            Some(Color::try_from("#cba6f7").unwrap())
+        );
+        assert_eq!(
+            theme
+                .resolve("dynamic.callable.missing")
+                .unwrap()
+                .foreground,
+            Some(Color::try_from("#f38ba8").unwrap())
+        );
     }
 
     #[test]

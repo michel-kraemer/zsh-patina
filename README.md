@@ -255,6 +255,10 @@ The following built-in themes are available:
 | Theme | Description |
 |-------|-------------|
 | `patina` | The **default** theme with a balanced color palette. |
+| `catppuccin-frappe` | A soothing dark theme with muted tones. Based on [Catppuccin Frappé](https://catppuccin.com/palette#frappe). |
+| `catppuccin-latte` | A soothing light theme with pastel tones. Based on [Catppuccin Latte](https://catppuccin.com/palette#latte). |
+| `catppuccin-macchiato` | A soothing dark theme with vibrant tones. Based on [Catppuccin Macchiato](https://catppuccin.com/palette#macchiato). |
+| `catppuccin-mocha` | A soothing warm-toned dark theme. Based on [Catppuccin Mocha](https://catppuccin.com/palette#mocha). |
 | `classic` | ANSI color theme inspired by [fast-syntax-highlighting's default theme](https://github.com/zdharma-continuum/fast-syntax-highlighting/blob/master/themes/default.ini).
 | `lavender` | A variant with magenta/lavender tones. |
 | `nord` | An arctic, north-bluish color palette. Based on [Nord](https://www.nordtheme.com/). |

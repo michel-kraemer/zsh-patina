@@ -161,6 +161,18 @@ impl Highlighter {
             theme
                 .to_syntect(&scope_mapping)
                 .with_context(|| match &config.theme {
+                    ThemeSource::CatppuccinFrappe => {
+                        "Failed to parse catppuccin-frappe theme".to_string()
+                    }
+                    ThemeSource::CatppuccinLatte => {
+                        "Failed to parse catppuccin-latte theme".to_string()
+                    }
+                    ThemeSource::CatppuccinMacchiato => {
+                        "Failed to parse catppuccin-macchiato theme".to_string()
+                    }
+                    ThemeSource::CatppuccinMocha => {
+                        "Failed to parse catppuccin-mocha theme".to_string()
+                    }
                     ThemeSource::Classic => "Failed to parse classic theme".to_string(),
                     ThemeSource::Lavender => "Failed to parse lavender theme".to_string(),
                     ThemeSource::Nord => "Failed to parse nord theme".to_string(),

@@ -1,0 +1,58 @@
+# This theme is based on Catppuccin Frappé (Copyright (c) 2021 Catppuccin, released
+# under the MIT license, https://github.com/catppuccin/catppuccin)
+
+# comments
+"comment" = "#949cbb"
+
+# strings
+"string" = "#a6d189"
+
+# regular expressions
+"keyword.operator.regexp" = "#f4b8e4"
+
+# escape characters
+"constant.character" = "#f4b8e4"
+
+# constants in general
+"constant" = "#ef9f76"
+
+# parameters
+"variable.parameter" = "#ea999c"
+
+# environment variables
+"variable.other" = "#e78284"
+"punctuation.definition.variable" = "#e78284"
+
+# commands
+"variable.function" = "#8caaee"
+
+# home directory ~
+"variable.language.tilde" = "#e78284"
+
+# keywords
+"keyword" = "#ca9ee6"
+
+# general foreground color
+source = "#c6d0f5"
+
+# variable assignments
+"storage" = "#e5c890"
+"storage.modifier" = "#ca9ee6"
+
+# support terms (e.g. double braces, let)
+"support" = "#8caaee"
+"keyword.operator" = "#81c8be"
+
+# function names
+"entity.name.function" = "#8caaee"
+
+# braces
+"punctuation.section" = "#949cbb"
+
+# terminators (e.g. ";;" after a case item)
+"punctuation.terminator" = "#949cbb"
+
+# dynamic items
+"dynamic.callable" = "#8caaee"
+"dynamic.callable.missing" = "#e78284"
+"dynamic.path" = { underline = true }
