@@ -19,7 +19,7 @@ codegen-units = 1
 
 [dependencies]
 anyhow = "1.0.102"
-askama = "0.15.4"
+askama = "0.15.6"
 clap = { version = "4.5.60", features = ["derive", "wrap_help"] }
 dirs = "6.0.0"
 figment = { version = "0.10.19", features = ["toml"] }
