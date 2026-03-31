@@ -1,4 +1,7 @@
+use std::fmt::Formatter;
+
 use anyhow::{Context, Result, bail};
+use serde::{Deserialize, Deserializer, de::Visitor};
 use termcolor::Color as TermColor;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -99,5 +102,39 @@ impl Color {
             Color::Ansi256(c) => c.to_string(),
             Color::Rgb(r, g, b) => to_hex(r, g, b),
         }
+    }
+}
+
+impl<'de> Deserialize<'de> for Color {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct StringOrInt;
+
+        impl<'de> Visitor<'de> for StringOrInt {
+            type Value = Color;
+
+            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+                formatter.write_str("string or 8-bit number")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Color, E>
+            where
+                E: serde::de::Error,
+            {
+                Color::try_from(value).map_err(E::custom)
+            }
+
+            fn visit_i64<E>(self, value: i64) -> Result<Color, E>
+            where
+                E: serde::de::Error,
+            {
+                let value = u8::try_from(value).map_err(E::custom)?;
+                Ok(Color::Ansi256(value))
+            }
+        }
+
+        deserializer.deserialize_any(StringOrInt)
     }
 }

@@ -147,25 +147,9 @@ impl<'de> Deserialize<'de> for Style {
                 M: MapAccess<'de>,
             {
                 #[derive(Deserialize)]
-                #[serde(untagged)]
-                enum StrOrInteger {
-                    Str(String),
-                    Int(i64),
-                }
-
-                impl StrOrInteger {
-                    fn into_string(self) -> String {
-                        match self {
-                            StrOrInteger::Str(s) => s,
-                            StrOrInteger::Int(i) => i.to_string(),
-                        }
-                    }
-                }
-
-                #[derive(Deserialize)]
                 struct Helper {
-                    foreground: Option<StrOrInteger>,
-                    background: Option<StrOrInteger>,
+                    foreground: Option<Color>,
+                    background: Option<Color>,
                     #[serde(default)]
                     bold: bool,
                     #[serde(default)]
@@ -175,18 +159,8 @@ impl<'de> Deserialize<'de> for Style {
                 let h = Helper::deserialize(MapAccessDeserializer::new(map))?;
 
                 Ok(Style {
-                    foreground: h
-                        .foreground
-                        .map(|fg| {
-                            Color::try_from(fg.into_string().as_str()).map_err(M::Error::custom)
-                        })
-                        .transpose()?,
-                    background: h
-                        .background
-                        .map(|bg| {
-                            Color::try_from(bg.into_string().as_str()).map_err(M::Error::custom)
-                        })
-                        .transpose()?,
+                    foreground: h.foreground,
+                    background: h.background,
                     bold: h.bold,
                     underline: h.underline,
                 })

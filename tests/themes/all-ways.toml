@@ -3,7 +3,7 @@
 "a" = "red"
 "b" = "#f00"
 "c" = "1"
-"d" = "1"
+"d" = 1
 
 "e" = { foreground = "red" }
 "f" = { foreground = "#f00" }
