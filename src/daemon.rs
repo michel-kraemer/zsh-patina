@@ -65,13 +65,15 @@ fn pid_alive(pid: u32) -> bool {
 fn format_static_style(style: &StaticStyle) -> String {
     let mut result = String::new();
     if let Some(fg) = &style.foreground_color {
-        result.push_str(&format!("fg={}", fg));
+        result.push_str("fg=");
+        result.push_str(fg);
     }
     if let Some(bg) = &style.background_color {
         if !result.is_empty() {
             result.push(',');
         }
-        result.push_str(&format!("bg={}", bg));
+        result.push_str("bg=");
+        result.push_str(bg);
     }
     if style.bold {
         if !result.is_empty() {
