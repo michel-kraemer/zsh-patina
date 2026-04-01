@@ -1,4 +1,4 @@
-use std::{fs, io::Write, process};
+use std::{env, fs, io::Write, path::PathBuf, process};
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -84,7 +84,7 @@ enum Command {
 
 fn run() -> Result<()> {
     let home = dirs::home_dir().context("Unable to find home directory")?;
-    let config_dir = home.join(".config/zsh-patina");
+    let config_dir = config_dir(&home);
     let data_dir = home.join(".local/share/zsh-patina");
 
     // parse arguments
@@ -119,6 +119,14 @@ fn run() -> Result<()> {
         Command::ListScopes => list_scopes(),
         Command::ListThemes => list_themes(&config),
     }
+}
+
+fn config_dir(home: &PathBuf) -> PathBuf {
+    env::var_os("XDG_CONFIG_HOME")
+        .filter(|dir| !dir.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home.join(".config"))
+        .join("zsh-patina")
 }
 
 fn main() -> Result<()> {
