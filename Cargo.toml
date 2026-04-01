@@ -33,7 +33,7 @@ syntect = { version = "5.3.0", default-features = false, features = ["parsing", 
 tempfile = "3.27.0"
 termcolor = "1.4.1"
 textwrap = { version = "0.16.2", features = ["terminal_size"] }
-toml = "1.1.0"
+toml = "1.1.2"
 
 [build-dependencies]
 anyhow = "1.0.102"
