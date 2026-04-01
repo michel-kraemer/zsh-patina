@@ -23,7 +23,7 @@ askama = "0.15.6"
 clap = { version = "4.5.60", features = ["derive", "wrap_help"] }
 dirs = "6.0.0"
 figment = { version = "0.10.19", features = ["toml"] }
-libc = "0.2.182"
+libc = "0.2.184"
 rayon = "1.11.0"
 rustc-hash = "2.1.2"
 serde = { version = "1.0.228", features = ["derive"] }
