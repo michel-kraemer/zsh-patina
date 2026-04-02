@@ -110,28 +110,19 @@ _zsh_patina() {
         return
     fi
 
-    # Split pre-buffer into lines. In a multi-line input at the secondary
-    # prompt, the pre-buffer contains the lines before the one the cursor is
-    # currently in.
-    local pre_count
-    local -a pre_lines
+    # Count lines in pre-buffer. In a multi-line input at the secondary prompt,
+    # the pre-buffer contains the lines before the one the cursor is currently
+    # in.
+    local pre_count=0
     if [[ -n "$PREBUFFER" ]]; then
-        pre_lines=("${(@f)PREBUFFER}")
-        pre_count=${#pre_lines}
-    else
-        pre_lines=()
-        pre_count=0
+        # remove every character instead of '\n' and then get string length
+        pre_count=$(( ${#${PREBUFFER//[^$'\n']/}} + 1 ))
     fi
 
-    # Split edit buffer into lines
-    local count
-    local -a lines
+    # Count lines in buffer
+    local count=0
     if [[ -n "$BUFFER" ]]; then
-        lines=("${(@f)BUFFER}")
-        count=${#lines}
-    else
-        lines=()
-        count=0
+        count=$(( ${#${BUFFER//[^$'\n']/}} + 1 ))
     fi
 
     if ! zsocket "$socket_path" 2>/dev/null; then
@@ -186,6 +177,11 @@ _zsh_patina() {
     # behaviour).
     local entry range_start range_end ch
 
+    # declaring all other variables outside the while loop (outside the hot
+    # path), too, slightly increases performance
+    local -A choices
+    local parsed_callable args choices_raw remainder key value
+
     local new_regions=("${region_highlight[@]}") # preserve existing highlighting
     local line
     while IFS= read -r -u $fd line; do
@@ -193,22 +189,22 @@ _zsh_patina() {
 
         if [[ "$line" == "-DY"* ]]; then
             # Strip "-DY" prefix and split by whitespace
-            local remainder="${line#-DY}"
-            local args=(${(@s/ /)remainder})
+            remainder="${line#-DY}"
+            args=(${(@s/ /)remainder})
 
-            local range_start=$args[1]
-            local range_end=$args[2]
+            range_start=$args[1]
+            range_end=$args[2]
             _zsh_patina_decode_string $args[3]
-            local parsed_callable=$REPLY
+            parsed_callable=$REPLY
             _zsh_patina_decode_string $args[4]
-            local choices_raw=$REPLY
+            choices_raw=$REPLY
 
             # Parse choices_raw ("key:val;key:val;...") into associative array.
             # Split keys into individual characters.
-            local -A choices=()
+            choices=()
             for entry in "${(@s/;/)choices_raw}"; do
-                local key="${entry%%:*}"
-                local value="${entry#*:}"
+                key="${entry%%:*}"
+                value="${entry#*:}"
                 for ch in "${(@s::)key}"; do
                     choices[$ch]="$value"
                 done
@@ -232,9 +228,6 @@ _zsh_patina() {
 
     # close socket connection
     exec {fd}>&-
-
-    # alternative but spawns an additional process (i.e. nc):
-    # printf '%s\n' "$1" | nc -U "$sock" 2>/dev/null
 
     # end=$EPOCHREALTIME
     # elapsed_ms=$(( (end - start) * 1000 ))
