@@ -103,7 +103,7 @@ _zsh_patina() {
     [[ -z "$PREBUFFER" && -z "$BUFFER" ]] && return
 
     local socket_path
-    socket_path="$HOME/.local/share/zsh-patina/daemon.sock"
+    socket_path="${XDG_DATA_HOME:-$HOME/.local/share}/zsh-patina/daemon.sock"
 
     if [[ ! -S "$socket_path" ]]; then
         # socket does not exist - daemon is not running
