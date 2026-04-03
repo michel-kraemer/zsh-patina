@@ -83,6 +83,40 @@ enum Command {
 }
 
 fn run() -> Result<()> {
+    // initialize logger and configure custom format
+    env_logger::builder()
+        .format(|buf, record| {
+            let timestamp = buf.timestamp_micros();
+            let level = record.level();
+            let file = record.file();
+            let line = record.line();
+            let thread_id = std::thread::current().id();
+            if let Some(file) = file
+                && let Some(line) = line
+            {
+                writeln!(
+                    buf,
+                    "[{} {} {}:{} {:?}] {}",
+                    timestamp,
+                    level,
+                    file,
+                    line,
+                    thread_id,
+                    record.args()
+                )
+            } else {
+                writeln!(
+                    buf,
+                    "[{} {} {:?}] {}",
+                    timestamp,
+                    level,
+                    thread_id,
+                    record.args()
+                )
+            }
+        })
+        .init();
+
     let home = dirs::home_dir().context("Unable to find home directory")?;
     let config_dir = home.join(".config/zsh-patina");
     let data_dir = home.join(".local/share/zsh-patina");

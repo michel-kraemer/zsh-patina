@@ -219,6 +219,8 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
     let mut yank_end = None;
     let mut zle_highlight_paste = None;
 
+    log::trace!("Received header: {}", header.trim_ascii_end());
+
     for h in header.split_ascii_whitespace() {
         let (key, value) = h
             .split_once("=")
@@ -335,6 +337,8 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
         pre_buffer_total_len += line_len;
     }
 
+    log::trace!("{pre_buffer_line_count} pre-buffer lines read.");
+
     // read lines
     let mut total_len = 0;
     let mut line_lengths = Vec::new();
@@ -364,10 +368,15 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
         }
     }
 
+    log::trace!("{buffer_line_count} buffer lines read.");
+
     // check if the client version matches ours
     if client_version.is_none_or(|v| v != PROTOCOL_VERSION) {
         // Return immediately. This will close the connection with an empty
         // response.
+        log::warn!(
+            "Client version is {client_version:?}. Expected protocol version is {PROTOCOL_VERSION}."
+        );
         return Ok(());
     }
 
@@ -428,6 +437,8 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
         }
     }
 
+    log::trace!("Highlighting result: {merged:?}");
+
     for s in merged {
         // write response
         let message = match s.style {
@@ -466,6 +477,7 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
         };
 
         if let Some(message) = message {
+            log::trace!("Writing response: {message}");
             stream
                 .write_all(message.as_bytes())
                 .context("Unable to send response")?;
@@ -679,12 +691,16 @@ fn start_daemon_internal(
     let listener = UnixListener::bind(&socket_path)
         .with_context(|| format!("Unable to bind socket {socket_path:?}"))?;
 
+    log::info!("Listening for connections on {socket_path:?} ...");
+
     // accept connections
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
                 let highlighter = Arc::clone(&highlighter);
                 pool.spawn(|| {
+                    log::debug!("New connection ...");
+
                     // Handle connection and ignore any errors. Errors can
                     // happen in two cases:
                     // * We are unable to read the input. In this case, Zsh will
@@ -693,7 +709,15 @@ fn start_daemon_internal(
                     // * We are unable to highlight the command or send a
                     //   response. In this case, `stream` will be dropped and
                     //   Zsh will just continue without highlighting.
-                    let _ = handle_connection(stream, highlighter);
+                    let e = handle_connection(stream, highlighter);
+
+                    match e {
+                        Ok(_) => log::debug!("Connection successfully handled."),
+                        Err(e) => {
+                            log::error!("Failed to handle connection.");
+                            log::error!("{e}");
+                        }
+                    }
                 });
             }
             _ => {
