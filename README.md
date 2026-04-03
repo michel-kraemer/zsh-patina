@@ -198,7 +198,12 @@ A flake is provided to make the executable the plugin requires available in `/ni
 
 ## Configuration
 
-zsh-patina can be configured through an optional configuration file at `~/.config/zsh-patina/config.toml`. If the file doesn't exist, the plugin uses the default settings shown below.
+zsh-patina can be configured through an optional configuration file at the following locations (in order of precedence):
+
+* `$XDG_CONFIG_HOME/zsh-patina/config.toml` (if `$XDG_CONFIG_HOME` is set)
+* `~/.config/zsh-patina/config.toml`
+
+If the file doesn't exist at either location, the plugin uses the default settings shown below.
 
 **Example configuration:**
 
@@ -229,7 +234,7 @@ max_line_length = 20000
 timeout_ms = 500
 ```
 
-After changing the configuration, restart the daemon with:
+**Important:** After changing the configuration, restart the daemon with:
 
 ```shell
 zsh-patina restart
@@ -243,7 +248,7 @@ Note that after changing the `theme` setting or editing your custom theme file, 
 
 ### Built-in themes
 
-Set the `theme` option in your configuration file (`~/.config/zsh-patina/config.toml`):
+Set the `theme` option in your [configuration file](#configuration):
 
 ```toml
 [highlighting]
@@ -279,7 +284,7 @@ To load a custom theme from a file, use the `file:` prefix:
 theme = "file:/path/to/mytheme.toml"
 ```
 
-The path must be absolute. It can start with a tilde `~` (for your home directory), and you can use environment variables such as `$HOME`.
+The path must be absolute. It can start with a tilde `~` (for your home directory), and you can use environment variables such as `$HOME` or `$XDG_CONFIG_HOME`.
 
 ### Creating a custom theme
 
@@ -442,7 +447,7 @@ If none of the above has helped, and you cannot solve the issue yourself, please
 
 ## How to remove the plugin
 
-In the unlikely case you don't like zsh-patina ☹️, you can remove it as follows (note that these instructions assume you've installed the plugin in `~/.zsh-patina`):
+In the unlikely case you don't like zsh-patina ☹️, you can remove it as follows:
 
 1. Remove the `eval "$(~/.zsh-patina/zsh-patina activate)"` line from your `.zshrc`.
 2. Restart the terminal
@@ -469,6 +474,8 @@ In the unlikely case you don't like zsh-patina ☹️, you can remove it as foll
    ```shell
    rm -rf ~/.config/zsh-patina/
    ```
+
+> Note that these instructions assume you've installed the plugin in `~/.zsh-patina` and that `$XDG_CONFIG_HOME` and `$XDG_DATA_HOME` are not set. If these two environment variables are set, the configuration directory and the data directory are located at `$XDG_CONFIG_HOME/zsh-patina/` and `$XDG_DATA_HOME/zsh-patina/`, respectively.
 
 ## Contributing
 
