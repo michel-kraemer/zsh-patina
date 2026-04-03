@@ -133,6 +133,15 @@ _zsh_patina() {
     fi
     local fd=$REPLY
 
+    if [[ -z "$_ZSH_PATINA_ENCODED_PWD" ]]; then
+        # Lazily set _ZSH_PATINA_ENCODED_PWD if it's empty. Doing this here
+        # rather than right at activation, makes sure we get the actual
+        # directory the user has started in and not the one from which
+        # `zsh-patina activate` was called.
+        _zsh_patina_encode_string $PWD
+        _ZSH_PATINA_ENCODED_PWD=$REPLY
+    fi
+
     {
         # build header
         local header="ver=<{version}> term_cols=$COLUMNS term_rows=$LINES cursor=$CURSOR pre_buffer_line_count=$pre_count buffer_line_count=$count pwd=$_ZSH_PATINA_ENCODED_PWD"
@@ -247,6 +256,7 @@ fi
 
 autoload -U add-zle-hook-widget add-zsh-hook
 add-zle-hook-widget line-pre-redraw _zsh_patina
-add-zsh-hook chpwd _zsh_patina_chpwd
 
-_zsh_patina_chpwd
+# Add hook for the current working directory but don't call `_zsh_patina_chpwd`
+# right now. We will lazily initialize _ZSH_PATINA_ENCODED_PWD later.
+add-zsh-hook chpwd _zsh_patina_chpwd
