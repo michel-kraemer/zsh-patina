@@ -1,11 +1,4 @@
-use std::{
-    env,
-    ffi::OsString,
-    fs,
-    io::Write,
-    path::{Path, PathBuf},
-    process,
-};
+use std::{io::Write, process};
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -17,7 +10,7 @@ use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use crate::{
     commands::{check, list_scopes, list_themes, tokenize},
-    config::Config,
+    config::{Config, config_file_path, data_dir},
     daemon::{activate, start_daemon, status_daemon, stop_daemon},
 };
 
@@ -124,19 +117,17 @@ fn run() -> Result<()> {
         })
         .init();
 
-    let home = dirs::home_dir().context("Unable to find home directory")?;
-    let config_dir = xdg_dir(env::var_os("XDG_CONFIG_HOME"), &home, ".config");
-    let data_dir = xdg_dir(env::var_os("XDG_DATA_HOME"), &home, ".local/share");
+    let config_file_path = config_file_path()?;
+    let data_dir = data_dir()?;
 
     // parse arguments
     let args = Args::parse();
 
     // load config file
-    let config_file_path = config_dir.join("config.toml");
-    let config = if fs::exists(&config_file_path)? {
+    let config = if let Some(config_file_path) = &config_file_path {
         Figment::new()
             .merge(Serialized::defaults(Config::default()))
-            .merge(Toml::file(&config_file_path))
+            .merge(Toml::file(config_file_path))
             .extract()
             .with_context(|| format!("Unable to read config file {config_file_path:?}"))?
     } else {
@@ -160,14 +151,6 @@ fn run() -> Result<()> {
         Command::ListScopes => list_scopes(),
         Command::ListThemes => list_themes(&config),
     }
-}
-
-fn xdg_dir(env_dir: Option<OsString>, home: &Path, fallback: &str) -> PathBuf {
-    env_dir
-        .filter(|dir| !dir.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| home.join(fallback))
-        .join("zsh-patina")
 }
 
 fn main() -> Result<()> {

@@ -1,7 +1,7 @@
 use std::{
-    fs::{self, File},
+    fs::File,
     io::{BufRead, BufReader},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use anyhow::Result;
@@ -45,11 +45,11 @@ fn print_bullet(message: &str, t: MessageType) {
     }
 }
 
-pub fn check(config: &Config, config_file_path: &Path, data_dir: &Path) -> Result<()> {
+pub fn check(config: &Config, config_file_path: &Option<PathBuf>, data_dir: &Path) -> Result<()> {
     let mut has_errors = false;
     let mut has_warnings = false;
 
-    if fs::exists(config_file_path)? {
+    if let Some(config_file_path) = config_file_path {
         print_bullet(
             &format!(
                 "Using configuration file at `{}'.",
@@ -60,8 +60,11 @@ pub fn check(config: &Config, config_file_path: &Path, data_dir: &Path) -> Resul
     } else {
         print_bullet(
             &format!(
-                "No configuration file found at `{}'. Using default settings.",
-                config_file_path.to_string_lossy()
+                "No configuration file found at `$XDG_CONFIG_HOME/zsh-patina/config.toml' \
+                or `{}/.config/zsh-patina/config.toml'. Using default settings.",
+                dirs::home_dir()
+                    .and_then(|p| p.to_str().map(|s| s.to_string()))
+                    .unwrap_or_else(|| "~".to_string())
             ),
             MessageType::Info,
         );

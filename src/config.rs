@@ -1,5 +1,6 @@
-use std::time::Duration;
+use std::{env, path::PathBuf, time::Duration};
 
+use anyhow::{Context, Result};
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
     de::{MapAccess, Visitor, value::MapAccessDeserializer},
@@ -176,4 +177,54 @@ impl<'de> Deserialize<'de> for DynamicConfig {
 
         deserializer.deserialize_any(DynamicConfigVisitor)
     }
+}
+
+/// Returns the path to the configuration file if it exists. The configuration
+/// file is searched in the following locations (in order):
+///
+/// 1. `$XDG_CONFIG_HOME/zsh-patina/config.toml` if the `XDG_CONFIG_HOME`
+///    environment variable is set and points to an absolute path
+/// 2. `~/.config/zsh-patina/config.toml`
+///
+/// If no configuration file is found, the function returns `Ok(None)`.
+pub fn config_file_path() -> Result<Option<PathBuf>> {
+    if let Some(xdg) = env::var_os("XDG_CONFIG_HOME")
+        && !xdg.is_empty()
+    {
+        let xdg = PathBuf::from(xdg);
+        if xdg.is_absolute() {
+            let result = xdg.join("zsh-patina/config.toml");
+            if result.exists() {
+                return Ok(Some(result));
+            }
+        }
+    }
+
+    let home = dirs::home_dir().context("Unable to find home directory")?;
+    let result = home.join(".config/zsh-patina/config.toml");
+    if result.exists() {
+        Ok(Some(result))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Returns the path to the data directory, which is used for storing the PID
+/// file and the daemon's Unix socket. The data directory is either:
+///
+/// 1. `$XDG_DATA_HOME/zsh-patina` if the `XDG_DATA_HOME` environment variable
+///    is set and points to an absolute path,
+/// 2. or `~/.local/share/zsh-patina`.
+pub fn data_dir() -> Result<PathBuf> {
+    if let Some(xdg) = env::var_os("XDG_DATA_HOME")
+        && !xdg.is_empty()
+    {
+        let xdg = PathBuf::from(xdg);
+        if xdg.is_absolute() {
+            return Ok(xdg.join("zsh-patina"));
+        }
+    }
+
+    let home = dirs::home_dir().context("Unable to find home directory")?;
+    Ok(home.join(".local/share/zsh-patina"))
 }
