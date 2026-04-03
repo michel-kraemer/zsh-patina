@@ -1,4 +1,11 @@
-use std::{fs, io::Write, process};
+use std::{
+    env,
+    ffi::OsString,
+    fs,
+    io::Write,
+    path::{Path, PathBuf},
+    process,
+};
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -118,8 +125,8 @@ fn run() -> Result<()> {
         .init();
 
     let home = dirs::home_dir().context("Unable to find home directory")?;
-    let config_dir = home.join(".config/zsh-patina");
-    let data_dir = home.join(".local/share/zsh-patina");
+    let config_dir = xdg_dir(env::var_os("XDG_CONFIG_HOME"), &home, ".config");
+    let data_dir = xdg_dir(env::var_os("XDG_DATA_HOME"), &home, ".local/share");
 
     // parse arguments
     let args = Args::parse();
@@ -153,6 +160,14 @@ fn run() -> Result<()> {
         Command::ListScopes => list_scopes(),
         Command::ListThemes => list_themes(&config),
     }
+}
+
+fn xdg_dir(env_dir: Option<OsString>, home: &Path, fallback: &str) -> PathBuf {
+    env_dir
+        .filter(|dir| !dir.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home.join(fallback))
+        .join("zsh-patina")
 }
 
 fn main() -> Result<()> {
