@@ -1,6 +1,6 @@
 [package]
 name = "zsh-patina"
-version = "1.2.0"
+version = "1.3.0"
 edition = "2024"
 authors = ["Michel Krämer <michel@undercouch.de>"]
 license = "MIT"
