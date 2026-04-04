@@ -304,6 +304,16 @@ impl DynamicTokenGroup {
                         // next one
                         state.push_string()?;
                         state.is_poison = true;
+                    } else if let Some(last) = state.s.chars().last()
+                        && last.is_whitespace()
+                    {
+                        // The poison pill does not start with a whitespace, but
+                        // the previous string does. Keep the current string but
+                        // trim that trailing whitespace. Throw away the next
+                        // string.
+                        state.s.pop();
+                        state.push_string()?;
+                        state.is_poison = true;
                     } else {
                         // The poison pill does not start with a whitespace,
                         // which means it's part of the current string. Throw it

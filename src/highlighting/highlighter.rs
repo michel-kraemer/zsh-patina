@@ -464,7 +464,7 @@ mod tests {
 
     struct TestCfg {
         highlighter: Highlighter,
-        _homedir: TempDir,
+        homedir: TempDir,
         tempdir: TempDir,
         pwd: String,
     }
@@ -542,7 +542,7 @@ mod tests {
 
         Ok(TestCfg {
             highlighter,
-            _homedir: homedir,
+            homedir,
             tempdir: dir,
             pwd,
         })
@@ -865,6 +865,51 @@ mod tests {
                 cfg.dynamic_span(0, 3, "foo"),
                 cfg.static_span(4, 12, DYNAMIC_PATH_FILE)?,
                 cfg.static_span(12, 15, PARAMETER)?,
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn two_commands_followed_by_comment() -> Result<()> {
+        let cfg = test_cfg()?;
+        let ash = cfg.homedir.path().join("foo/a.sh");
+        let bsh = cfg.homedir.path().join("foo/b.sh");
+
+        // two commands referring two shell scripts that don't exist
+        let highlighted = cfg.highlight("~/foo/a.sh && ~/foo/b.sh")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 10, ash.to_str().unwrap()),
+                cfg.static_span(11, 13, OPERATOR_LOGICAL_AND)?,
+                cfg.dynamic_span(14, 24, bsh.to_str().unwrap()),
+            ]
+        );
+
+        // two commands followed by a comment
+        let highlighted = cfg.highlight("~/foo/a.sh && ~/foo/b.sh # comment")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 10, ash.to_str().unwrap()),
+                cfg.static_span(11, 13, OPERATOR_LOGICAL_AND)?,
+                cfg.dynamic_span(14, 25, bsh.to_str().unwrap()),
+                cfg.static_span(25, 34, COMMENT)?,
+            ]
+        );
+
+        // two commands but the second path is invalid
+        let highlighted = cfg.highlight("~/foo/a.sh && ~/foo/b.sh# comment")?;
+        let mut expected_path = bsh.to_str().unwrap().to_string();
+        expected_path.push('#');
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 10, ash.to_str().unwrap()),
+                cfg.static_span(11, 13, OPERATOR_LOGICAL_AND)?,
+                cfg.dynamic_span(14, 25, &expected_path),
             ]
         );
 

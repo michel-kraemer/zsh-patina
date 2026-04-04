@@ -31,6 +31,8 @@ const STRING_QUOTED_END: &str = "punctuation.definition.string.end.shell";
 const REDIRECTION: &str = "keyword.operator.assignment.redirection.shell";
 
 #[cfg(test)]
+const COMMENT: &str = "comment.line.number-sign.shell";
+#[cfg(test)]
 const CONTROL_BREAK: &str = "keyword.control.break.shell";
 #[cfg(test)]
 const CONTROL_CASE: &str = "keyword.control.case.shell";
