@@ -697,6 +697,15 @@ fn start_daemon_internal(
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
+                // This is a safe guard against bugs. It is extremely unlikely
+                // that a single message will take longer than 1 second to be
+                // sent from the client to the server (or vice versa) but in
+                // case something goes wrong during communication (e.g. the
+                // client sends a higher line count in the header than it
+                // actually sends lines), we won't block indefinitely.
+                stream.set_read_timeout(Some(Duration::from_secs(1)))?;
+                stream.set_write_timeout(Some(Duration::from_secs(1)))?;
+
                 let highlighter = Arc::clone(&highlighter);
                 pool.spawn(|| {
                     log::debug!("New connection ...");
