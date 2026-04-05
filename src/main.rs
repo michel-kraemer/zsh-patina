@@ -10,7 +10,7 @@ use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use crate::{
     commands::{check, list_scopes, list_themes, tokenize},
-    config::{Config, config_file_path, data_dir},
+    config::{Config, config_file_path, runtime_dir},
     daemon::{activate, start_daemon, status_daemon, stop_daemon},
 };
 
@@ -118,7 +118,7 @@ fn run() -> Result<()> {
         .init();
 
     let config_file_path = config_file_path()?;
-    let data_dir = data_dir()?;
+    let runtime_dir = runtime_dir()?;
 
     // parse arguments
     let args = Args::parse();
@@ -135,18 +135,18 @@ fn run() -> Result<()> {
     };
 
     match args.command {
-        Command::Activate => activate(&data_dir, &config),
-        Command::Start { no_daemon } => start_daemon(&data_dir, &config, no_daemon),
+        Command::Activate => activate(&runtime_dir, &config),
+        Command::Start { no_daemon } => start_daemon(&runtime_dir, &config, no_daemon),
         Command::Stop => {
-            stop_daemon(&data_dir);
+            stop_daemon(&runtime_dir);
             Ok(())
         }
         Command::Restart => {
-            stop_daemon(&data_dir);
-            start_daemon(&data_dir, &config, false)
+            stop_daemon(&runtime_dir);
+            start_daemon(&runtime_dir, &config, false)
         }
-        Command::Status => status_daemon(&data_dir),
-        Command::Check => check(&config, &config_file_path, &data_dir),
+        Command::Status => status_daemon(&runtime_dir),
+        Command::Check => check(&config, &config_file_path, &runtime_dir),
         Command::Tokenize { input_file } => tokenize(&config, &input_file),
         Command::ListScopes => list_scopes(),
         Command::ListThemes => list_themes(&config),

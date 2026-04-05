@@ -36,15 +36,16 @@ const PROTOCOL_VERSION: &str = "1";
 #[template(path = "zsh-patina.zsh")]
 struct ActivateTemplate {
     zsh_patina_path: String,
+    zsh_patina_runtime_dir: String,
     version: &'static str,
 }
 
-fn pid_path(data_dir: &Path) -> PathBuf {
-    data_dir.join("daemon.pid")
+fn pid_path(runtime_dir: &Path) -> PathBuf {
+    runtime_dir.join("daemon.pid")
 }
 
-fn sock_path(data_dir: &Path) -> PathBuf {
-    data_dir.join("daemon.sock")
+fn sock_path(runtime_dir: &Path) -> PathBuf {
+    runtime_dir.join("daemon.sock")
 }
 
 /// Read the PID from the PID file. Returns `None` if the file does not exist or
@@ -521,15 +522,20 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
     Ok(())
 }
 
-pub fn activate(data_dir: &Path, config: &Config) -> Result<()> {
+pub fn activate(runtime_dir: &Path, config: &Config) -> Result<()> {
     check_config(config)?;
 
-    let (role, already_running) = start_daemon_internal(data_dir, config, false)?;
+    let (role, already_running) = start_daemon_internal(runtime_dir, config, false)?;
     if role == Role::Parent {
         let exe = std::env::current_exe()?;
 
         let template = ActivateTemplate {
             zsh_patina_path: exe.to_str().unwrap().to_string(),
+            zsh_patina_runtime_dir: runtime_dir
+                .to_str()
+                .unwrap()
+                .trim_end_matches('/')
+                .to_string(),
             version: PROTOCOL_VERSION,
         };
 
@@ -541,7 +547,7 @@ pub fn activate(data_dir: &Path, config: &Config) -> Result<()> {
     if already_running {
         // Check the currently running daemon's version. Restart the it if the
         // versions don't match.
-        let socket_path = sock_path(data_dir);
+        let socket_path = sock_path(runtime_dir);
         let mut stream = UnixStream::connect(&socket_path)?;
 
         let timeout = Duration::from_secs(2);
@@ -564,25 +570,25 @@ pub fn activate(data_dir: &Path, config: &Config) -> Result<()> {
 
         if daemon_version.is_none_or(|v| v != our_version) {
             // restart daemon
-            stop_daemon(data_dir);
-            start_daemon(data_dir, config, false)?;
+            stop_daemon(runtime_dir);
+            start_daemon(runtime_dir, config, false)?;
         }
     }
 
     Ok(())
 }
 
-pub fn start_daemon(data_dir: &Path, config: &Config, no_daemon: bool) -> Result<()> {
-    start_daemon_internal(data_dir, config, no_daemon)?;
+pub fn start_daemon(runtime_dir: &Path, config: &Config, no_daemon: bool) -> Result<()> {
+    start_daemon_internal(runtime_dir, config, no_daemon)?;
     Ok(())
 }
 
 fn start_daemon_internal(
-    data_dir: &Path,
+    runtime_dir: &Path,
     config: &Config,
     no_daemon: bool,
 ) -> Result<(Role, bool)> {
-    let pid_file = pid_path(data_dir);
+    let pid_file = pid_path(runtime_dir);
 
     if let Some(pid) = read_pid(&pid_file)
         && pid_alive(pid)
@@ -596,7 +602,7 @@ fn start_daemon_internal(
     }
 
     // Make sure the data directory exists
-    fs::create_dir_all(data_dir).context("Unable to create data directory")?;
+    fs::create_dir_all(runtime_dir).context("Unable to create data directory")?;
 
     if !no_daemon {
         // Double-fork:
@@ -672,7 +678,7 @@ fn start_daemon_internal(
         .with_context(|| format!("Unable to write PID file {pid_file:?}"))?;
 
     // clean up leftover socket
-    let socket_path = sock_path(data_dir);
+    let socket_path = sock_path(runtime_dir);
     let _ = fs::remove_file(&socket_path); // ignore errors
 
     let pool = ThreadPoolBuilder::new().num_threads(4).build().unwrap();
@@ -741,8 +747,8 @@ fn start_daemon_internal(
     Ok((Role::Daemon, false))
 }
 
-pub fn stop_daemon(data_dir: &Path) {
-    let pid_file = pid_path(data_dir);
+pub fn stop_daemon(runtime_dir: &Path) {
+    let pid_file = pid_path(runtime_dir);
     if let Some(pid) = read_pid(&pid_file)
         && pid_alive(pid)
     {
@@ -751,12 +757,12 @@ pub fn stop_daemon(data_dir: &Path) {
         unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
 
         let _ = fs::remove_file(pid_file);
-        let _ = fs::remove_file(sock_path(data_dir));
+        let _ = fs::remove_file(sock_path(runtime_dir));
     }
 }
 
-pub fn is_daemon_running(data_dir: &Path) -> Option<u32> {
-    let pid_file = pid_path(data_dir);
+pub fn is_daemon_running(runtime_dir: &Path) -> Option<u32> {
+    let pid_file = pid_path(runtime_dir);
     if let Some(pid) = read_pid(&pid_file)
         && pid_alive(pid)
     {
@@ -766,8 +772,8 @@ pub fn is_daemon_running(data_dir: &Path) -> Option<u32> {
     }
 }
 
-pub fn status_daemon(data_dir: &Path) -> Result<()> {
-    if let Some(pid) = is_daemon_running(data_dir) {
+pub fn status_daemon(runtime_dir: &Path) -> Result<()> {
+    if let Some(pid) = is_daemon_running(runtime_dir) {
         println!("Daemon is running. PID {pid}.");
         Ok(())
     } else {

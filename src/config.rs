@@ -1,4 +1,4 @@
-use std::{env, path::PathBuf, time::Duration};
+use std::{env, fs::DirBuilder, os::unix::fs::DirBuilderExt, path::PathBuf, time::Duration};
 
 use anyhow::{Context, Result};
 use serde::{
@@ -209,14 +209,19 @@ pub fn config_file_path() -> Result<Option<PathBuf>> {
     }
 }
 
-/// Returns the path to the data directory, which is used for storing the PID
-/// file and the daemon's Unix socket. The data directory is either:
+/// Returns the path to the runtime directory, which is used for storing the PID
+/// file and the daemon's Unix socket. The runtime directory is either:
 ///
-/// 1. `$XDG_DATA_HOME/zsh-patina` if the `XDG_DATA_HOME` environment variable
-///    is set and points to an absolute path,
-/// 2. or `~/.local/share/zsh-patina`.
-pub fn data_dir() -> Result<PathBuf> {
-    if let Some(xdg) = env::var_os("XDG_DATA_HOME")
+/// 1. `$XDG_RUNTIME_DIR/zsh-patina` if the `XDG_RUNTIME_DIR` environment
+///    variable is set and points to an absolute path,
+/// 2. on macOS, `$TMPDIR/zsh-patina` (where `$TMPDIR` is typically something
+///    like `/var/folders/.../T/` and is user-specific),
+/// 3. or a user-owned subdirectory of the temporary directory (e.g.
+///    `/tmp/zsh-patina-1000`), which is created if it doesn't already exists.
+///    The user-owned subdirectory is necessary because the temporary directory
+///    is typically world-writable.
+pub fn runtime_dir() -> std::io::Result<PathBuf> {
+    if let Some(xdg) = std::env::var_os("XDG_RUNTIME_DIR")
         && !xdg.is_empty()
     {
         let xdg = PathBuf::from(xdg);
@@ -225,6 +230,27 @@ pub fn data_dir() -> Result<PathBuf> {
         }
     }
 
-    let home = dirs::home_dir().context("Unable to find home directory")?;
-    Ok(home.join(".local/share/zsh-patina"))
+    #[cfg(target_os = "macos")]
+    {
+        // On macOS, temp_dir is user specific. So that's all we need to do.
+        let tmp = std::env::temp_dir();
+        if tmp.is_dir() {
+            return Ok(tmp.join("zsh-patina"));
+        }
+    }
+
+    // Fallback to temporary directory ...
+
+    // SAFETY: getuid() never fails and just returns a u32
+    let uid = unsafe { libc::getuid() };
+
+    // create user-owned subdirectory because the temporary might be
+    // world-writable
+    let path = std::env::temp_dir().join(format!("zsh-patina-{uid}"));
+    DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(&path)?;
+
+    Ok(path)
 }

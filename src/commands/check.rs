@@ -45,7 +45,11 @@ fn print_bullet(message: &str, t: MessageType) {
     }
 }
 
-pub fn check(config: &Config, config_file_path: &Option<PathBuf>, data_dir: &Path) -> Result<()> {
+pub fn check(
+    config: &Config,
+    config_file_path: &Option<PathBuf>,
+    runtime_dir: &Path,
+) -> Result<()> {
     let mut has_errors = false;
     let mut has_warnings = false;
 
@@ -82,7 +86,7 @@ pub fn check(config: &Config, config_file_path: &Option<PathBuf>, data_dir: &Pat
     }
 
     // check if the daemon is running
-    if let Some(pid) = is_daemon_running(data_dir) {
+    if let Some(pid) = is_daemon_running(runtime_dir) {
         print_bullet(
             &format!("Daemon is running. PID {pid}."),
             MessageType::Success,
