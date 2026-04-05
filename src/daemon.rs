@@ -2,11 +2,14 @@ use anyhow::{Context, Result, bail};
 use askama::Template;
 use rayon::ThreadPoolBuilder;
 use std::{
-    fs,
+    fs::{self, Permissions},
     io::{BufRead, BufReader, Write, stdout},
     os::{
         fd::AsRawFd,
-        unix::net::{UnixListener, UnixStream},
+        unix::{
+            fs::PermissionsExt,
+            net::{UnixListener, UnixStream},
+        },
     },
     path::{Path, PathBuf},
     process,
@@ -677,6 +680,11 @@ fn start_daemon_internal(
     fs::write(&pid_file, format!("{my_pid}\n"))
         .with_context(|| format!("Unable to write PID file {pid_file:?}"))?;
 
+    // Set read/write permissions and protect PID file from being deleted by
+    // periodic cleanup (https://specifications.freedesktop.org/basedir/latest/).
+    fs::set_permissions(&pid_file, Permissions::from_mode(0o1600))
+        .with_context(|| format!("Unable to set permissions of {pid_file:?}"))?;
+
     // clean up leftover socket
     let socket_path = sock_path(runtime_dir);
     let _ = fs::remove_file(&socket_path); // ignore errors
@@ -696,6 +704,11 @@ fn start_daemon_internal(
     // bind the Unix domain socket
     let listener = UnixListener::bind(&socket_path)
         .with_context(|| format!("Unable to bind socket {socket_path:?}"))?;
+
+    // Set read/write permissions and protect socket from being deleted by
+    // periodic cleanup (https://specifications.freedesktop.org/basedir/latest/).
+    fs::set_permissions(&socket_path, Permissions::from_mode(0o1600))
+        .with_context(|| format!("Unable to set permissions of {socket_path:?}"))?;
 
     log::info!("Listening for connections on {socket_path:?} ...");
 
