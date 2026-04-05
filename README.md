@@ -152,7 +152,7 @@ A flake is provided to make the executable the plugin requires available in `/ni
 
    ```shell
    mkdir ~/.zsh-patina
-   tar xfz zsh-patina-v1.3.0-aarch64-apple-darwin.tar.gz -C ~/.zsh-patina --strip-components 1
+   tar xfz zsh-patina-v1.3.1-aarch64-apple-darwin.tar.gz -C ~/.zsh-patina --strip-components 1
    ```
 
 3. Initialize the plugin at the end of your `.zshrc` file:
