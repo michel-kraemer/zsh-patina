@@ -463,19 +463,15 @@ In the unlikely case you don't like zsh-patina ☹️, you can remove it as foll
    rm -rf ~/.zsh-patina
    ```
 
-5. Delete the plugin's data directory:
+5. If you have created a [configuration](#configuration) file, you may also want to delete the configuration directory:
 
    ```shell
-   rm -rf ~/.local/share/zsh-patina/
-   ```
-
-6. If you have created a [configuration](#configuration) file, you may also want to delete the configuration directory:
-
-   ```shell
+   rm -rf "$XDG_CONFIG_HOME/zsh-patina/"
+   # or
    rm -rf ~/.config/zsh-patina/
    ```
 
-> Note that these instructions assume you've installed the plugin in `~/.zsh-patina` and that `$XDG_CONFIG_HOME` and `$XDG_DATA_HOME` are not set. If these two environment variables are set, the configuration directory and the data directory are located at `$XDG_CONFIG_HOME/zsh-patina/` and `$XDG_DATA_HOME/zsh-patina/`, respectively.
+> Note that these instructions assume you've installed the plugin in `~/.zsh-patina`.
 
 ## Contributing
 
