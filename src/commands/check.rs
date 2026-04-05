@@ -45,6 +45,14 @@ fn print_bullet(message: &str, t: MessageType) {
     }
 }
 
+fn zshrc_path() -> Result<PathBuf> {
+    if let Some(zdotdir) = std::env::var_os("ZDOTDIR") {
+        Ok(PathBuf::from(zdotdir).join(".zshrc"))
+    } else {
+        Ok(PathBuf::from(shellexpand::full("~/.zshrc")?.as_ref()))
+    }
+}
+
 pub fn check(
     config: &Config,
     config_file_path: &Option<PathBuf>,
@@ -101,8 +109,8 @@ pub fn check(
 
     // check if `zsh-patina activate` is called in the zshrc file and if that
     // happens in the last line
-    match shellexpand::full("~/.zshrc") {
-        Ok(zshrc_path) => match File::open(zshrc_path.as_ref()) {
+    match zshrc_path() {
+        Ok(ref zshrc_path) => match File::open(zshrc_path) {
             Ok(f) => {
                 let reader = BufReader::new(f);
                 let mut activate_found = false;
@@ -123,7 +131,7 @@ pub fn check(
                     print_bullet(
                         &format!(
                             "The string `zsh-patina activate' was not found \
-                            in your .zshrc file at `{zshrc_path}'. Please make \
+                            in your .zshrc file at {zshrc_path:?}. Please make \
                             sure zsh-patina is activated when your shell is \
                             started."
                         ),
@@ -135,7 +143,7 @@ pub fn check(
                         print_bullet(
                             &format!(
                                 "zsh-patina is not activated last in your \
-                                .zshrc file at `{zshrc_path}'. Make sure the \
+                                .zshrc file at {zshrc_path:?}. Make sure the \
                                 `zsh-patina activate' call happens at the end \
                                 of the file."
                             ),
@@ -154,7 +162,7 @@ pub fn check(
             Err(e) => {
                 print_bullet(
                     &format!(
-                        "Failed to read `{zshrc_path}'. Unable to check if \
+                        "Failed to read {zshrc_path:?}. Unable to check if \
                         zsh-patina is activated when the shell is started.\n\n{e}"
                     ),
                     MessageType::Warning,
@@ -165,7 +173,7 @@ pub fn check(
         Err(e) => {
             print_bullet(
                 &format!(
-                    "Failed to resolve path to ~/.zshrc. Unable to check if \
+                    "Failed to resolve path to .zshrc. Unable to check if \
                     zsh-patina is activated when the shell is started.\n\n{e}"
                 ),
                 MessageType::Warning,
