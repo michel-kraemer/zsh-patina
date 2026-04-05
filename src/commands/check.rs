@@ -2,6 +2,7 @@ use std::{
     fs::File,
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
+    process::Command,
 };
 
 use anyhow::Result;
@@ -45,8 +46,27 @@ fn print_bullet(message: &str, t: MessageType) {
     }
 }
 
+/// Gets `$ZDOTDIR` either from the environment variable or by spawning a zsh
+/// process. Returns `None` if `$ZDOTDIR` is not set or if there was an error
+/// while trying to get it.
+fn get_zdotdir() -> Result<Option<String>> {
+    if let Some(zdotdir) = std::env::var_os("ZDOTDIR")
+        && let Some(zdotdir) = zdotdir.to_str()
+    {
+        return Ok(Some(zdotdir.to_string()));
+    }
+
+    let output = Command::new("zsh").args(["-c", "echo $ZDOTDIR"]).output()?;
+
+    let val = String::from_utf8(output.stdout)?;
+    let val = val.trim().to_string();
+    Ok(if val.is_empty() { None } else { Some(val) })
+}
+
+/// Returns the path to the user's `.zshrc` file. If `$ZDOTDIR` is set, it returns
+/// `$ZDOTDIR/.zshrc`. Otherwise, it returns `~/.zshrc`.
 fn zshrc_path() -> Result<PathBuf> {
-    if let Some(zdotdir) = std::env::var_os("ZDOTDIR") {
+    if let Some(zdotdir) = get_zdotdir()? {
         Ok(PathBuf::from(zdotdir).join(".zshrc"))
     } else {
         Ok(PathBuf::from(shellexpand::full("~/.zshrc")?.as_ref()))
