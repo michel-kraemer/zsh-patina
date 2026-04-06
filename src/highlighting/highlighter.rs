@@ -235,6 +235,14 @@ impl Highlighter {
         &self.callable_choices
     }
 
+    fn should_highlight_dynamic(&self, dynamic_type: &DynamicType) -> bool {
+        match dynamic_type {
+            DynamicType::Unknown => true,
+            DynamicType::Callable => self.dynamic_callables_enabled,
+            DynamicType::Arguments => self.dynamic_arguments_enabled,
+        }
+    }
+
     pub fn highlight<P>(&self, command: &str, pwd: Option<&str>, predicate: P) -> Result<Vec<Span>>
     where
         P: Fn(&Range<usize>) -> bool,
@@ -280,8 +288,14 @@ impl Highlighter {
 
                 if let Some(scope) = self.scope_mapping.decode(&r.0.foreground) {
                     let range = i..i + len;
-                    if predicate(&range) {
-                        self.highlight_other(range, scope, &mut result);
+                    if predicate(&range)
+                        && let Some(style) = resolve_static_style(scope, &self.theme)
+                    {
+                        result.push(Span {
+                            start: range.start,
+                            end: range.end,
+                            style: SpanStyle::Static(style),
+                        });
                     }
                 }
 
@@ -330,24 +344,6 @@ impl Highlighter {
         }
 
         Ok(result)
-    }
-
-    fn highlight_other(&self, range: Range<usize>, scope: &str, result: &mut Vec<Span>) {
-        if let Some(style) = resolve_static_style(scope, &self.theme) {
-            result.push(Span {
-                start: range.start,
-                end: range.end,
-                style: SpanStyle::Static(style),
-            });
-        }
-    }
-
-    fn should_highlight_dynamic(&self, dynamic_type: &DynamicType) -> bool {
-        match dynamic_type {
-            DynamicType::Unknown => true,
-            DynamicType::Callable => self.dynamic_callables_enabled,
-            DynamicType::Arguments => self.dynamic_arguments_enabled,
-        }
     }
 
     pub fn tokenize(&self, command: &str) -> Result<Vec<Token>> {
