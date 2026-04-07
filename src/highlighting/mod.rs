@@ -2,6 +2,7 @@ use std::ops::Range;
 
 mod dynamic;
 mod highlighter;
+mod historyexpansion;
 
 pub use highlighter::{Highlighter, HighlighterBuilder};
 
@@ -17,6 +18,8 @@ const DYNAMIC_CALLABLE_BUILTIN: &str = "dynamic.callable.builtin.shell";
 const DYNAMIC_CALLABLE_COMMAND: &str = "dynamic.callable.command.shell";
 const DYNAMIC_CALLABLE_FUNCTION: &str = "dynamic.callable.function.shell";
 const DYNAMIC_CALLABLE_MISSING: &str = "dynamic.callable.missing.shell";
+
+const EXPANSION_HISTORY: &str = "meta.group.expansion.history.shell";
 
 const CHARACTER_ESCAPE: &str = "constant.character.escape.shell";
 const TILDE_VARIABLE: &str = "variable.language.tilde.shell";

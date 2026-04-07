@@ -52,6 +52,9 @@
 # terminators (e.g. ";;" after a case item)
 "punctuation.terminator" = "#939ab7"
 
+# history expansions
+"meta.group.expansion.history" = "#ed8796"
+
 # dynamic items
 "dynamic.callable" = "#8aadf4"
 "dynamic.callable.missing" = "#ed8796"

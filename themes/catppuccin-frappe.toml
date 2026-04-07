@@ -52,6 +52,9 @@ source = "#c6d0f5"
 # terminators (e.g. ";;" after a case item)
 "punctuation.terminator" = "#949cbb"
 
+# history expansions
+"meta.group.expansion.history" = "#e78284"
+
 # dynamic items
 "dynamic.callable" = "#8caaee"
 "dynamic.callable.missing" = "#e78284"

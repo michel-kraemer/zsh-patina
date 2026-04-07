@@ -17,6 +17,9 @@
 "entity.name.function" = "#E6C384"
 "punctuation.section" = "#E6C384"
 
+# history expansions
+"meta.group.expansion.history" = "#E6C384"
+
 # dynamic items
 "dynamic.callable" = "#7DCFFF"
 "dynamic.callable.missing" = "#F7768E"

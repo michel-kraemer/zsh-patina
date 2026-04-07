@@ -44,6 +44,9 @@
 # braces
 "punctuation.section" = "#5E81AC"
 
+# history expansions
+"meta.group.expansion.history" = "#EBCB8B"
+
 # dynamic items
 "dynamic.callable" = "#88C0D0"
 "dynamic.callable.missing" = "#BF616A"
