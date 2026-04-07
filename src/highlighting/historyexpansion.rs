@@ -391,7 +391,13 @@ where
         let chars = next.char_indices().collect::<Vec<_>>();
         let mut i = 0;
         while i < chars.len() {
-            if chars[i].1 == '!'
+            if chars[i].1 == '\'' {
+                // Just skip everything inside single quotes. This also includes
+                // POSIX quotes ($'')
+                i = consume_until_non_escaped(&chars, i + 1, '\'')
+                    .map(|j| j + 1)
+                    .unwrap_or(chars.len());
+            } else if chars[i].1 == '!'
                 && let Some(char_end_index) = consume_history_expansion(&chars, i)
             {
                 let byte_start_index = chars[i].0;
@@ -652,5 +658,19 @@ mod tests {
     fn no_history_expansion() {
         // should not happen at the end of a string
         assert_expanded("echo Hello!", &[("echo Hello!", [])]);
+
+        // not inside single quotes and POSIX quotes
+        assert_expanded(
+            "echo !! 'Hello!!' !! world",
+            &[("echo    'Hello!!'    world", [(5, 7), (18, 20)])],
+        );
+        assert_expanded(
+            "echo !! $'Hello!!' !! world",
+            &[("echo    $'Hello!!'    world", [(5, 7), (19, 21)])],
+        );
+        assert_expanded(
+            r#"echo !! 'Hello!!\'!!' !! world"#,
+            &[(r#"echo    'Hello!!\'!!'    world"#, [(5, 7), (22, 24)])],
+        );
     }
 }
