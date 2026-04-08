@@ -347,17 +347,20 @@ fn consume_history_expansion(chars: &[(usize, char)], mut i: usize) -> Option<us
         return Some(i);
     }
 
-    // either the event designator or the word designator must be given
-    if !event_designator_consumed && !word_designator_consumed {
-        return None;
-    }
-
     // Consume optional modifiers. Consume as many as possible.
+    let mut modifier_consumed = false;
     while i < chars.len() && chars[i].1 == ':' {
         let Some(j) = consume_modifier(chars, i) else {
             break;
         };
+        modifier_consumed = true;
         i = j;
+    }
+
+    // either the event designator, the word designator, or a modifier must be
+    // given
+    if !event_designator_consumed && !word_designator_consumed && !modifier_consumed {
+        return None;
     }
 
     Some(i)
@@ -622,6 +625,10 @@ mod tests {
         assert_expanded("!ls?", &[("    ", vec![(0, 4)])]);
         assert_expanded("!?ls", &[("    ", vec![(0, 4)])]);
         assert_expanded("!?ls?", &[("     ", vec![(0, 5)])]);
+        assert_expanded(
+            "echo !ls:s/ls/ll/ && echo !:&",
+            &[("echo              && echo    ", vec![(5, 17), (26, 29)])],
+        );
     }
 
     #[test]
