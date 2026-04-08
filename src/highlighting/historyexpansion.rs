@@ -358,6 +358,9 @@ pub struct HistoryExpanded<'a, I>
 where
     I: Iterator<Item = &'a str>,
 {
+    /// `true` if we're currently inside a single-quoted string. This also
+    /// includes POSIX-quoted strings.
+    inside_single_quotes: bool,
     inner: I,
 }
 
@@ -368,7 +371,10 @@ where
     /// Wrap the given iterator into a `HistoryExpanded` iterator. All lines
     /// returned by the wrapped iterator will undergo history expansion.
     pub fn wrap(inner: I) -> Self {
-        Self { inner }
+        Self {
+            inside_single_quotes: false,
+            inner,
+        }
     }
 }
 
@@ -381,7 +387,7 @@ where
     fn next(&mut self) -> Option<(Cow<'a, str>, HistoryExpansions)> {
         let next = self.inner.next()?;
 
-        if !next.contains('!') {
+        if !self.inside_single_quotes && !next.contains('!') {
             return Some((Cow::Borrowed(next), HistoryExpansions::empty()));
         }
 
@@ -391,12 +397,24 @@ where
         let chars = next.char_indices().collect::<Vec<_>>();
         let mut i = 0;
         while i < chars.len() {
-            if chars[i].1 == '\'' {
-                // Just skip everything inside single quotes. This also includes
-                // POSIX quotes ($'')
-                i = consume_until_non_escaped(&chars, i + 1, '\'')
-                    .map(|j| j + 1)
-                    .unwrap_or(chars.len());
+            if self.inside_single_quotes || chars[i].1 == '\'' {
+                let start = if self.inside_single_quotes { i } else { i + 1 };
+
+                // Look for the end of single quotes
+                match consume_until_non_escaped(&chars, start, '\'') {
+                    Some(j) => {
+                        // just skip everything inside single quotes on the same
+                        // line, also skip the trailing single quote
+                        i = j + 1;
+                        self.inside_single_quotes = false;
+                    }
+                    None => {
+                        // No end of single quoted string found on this line.
+                        // Look for it in the next line.
+                        self.inside_single_quotes = true;
+                        break;
+                    }
+                }
             } else if chars[i].1 == '!'
                 && let Some(char_end_index) = consume_history_expansion(&chars, i)
             {
@@ -503,7 +521,7 @@ mod tests {
         assert_eq!(expected.len(), history_expansions.len());
         for (e, he) in expected.iter().zip(history_expansions) {
             assert_eq!(e.0, he.0);
-            assert_eq!(e.1.len() * 2, he.1.ops.len());
+            assert_eq!(e.1.len() * 2, he.1.ops.len(), "{:?} != {:?}", e.1, he.1);
             for (r, o) in e.1.iter().zip(he.1.ops.chunks(2)) {
                 assert!(
                     matches!(o[0], (start, ExpansionOp::Push(_)) if start == r.0),
@@ -673,6 +691,23 @@ mod tests {
         assert_expanded(
             r#"echo !! 'Hello!!\'!!' !! world"#,
             &[(r#"echo    'Hello!!\'!!'    world"#, vec![(5, 7), (22, 24)])],
+        );
+
+        assert_expanded(
+            "echo !! 'Hello\n!!' !! world",
+            &[
+                ("echo    'Hello", vec![(5, 7)]),
+                ("!!'    world", vec![(4, 6)]),
+            ],
+        );
+
+        assert_expanded(
+            "echo !! 'Hello\n' \n !! world",
+            &[
+                ("echo    'Hello", vec![(5, 7)]),
+                ("' ", vec![]),
+                ("    world", vec![(1, 3)]),
+            ],
         );
     }
 
