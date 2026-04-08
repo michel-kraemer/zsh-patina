@@ -1,0 +1,2 @@
+# This is necessary for Windows builds
+**/*.zsh text eol=lf

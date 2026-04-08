@@ -58,11 +58,14 @@ jobs:
             target: x86_64-apple-darwin
           - os: macos-latest
             target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-cygwin
 
     steps:
       - uses: actions/checkout@v6
 
       - name: Install Rust
+        if: matrix.os != 'windows-latest'
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
@@ -79,28 +82,60 @@ jobs:
         shell: bash
         run: echo "BUILD_CMD=cross" >> $GITHUB_ENV
 
+      - name: Install msys2 and Rust
+        if: matrix.os == 'windows-latest'
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: >-
+            rust
+
       - name: Build
+        if: matrix.os != 'windows-latest'
         shell: bash
         run: $BUILD_CMD build --locked --profile release-lto --target=${{ matrix.target }}
-      
+
+      - name: Build (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: msys2 {0}
+        run: $BUILD_CMD build --locked --profile release-lto --target=${{ matrix.target }}
+
       - name: Set binary name and path
         id: bin
         shell: bash
         run: |
-          BIN_PATH="target/${{ matrix.target }}/release/zsh-patina"
+          EXE_suffix=""
+          if [[ ${{ matrix.os }} = windows-* ]]
+          then
+            EXE_suffix=".exe"
+          fi
+
+          BIN_PATH="target/${{ matrix.target }}/release-lto/zsh-patina${EXE_suffix}"
           echo "BIN_PATH=${BIN_PATH}" >> $GITHUB_OUTPUT
 
       - name: Smoke test
+        if: matrix.os != 'windows-latest'
         shell: bash
         run: |
-          $BUILD_CMD run --release --locked --target=${{ matrix.target }} -- list-scopes
+          $BUILD_CMD run --profile release-lto --locked --target=${{ matrix.target }} -- list-scopes
+
+      - name: Smoke test
+        if: matrix.os == 'windows-latest'
+        shell: msys2 {0}
+        run: |
+          $BUILD_CMD run --profile release-lto --locked --target=${{ matrix.target }} -- list-scopes
 
       - name: Create tarball
         id: package
         shell: bash
         run: |
+          PKG_suffix=".tar.gz";
+          if [[ ${{ matrix.os }} = windows-* ]]
+          then
+            PKG_suffix=".zip"
+          fi
           PKG_BASENAME=zsh-patina-v${{ needs.check-version.outputs.version }}-${{ matrix.target }}
-          PKG_NAME="${PKG_BASENAME}.tar.gz"
+          PKG_NAME="${PKG_BASENAME}${PKG_suffix}"
           echo "PKG_NAME=${PKG_NAME}" >> $GITHUB_OUTPUT
 
           PKG_STAGING="package"
@@ -115,7 +150,12 @@ jobs:
 
           # base compressed package
           pushd "${PKG_STAGING}/" >/dev/null
-          tar czf "${PKG_NAME}" "${PKG_BASENAME}"/*
+          if [[ ${{ matrix.os }} = windows-* ]]
+          then
+            7z -y a "${PKG_NAME}" "${PKG_BASENAME}"/* | tail -2
+          else
+            tar czf "${PKG_NAME}" "${PKG_BASENAME}"/*
+          fi
           popd >/dev/null
 
           # Let subsequent steps know where to find the compressed package
