@@ -110,7 +110,7 @@ jobs:
             EXE_suffix=".exe"
           fi
 
-          BIN_PATH="target/${{ matrix.target }}/release/zsh-patina${EXE_suffix}"
+          BIN_PATH="target/${{ matrix.target }}/release-lto/zsh-patina${EXE_suffix}"
           echo "BIN_PATH=${BIN_PATH}" >> $GITHUB_OUTPUT
 
       - name: Smoke test
