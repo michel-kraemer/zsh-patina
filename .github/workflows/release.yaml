@@ -117,13 +117,13 @@ jobs:
         if: matrix.os != 'windows-latest'
         shell: bash
         run: |
-          $BUILD_CMD run --release --locked --target=${{ matrix.target }} -- list-scopes
+          $BUILD_CMD run --profile release-lto --locked --target=${{ matrix.target }} -- list-scopes
 
       - name: Smoke test
         if: matrix.os == 'windows-latest'
         shell: msys2 {0}
         run: |
-          $BUILD_CMD run --release --locked --target=${{ matrix.target }} -- list-scopes
+          $BUILD_CMD run --profile release-lto --locked --target=${{ matrix.target }} -- list-scopes
 
       - name: Create tarball
         id: package
