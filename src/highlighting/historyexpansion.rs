@@ -415,6 +415,9 @@ where
                         break;
                     }
                 }
+            } else if chars[i].1 == '\\' && i < chars.len() - 1 && chars[i + 1].1 == '!' {
+                // skip escaped bang '!'
+                i += 2;
             } else if chars[i].1 == '!'
                 && let Some(char_end_index) = consume_history_expansion(&chars, i)
             {
@@ -712,8 +715,20 @@ mod tests {
     }
 
     #[test]
+    fn escaped_bang() {
+        assert_expanded(
+            r#"echo Hello\!ls:1 world"#,
+            &[(r#"echo Hello\!ls:1 world"#, vec![])],
+        );
+    }
+
+    #[test]
     fn no_history_expansion_at_end() {
-        // should not happen at the end of a string
         assert_expanded("echo Hello!", &[("echo Hello!", vec![])]);
+    }
+
+    #[test]
+    fn bang_without_history_expansion() {
+        assert_expanded("echo Hello! world", &[("echo Hello! world", vec![])]);
     }
 }
