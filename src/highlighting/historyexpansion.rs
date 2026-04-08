@@ -6,7 +6,15 @@ use crate::highlighting::EXPANSION_HISTORY;
 
 /// Test if a character is a valid character in a history expansion string
 fn is_string_character(c: char) -> bool {
-    !c.is_whitespace() && c != ':' && c != '^' && c != '$' && c != '*' && c != '-' && c != '%'
+    !c.is_whitespace()
+        && c != ':'
+        && c != ';'
+        && c != '^'
+        && c != '$'
+        && c != '*'
+        && c != '-'
+        && c != '%'
+        && c != '"'
 }
 
 /// Consume a bang character '!'. Returns the index after the bang if
@@ -124,6 +132,7 @@ fn consume_modifier(chars: &[(usize, char)], mut i: usize) -> Option<usize> {
                 None
             }
         }
+
         _ => None,
     }
 }
@@ -358,10 +367,16 @@ pub struct HistoryExpanded<'a, I>
 where
     I: Iterator<Item = &'a str>,
 {
+    /// The wrapped iterator
+    inner: I,
+
     /// `true` if we're currently inside a single-quoted string. This also
     /// includes POSIX-quoted strings.
     inside_single_quotes: bool,
-    inner: I,
+
+    /// `true` if history expansion has been disabled for the rest of the
+    /// command line using the character sequence `!"`.
+    disabled: bool,
 }
 
 impl<'a, I> HistoryExpanded<'a, I>
@@ -372,8 +387,9 @@ where
     /// returned by the wrapped iterator will undergo history expansion.
     pub fn wrap(inner: I) -> Self {
         Self {
-            inside_single_quotes: false,
             inner,
+            inside_single_quotes: false,
+            disabled: false,
         }
     }
 }
@@ -386,6 +402,10 @@ where
 
     fn next(&mut self) -> Option<(Cow<'a, str>, HistoryExpansions)> {
         let next = self.inner.next()?;
+
+        if self.disabled {
+            return Some((Cow::Borrowed(next), HistoryExpansions::empty()));
+        }
 
         if !self.inside_single_quotes && !next.contains('!') {
             return Some((Cow::Borrowed(next), HistoryExpansions::empty()));
@@ -418,6 +438,27 @@ where
             } else if chars[i].1 == '\\' && i < chars.len() - 1 && chars[i + 1].1 == '!' {
                 // skip escaped bang '!'
                 i += 2;
+            } else if chars[i].1 == '!' && i < chars.len() - 1 && chars[i + 1].1 == '"' {
+                // disable history expansion for the rest of the command line
+                self.disabled = true;
+
+                let byte_start_index = chars[i].0;
+                let byte_end_index = byte_start_index + 2;
+
+                if byte_start_index > last_byte_start_index {
+                    modified.push_str(&next[last_byte_start_index..byte_start_index]);
+                }
+                modified.push_str(&" ".repeat(byte_end_index - byte_start_index));
+
+                expansions.push((
+                    byte_start_index,
+                    // TODO cache
+                    ExpansionOp::Push(Scope::new(EXPANSION_HISTORY).unwrap()),
+                ));
+                expansions.push((byte_end_index, ExpansionOp::Pop));
+
+                last_byte_start_index = byte_end_index;
+                break;
             } else if chars[i].1 == '!'
                 && let Some(char_end_index) = consume_history_expansion(&chars, i)
             {
@@ -730,5 +771,49 @@ mod tests {
     #[test]
     fn bang_without_history_expansion() {
         assert_expanded("echo Hello! world", &[("echo Hello! world", vec![])]);
+    }
+
+    #[test]
+    fn disable() {
+        assert_expanded(
+            r#"echo !! !" !!; echo !!"#,
+            &[(r#"echo       !!; echo !!"#, vec![(5, 7), (8, 10)])],
+        );
+        assert_expanded(
+            r#"echo "!!" !" !!; echo !!"#,
+            &[(r#"echo "  "    !!; echo !!"#, vec![(6, 8), (10, 12)])],
+        );
+        assert_expanded(r#"echo !"Hello!"#, &[(r#"echo   Hello!"#, vec![(5, 7)])]);
+        assert_expanded(
+            r#"echo !"Hello!; echo !!"#,
+            &[(r#"echo   Hello!; echo !!"#, vec![(5, 7)])],
+        );
+        assert_expanded(
+            r#"echo !"Hello!"world""#,
+            &[(r#"echo   Hello!"world""#, vec![(5, 7)])],
+        );
+        assert_expanded(
+            r#"echo OK !! && echo !"Hello! && echo !!"#,
+            &[(
+                r#"echo OK    && echo   Hello! && echo !!"#,
+                vec![(8, 10), (19, 21)],
+            )],
+        );
+
+        // multi-line
+        assert_expanded(
+            "echo OK !! && echo !\"Hello! &&\necho !!",
+            &[
+                (r#"echo OK    && echo   Hello! &&"#, vec![(8, 10), (19, 21)]),
+                (r#"echo !!"#, vec![]),
+            ],
+        );
+
+        // escaped
+        assert_expanded(r#"echo "Hello\!""#, &[(r#"echo "Hello\!""#, vec![])]);
+        assert_expanded(
+            r#"echo "Hello\!" !!"#,
+            &[(r#"echo "Hello\!"   "#, vec![(15, 17)])],
+        );
     }
 }
