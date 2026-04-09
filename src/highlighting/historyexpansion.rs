@@ -171,18 +171,16 @@ fn consume_substitution(chars: &[(usize, char)], mut i: usize) -> Option<usize> 
         return Some(i);
     }
 
-    // consume '/'
-    if chars[i].1 != '/' {
-        return None;
-    }
+    // consume separation character
+    let separation_char = chars[i].1;
     i += 1;
 
     if i == chars.len() {
         return Some(i);
     }
 
-    // consume string to replace (including next '/')
-    if let Some(j) = consume_until_non_escaped(chars, i, '/') {
+    // consume string to replace (including the next separation character)
+    if let Some(j) = consume_until_non_escaped(chars, i, separation_char) {
         i = j + 1;
     } else {
         return Some(chars.len());
@@ -192,8 +190,8 @@ fn consume_substitution(chars: &[(usize, char)], mut i: usize) -> Option<usize> 
         return Some(i);
     }
 
-    // consume replacement string (including next '/')
-    if let Some(j) = consume_until_non_escaped(chars, i, '/') {
+    // consume replacement string (including the next separation character)
+    if let Some(j) = consume_until_non_escaped(chars, i, separation_char) {
         i = j + 1;
     } else {
         return Some(chars.len());
@@ -700,6 +698,7 @@ mod tests {
 
     #[test]
     fn substitutions() {
+        assert_expanded("!!:s/ls -l/cat", &[("              ", vec![(0, 14)])]);
         assert_expanded("!!:s/ls -l/cat/", &[("               ", vec![(0, 15)])]);
         assert_expanded(
             "!!:s/ls -l/cat param",
@@ -713,8 +712,19 @@ mod tests {
             r#"!!:s/ls \//ls .\//"#,
             &[(r#"                  "#, vec![(0, 18)])],
         );
+        assert_expanded("!!:gs/foo/bar", &[("             ", vec![(0, 13)])]);
         assert_expanded("!!:gs/foo/bar/", &[("              ", vec![(0, 14)])]);
         assert_expanded("!!:s/foo/bar/:G", &[("               ", vec![(0, 15)])]);
+
+        assert_expanded("!!:s^ls -l^cat", &[("              ", vec![(0, 14)])]);
+        assert_expanded("!!:gs^foo^bar", &[("             ", vec![(0, 13)])]);
+        assert_expanded("!!:s#foo#bar", &[("            ", vec![(0, 12)])]);
+        assert_expanded("!!:s@foo@bar@:G", &[("               ", vec![(0, 15)])]);
+        assert_expanded(
+            r#"!!:s@foo\@@bar@:G"#,
+            &[("                 ", vec![(0, 17)])],
+        );
+        assert_expanded("!!:spfoopbar", &[("            ", vec![(0, 12)])]);
     }
 
     #[test]
