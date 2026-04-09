@@ -93,7 +93,8 @@ pub fn check(
         print_bullet(
             &format!(
                 "No configuration file found at `$XDG_CONFIG_HOME/zsh-patina/config.toml' \
-                or `{}/.config/zsh-patina/config.toml'. Using default settings.",
+                or `{}/.config/zsh-patina/config.toml' and $ZSH_PATINA_CONFIG_FILE is unset. \
+				Using default settings.",
                 dirs::home_dir()
                     .and_then(|p| p.to_str().map(|s| s.to_string()))
                     .unwrap_or_else(|| "~".to_string())

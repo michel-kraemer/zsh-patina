@@ -182,12 +182,22 @@ impl<'de> Deserialize<'de> for DynamicConfig {
 /// Returns the path to the configuration file if it exists. The configuration
 /// file is searched in the following locations (in order):
 ///
-/// 1. `$XDG_CONFIG_HOME/zsh-patina/config.toml` if the `XDG_CONFIG_HOME`
+/// 1. $ZSH_PATINA_CONFIG_FILE if it is set.
+/// 2. `$XDG_CONFIG_HOME/zsh-patina/config.toml` if the `XDG_CONFIG_HOME`
 ///    environment variable is set and points to an absolute path
-/// 2. `~/.config/zsh-patina/config.toml`
+/// 3. `~/.config/zsh-patina/config.toml`
 ///
 /// If no configuration file is found, the function returns `Ok(None)`.
 pub fn config_file_path() -> Result<Option<PathBuf>> {
+    if let Some(config_file) = env::var_os("ZSH_PATINA_CONFIG_FILE")
+        && !config_file.is_empty()
+    {
+        let config_file = PathBuf::from(config_file);
+        if config_file.exists() {
+            return Ok(Some(config_file));
+        }
+    }
+
     if let Some(xdg) = env::var_os("XDG_CONFIG_HOME")
         && !xdg.is_empty()
     {
