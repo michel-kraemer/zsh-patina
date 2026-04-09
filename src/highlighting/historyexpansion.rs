@@ -171,6 +171,13 @@ fn consume_substitution(chars: &[(usize, char)], mut i: usize) -> Option<usize> 
         return Some(i);
     }
 
+    consume_substitution_without_leading(chars, i)
+}
+
+/// Consume a substitution modifier starting at index i without the leading
+/// character (typically 's'). Returns the index after the substitution if
+/// successful, or None if there is no valid substitution at index i.
+fn consume_substitution_without_leading(chars: &[(usize, char)], mut i: usize) -> Option<usize> {
     // consume separation character
     let separation_char = chars[i].1;
     i += 1;
@@ -378,6 +385,13 @@ where
     /// `true` if history expansion has been disabled for the rest of the
     /// command line using the character sequence `!"`.
     disabled: bool,
+
+    /// `true` if the first non-empty line of a multi-line command has been
+    /// consumed
+    fist_non_empty_line_consumed: bool,
+
+    /// Cached scope for history expansions
+    expansion_history_scope: Scope,
 }
 
 impl<'a, I> HistoryExpanded<'a, I>
@@ -387,11 +401,36 @@ where
     /// Wrap the given iterator into a `HistoryExpanded` iterator. All lines
     /// returned by the wrapped iterator will undergo history expansion.
     pub fn wrap(inner: I) -> Self {
+        let expansion_history_scope = Scope::new(EXPANSION_HISTORY).unwrap();
+
         Self {
             inner,
             inside_single_quotes: false,
             disabled: false,
+            fist_non_empty_line_consumed: false,
+            expansion_history_scope,
         }
+    }
+
+    fn handle_expansion(
+        &self,
+        next: &str,
+        byte_start_index: usize,
+        byte_end_index: usize,
+        last_byte_start_index: usize,
+        modified: &mut String,
+        expansions: &mut Vec<(usize, ExpansionOp)>,
+    ) {
+        if byte_start_index > last_byte_start_index {
+            modified.push_str(&next[last_byte_start_index..byte_start_index]);
+        }
+        modified.push_str(&" ".repeat(byte_end_index - byte_start_index));
+
+        expansions.push((
+            byte_start_index,
+            ExpansionOp::Push(self.expansion_history_scope),
+        ));
+        expansions.push((byte_end_index, ExpansionOp::Pop));
     }
 }
 
@@ -408,7 +447,8 @@ where
             return Some((Cow::Borrowed(next), HistoryExpansions::empty()));
         }
 
-        if !self.inside_single_quotes && !next.contains('!') {
+        if !self.inside_single_quotes && !next.contains('!') && !next.trim_start().starts_with('^')
+        {
             return Some((Cow::Borrowed(next), HistoryExpansions::empty()));
         }
 
@@ -417,6 +457,48 @@ where
         let mut last_byte_start_index = 0;
         let chars = next.char_indices().collect::<Vec<_>>();
         let mut i = 0;
+
+        if !self.fist_non_empty_line_consumed {
+            // skip leading whitespace
+            while i < chars.len() && chars[i].1.is_whitespace() {
+                i += 1;
+            }
+            if i == chars.len() {
+                // Already consumed the whole line. Return immediately. With
+                // this, we're not only taking a shortcut, we're also skipping
+                // all leading empty lines before we set
+                // self.fist_non_empty_line_consumed to true.
+                return Some((Cow::Borrowed(next), HistoryExpansions::empty()));
+            }
+
+            // consume quick substitution
+            if i < chars.len()
+                && chars[i].1 == '^'
+                && let Some(char_end_index) = consume_substitution_without_leading(&chars, i)
+            {
+                let byte_start_index = chars[i].0;
+                let byte_end_index = if char_end_index == chars.len() {
+                    next.len()
+                } else {
+                    chars[char_end_index].0
+                };
+
+                self.handle_expansion(
+                    next,
+                    byte_start_index,
+                    byte_end_index,
+                    last_byte_start_index,
+                    &mut modified,
+                    &mut expansions,
+                );
+
+                last_byte_start_index = byte_end_index;
+                i = char_end_index;
+            }
+
+            self.fist_non_empty_line_consumed = true;
+        }
+
         while i < chars.len() {
             if self.inside_single_quotes || chars[i].1 == '\'' {
                 let start = if self.inside_single_quotes { i } else { i + 1 };
@@ -446,17 +528,14 @@ where
                 let byte_start_index = chars[i].0;
                 let byte_end_index = byte_start_index + 2;
 
-                if byte_start_index > last_byte_start_index {
-                    modified.push_str(&next[last_byte_start_index..byte_start_index]);
-                }
-                modified.push_str(&" ".repeat(byte_end_index - byte_start_index));
-
-                expansions.push((
+                self.handle_expansion(
+                    next,
                     byte_start_index,
-                    // TODO cache
-                    ExpansionOp::Push(Scope::new(EXPANSION_HISTORY).unwrap()),
-                ));
-                expansions.push((byte_end_index, ExpansionOp::Pop));
+                    byte_end_index,
+                    last_byte_start_index,
+                    &mut modified,
+                    &mut expansions,
+                );
 
                 last_byte_start_index = byte_end_index;
                 break;
@@ -470,17 +549,14 @@ where
                     chars[char_end_index].0
                 };
 
-                if byte_start_index > last_byte_start_index {
-                    modified.push_str(&next[last_byte_start_index..byte_start_index]);
-                }
-                modified.push_str(&" ".repeat(byte_end_index - byte_start_index));
-
-                expansions.push((
+                self.handle_expansion(
+                    next,
                     byte_start_index,
-                    // TODO cache
-                    ExpansionOp::Push(Scope::new(EXPANSION_HISTORY).unwrap()),
-                ));
-                expansions.push((byte_end_index, ExpansionOp::Pop));
+                    byte_end_index,
+                    last_byte_start_index,
+                    &mut modified,
+                    &mut expansions,
+                );
 
                 last_byte_start_index = byte_end_index;
                 i = char_end_index;
@@ -725,6 +801,20 @@ mod tests {
             &[("                 ", vec![(0, 17)])],
         );
         assert_expanded("!!:spfoopbar", &[("            ", vec![(0, 12)])]);
+    }
+
+    #[test]
+    fn quick_substitutions() {
+        assert_expanded("^ls -l^cat", &[("          ", vec![(0, 10)])]);
+        assert_expanded("^ls -l^cat^", &[("           ", vec![(0, 11)])]);
+        assert_expanded("^ls -l^cat param", &[("                ", vec![(0, 16)])]);
+        assert_expanded("^ls -l^cat^ param", &[("            param", vec![(0, 11)])]);
+        assert_expanded(r#"^ls \^^ls ./^"#, &[(r#"             "#, vec![(0, 13)])]);
+        assert_expanded("^foo^bar^:G", &[("           ", vec![(0, 11)])]);
+        assert_expanded(
+            "^foo^bar^:G echo !!",
+            &[("            echo   ", vec![(0, 11), (17, 19)])],
+        );
     }
 
     #[test]
