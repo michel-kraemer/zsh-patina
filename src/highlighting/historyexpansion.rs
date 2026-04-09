@@ -390,7 +390,7 @@ where
 
     /// `true` if the first non-empty line of a multi-line command has been
     /// consumed
-    fist_non_empty_line_consumed: bool,
+    first_non_empty_line_consumed: bool,
 
     /// Cached scope for history expansions
     expansion_history_scope: Scope,
@@ -409,7 +409,7 @@ where
             inner,
             inside_single_quotes: false,
             disabled: false,
-            fist_non_empty_line_consumed: false,
+            first_non_empty_line_consumed: false,
             expansion_history_scope,
         }
     }
@@ -460,7 +460,7 @@ where
         let chars = next.char_indices().collect::<Vec<_>>();
         let mut i = 0;
 
-        if !self.fist_non_empty_line_consumed {
+        if !self.first_non_empty_line_consumed {
             // skip leading whitespace
             while i < chars.len() && chars[i].1.is_whitespace() {
                 i += 1;
@@ -498,7 +498,7 @@ where
                 i = char_end_index;
             }
 
-            self.fist_non_empty_line_consumed = true;
+            self.first_non_empty_line_consumed = true;
         }
 
         while i < chars.len() {
