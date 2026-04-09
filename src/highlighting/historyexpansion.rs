@@ -228,7 +228,7 @@ fn consume_substitution_without_leading(chars: &[(usize, char)], mut i: usize) -
 /// None if there is no valid substring designator at index i.
 fn consume_substring(chars: &[(usize, char)], i: usize) -> Option<usize> {
     let mut j = i;
-    while j < chars.len() && chars[j].1 != '?' && is_string_character(chars[j].1) {
+    while j < chars.len() && chars[j].1 != '?' {
         j += 1;
     }
     if j > i { Some(j) } else { None }
@@ -699,6 +699,7 @@ mod tests {
         assert_expanded("!ls?", &[("    ", vec![(0, 4)])]);
         assert_expanded("!?ls", &[("    ", vec![(0, 4)])]);
         assert_expanded("!?ls?", &[("     ", vec![(0, 5)])]);
+        assert_expanded("!?ls:$?", &[("       ", vec![(0, 7)])]);
         assert_expanded(
             "echo !ls:s/ls/ll/ && echo !:&",
             &[("echo              && echo    ", vec![(5, 17), (26, 29)])],
