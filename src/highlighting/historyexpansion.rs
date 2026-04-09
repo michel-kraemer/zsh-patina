@@ -416,14 +416,20 @@ where
     fn handle_expansion(
         &self,
         next: &str,
-        byte_start_index: usize,
-        byte_end_index: usize,
-        last_byte_start_index: usize,
+        chars: &[(usize, char)],
+        char_range: (usize, usize),
+        last_byte_start_index: &mut usize,
         modified: &mut String,
         expansions: &mut Vec<(usize, ExpansionOp)>,
     ) {
-        if byte_start_index > last_byte_start_index {
-            modified.push_str(&next[last_byte_start_index..byte_start_index]);
+        let byte_start_index = chars[char_range.0].0;
+        let byte_end_index = if char_range.1 == chars.len() {
+            next.len()
+        } else {
+            chars[char_range.1].0
+        };
+        if byte_start_index > *last_byte_start_index {
+            modified.push_str(&next[*last_byte_start_index..byte_start_index]);
         }
         modified.push_str(&" ".repeat(byte_end_index - byte_start_index));
 
@@ -432,6 +438,8 @@ where
             ExpansionOp::Push(self.expansion_history_scope),
         ));
         expansions.push((byte_end_index, ExpansionOp::Pop));
+
+        *last_byte_start_index = byte_end_index;
     }
 }
 
@@ -477,23 +485,15 @@ where
                 && chars[i].1 == '^'
                 && let Some(char_end_index) = consume_substitution_without_leading(&chars, i)
             {
-                let byte_start_index = chars[i].0;
-                let byte_end_index = if char_end_index == chars.len() {
-                    next.len()
-                } else {
-                    chars[char_end_index].0
-                };
-
                 self.handle_expansion(
                     next,
-                    byte_start_index,
-                    byte_end_index,
-                    last_byte_start_index,
+                    &chars,
+                    (i, char_end_index),
+                    &mut last_byte_start_index,
                     &mut modified,
                     &mut expansions,
                 );
 
-                last_byte_start_index = byte_end_index;
                 i = char_end_index;
             }
 
@@ -526,40 +526,28 @@ where
                 // disable history expansion for the rest of the command line
                 self.disabled = true;
 
-                let byte_start_index = chars[i].0;
-                let byte_end_index = byte_start_index + 2;
-
                 self.handle_expansion(
                     next,
-                    byte_start_index,
-                    byte_end_index,
-                    last_byte_start_index,
+                    &chars,
+                    (i, i + 2),
+                    &mut last_byte_start_index,
                     &mut modified,
                     &mut expansions,
                 );
 
-                last_byte_start_index = byte_end_index;
                 break;
             } else if chars[i].1 == '!'
                 && let Some(char_end_index) = consume_history_expansion(&chars, i)
             {
-                let byte_start_index = chars[i].0;
-                let byte_end_index = if char_end_index == chars.len() {
-                    next.len()
-                } else {
-                    chars[char_end_index].0
-                };
-
                 self.handle_expansion(
                     next,
-                    byte_start_index,
-                    byte_end_index,
-                    last_byte_start_index,
+                    &chars,
+                    (i, char_end_index),
+                    &mut last_byte_start_index,
                     &mut modified,
                     &mut expansions,
                 );
 
-                last_byte_start_index = byte_end_index;
                 i = char_end_index;
             } else {
                 i += 1;
