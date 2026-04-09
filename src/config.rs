@@ -182,7 +182,7 @@ impl<'de> Deserialize<'de> for DynamicConfig {
 /// Returns the path to the configuration file if it exists. The configuration
 /// file is searched in the following locations (in order):
 ///
-/// 1. $ZSH_PATINA_CONFIG_FILE if it is set.
+/// 1. `$ZSH_PATINA_CONFIG_FILE` if it is set.
 /// 2. `$XDG_CONFIG_HOME/zsh-patina/config.toml` if the `XDG_CONFIG_HOME`
 ///    environment variable is set and points to an absolute path
 /// 3. `~/.config/zsh-patina/config.toml`
