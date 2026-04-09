@@ -1,0 +1,48 @@
+#compdef zsh-patina
+
+local context state state_descr line
+local -A opt_args
+local -a commands subcmds
+
+_arguments -C \
+	'(-h --help)'{-h,--help}'[Print help]' \
+	'(-V --version)'{-V,--version}'[Print version]' \
+	'1: :->cmds' \
+	'*:: :->args'
+
+case $state in
+cmds)
+	commands=(
+		'activate:Initialize zsh-patina in the current shell session'
+		'start:Start the highlighter daemon'
+		'stop:Stop the highlighter daemon'
+		'restart:Restart or start the highlighter daemon'
+		'status:Check if the daemon is running'
+		'check:Check config and theme for errors'
+		'tokenize:Tokenize a command from file or stdin'
+		'list-scopes:List all available highlight scopes'
+		'list-themes:List available themes'
+		'help:Print help for a subcommand'
+	)
+	_describe -t commands 'zsh-patina command' commands
+	;;
+args)
+	case $line[1] in
+	tokenize)
+		_arguments \
+			'(-h --help)'{-h,--help}'[Print help]' \
+			'1:file:_files'
+		;;
+	help)
+		subcmds=(
+			'activate' 'start' 'stop' 'restart' 'status'
+			'check' 'tokenize' 'list-scopes' 'list-themes'
+		)
+		_values 'subcommands' $subcmds
+		;;
+	*)
+		_arguments '(-h --help)'{-h,--help}'[Print help]'
+		;;
+	esac
+	;;
+esac
