@@ -758,6 +758,10 @@ mod tests {
         assert_expanded("ls -l !cp:2*.bak", &[("ls -l       .bak", vec![(6, 12)])]);
         assert_expanded("ls -l !tar:3-5", &[("ls -l         ", vec![(6, 14)])]);
         assert_expanded("ls -l !tar:2-$", &[("ls -l         ", vec![(6, 14)])]);
+        assert_expanded("ls -l !tar:2-", &[("ls -l        ", vec![(6, 13)])]);
+        assert_expanded("ls -l !tar:$-", &[("ls -l        ", vec![(6, 13)])]);
+        assert_expanded("ls -l !tar:^-", &[("ls -l        ", vec![(6, 13)])]);
+        assert_expanded("ls -l !tar:%-", &[("ls -l        ", vec![(6, 13)])]);
         assert_expanded(
             "tar cvfz new-file.tar !tar:3-:p",
             &[("tar cvfz new-file.tar          ", vec![(22, 31)])],
