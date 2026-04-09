@@ -51,7 +51,7 @@ fn consume_event_designator(chars: &[(usize, char)], mut i: usize) -> Option<usi
             if i + 1 == chars.len() {
                 Some(i + 1)
             } else {
-                i = consume_substring(chars, i + 1)?;
+                i = consume_substring(chars, i + 1);
                 if i < chars.len() && chars[i].1 == '?' {
                     Some(i + 1)
                 } else {
@@ -226,14 +226,13 @@ fn consume_substitution_without_leading(chars: &[(usize, char)], mut i: usize) -
 }
 
 /// Consume a substring designator starting at index i (until and excluding the
-/// next '?' character). Returns the index after the substring if successful, or
-/// None if there is no valid substring designator at index i.
-fn consume_substring(chars: &[(usize, char)], i: usize) -> Option<usize> {
-    let mut j = i;
-    while j < chars.len() && chars[j].1 != '?' {
-        j += 1;
+/// next '?' character). Returns the index after the substring if successful.
+/// Note that the substring can be empty.
+fn consume_substring(chars: &[(usize, char)], mut i: usize) -> usize {
+    while i < chars.len() && chars[i].1 != '?' {
+        i += 1;
     }
-    if j > i { Some(j) } else { None }
+    i
 }
 
 /// Consume characters until the first non-escaped occurrence of the character
@@ -702,6 +701,7 @@ mod tests {
         assert_expanded("!?ls", &[("    ", vec![(0, 4)])]);
         assert_expanded("!?ls?", &[("     ", vec![(0, 5)])]);
         assert_expanded("!?ls:$?", &[("       ", vec![(0, 7)])]);
+        assert_expanded("!??", &[("   ", vec![(0, 3)])]);
         assert_expanded(
             "echo !ls:s/ls/ll/ && echo !:&",
             &[("echo              && echo    ", vec![(5, 17), (26, 29)])],
