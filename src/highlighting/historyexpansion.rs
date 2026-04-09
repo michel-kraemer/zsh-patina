@@ -27,6 +27,8 @@ fn consume_bang(chars: &[(usize, char)], i: usize) -> Option<usize> {
 /// successful, or None if there is no valid event designator at index i.
 fn consume_event_designator(chars: &[(usize, char)], mut i: usize) -> Option<usize> {
     match chars[i].1 {
+        '=' | '(' => None,
+
         '!' | '#' => Some(i + 1),
 
         '0'..='9' => {
@@ -874,6 +876,12 @@ mod tests {
     #[test]
     fn no_history_expansion_at_end() {
         assert_expanded("echo Hello!", &[("echo Hello!", vec![])]);
+    }
+
+    #[test]
+    fn no_history_expansion_if_followed_by() {
+        assert_expanded("!=", &[("!=", vec![])]);
+        assert_expanded("!(", &[("!(", vec![])]);
     }
 
     #[test]
