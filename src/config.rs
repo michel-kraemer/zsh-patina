@@ -192,10 +192,7 @@ pub fn config_file_path() -> Result<Option<PathBuf>> {
     if let Some(config_file) = env::var_os("ZSH_PATINA_CONFIG_FILE")
         && !config_file.is_empty()
     {
-        let config_file = PathBuf::from(config_file);
-        if config_file.exists() {
-            return Ok(Some(config_file));
-        }
+        return Ok(Some(PathBuf::from(config_file)));
     }
 
     if let Some(xdg) = env::var_os("XDG_CONFIG_HOME")
@@ -204,6 +201,8 @@ pub fn config_file_path() -> Result<Option<PathBuf>> {
         let xdg = PathBuf::from(xdg);
         if xdg.is_absolute() {
             let result = xdg.join("zsh-patina/config.toml");
+            // for backwards compatibility, we fall through to looking at the
+            // default location of there is no config file in $XDG_CONFIG_HOME
             if result.exists() {
                 return Ok(Some(result));
             }
