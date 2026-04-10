@@ -1596,6 +1596,18 @@ mod tests {
             ]
         );
 
+        let highlighted = cfg.highlight("!-20 foobar")?;
+        assert_eq!(highlighted, vec![cfg.static_span(0, 4, EXPANSION_HISTORY)?]);
+
+        let highlighted = cfg.highlight("!4echo")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 2, EXPANSION_HISTORY)?,
+                cfg.static_span(2, 6, CALLABLE)?
+            ]
+        );
+
         let highlighted = cfg.highlight("vi !!:0")?;
         assert_eq!(
             highlighted,
@@ -1630,6 +1642,18 @@ mod tests {
                 cfg.dynamic_span(0, 2, "ls"),
                 cfg.static_span(2, 5, PARAMETER)?,
                 cfg.static_span(6, 10, EXPANSION_HISTORY)?
+            ]
+        );
+
+        let highlighted = cfg.highlight("!% stop")?;
+        assert_eq!(highlighted, vec![cfg.static_span(0, 2, EXPANSION_HISTORY)?]);
+
+        let highlighted = cfg.highlight("!zsh-patina")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 5, EXPANSION_HISTORY)?,
+                cfg.static_span(5, 11, CALLABLE)?
             ]
         );
 

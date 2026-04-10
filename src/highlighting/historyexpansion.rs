@@ -450,7 +450,30 @@ where
         if byte_start_index > *last_byte_start_index {
             modified.push_str(&next[*last_byte_start_index..byte_start_index]);
         }
-        modified.push_str(&" ".repeat(byte_end_index - byte_start_index));
+
+        // Replace history expansion with a single-quoted string. This hides
+        // them from the Syntect parser. Since history expansions are not
+        // allowed inside single-quoted strings, this is safe. The parser will
+        // produce the following operations (in the given order):
+        //
+        // - Push(string.quoted.single.shell),
+        //   - Push(punctuation.definition.string.begin.shell)
+        //   - Pop
+        //   - Push(punctuation.definition.string.end.shell)
+        //   - Pop
+        // - Pop
+        //
+        // HistoryExpansions::apply() will later replace these operations with a
+        // Push and a Pop for `meta.group.expansion.history.shell`.
+        match byte_end_index - byte_start_index {
+            0 => {}
+            1 => unreachable!("A history expansion with 1 character does not exist"),
+            len => {
+                modified.push('\'');
+                modified.push_str(&" ".repeat(len - 2));
+                modified.push('\'');
+            }
+        }
 
         expansions.push((
             byte_start_index,
@@ -598,6 +621,9 @@ impl HistoryExpansions {
             return ops;
         }
 
+        // see HistoryExpanded::handle_expansion() for more information about
+        // how to handle ExpansionOps and why single-quoted strings are a
+        // placeholder.
         let mut result = Vec::new();
         let mut j = ops.into_iter().peekable();
         for ni in self.ops {
@@ -610,16 +636,30 @@ impl HistoryExpansions {
                     {
                         result.push(j.next().unwrap());
                     }
+
+                    // remove operations for `string.quoted.single.shell` and
+                    // `punctuation.definition.string.begin.shell`
+                    result.pop();
+                    result.pop();
+
                     result.push((ni.0, ScopeStackOp::Push(s)));
                 }
                 ExpansionOp::Pop => {
-                    // a pop of a history expansion must happen before (<) all
-                    // other operations at the same location
+                    // since we've replaced the history expansion with a single
+                    // quoted-string, every element up to the end of the history
+                    // expansion belongs to this single-quoted string and can
+                    // be skipped
                     while let Some(nj) = j.peek()
                         && nj.0 < ni.0
                     {
-                        result.push(j.next().unwrap());
+                        j.next();
                     }
+
+                    // skip next two elements, which pop `punctuation.definition.string.end.shell`
+                    // and `string.quoted.single.shell`
+                    j.next();
+                    j.next();
+
                     result.push((ni.0, ScopeStackOp::Pop(1)));
                 }
             }
@@ -642,14 +682,21 @@ mod tests {
     use crate::highlighting::historyexpansion::{ExpansionOp, HistoryExpanded, HistoryExpansions};
 
     fn assert_history_expansions(
-        expected: &[(&str, Vec<(usize, usize)>)],
+        expected: &[Vec<(usize, usize)>],
         history_expansions: Vec<(Cow<'_, str>, HistoryExpansions)>,
     ) {
         assert_eq!(expected.len(), history_expansions.len());
         for (e, he) in expected.iter().zip(history_expansions) {
-            assert_eq!(e.0, he.0);
-            assert_eq!(e.1.len() * 2, he.1.ops.len(), "{:?} != {:?}", e.1, he.1);
-            for (r, o) in e.1.iter().zip(he.1.ops.chunks(2)) {
+            let mut expected_str = he.0.to_string();
+            for w in he.1.ops.chunks(2) {
+                expected_str.replace_range(
+                    w[0].0..w[1].0,
+                    &format!("'{}'", " ".repeat(w[1].0 - w[0].0 - 2)),
+                );
+            }
+            assert_eq!(expected_str, he.0);
+            assert_eq!(e.len() * 2, he.1.ops.len(), "{:?} != {:?}", e, he.1);
+            for (r, o) in e.iter().zip(he.1.ops.chunks(2)) {
                 assert!(
                     matches!(o[0], (start, ExpansionOp::Push(_)) if start == r.0),
                     "{:?} != ({}, Push(_))",
@@ -666,7 +713,7 @@ mod tests {
         }
     }
 
-    fn assert_expanded(input: &str, expected: &[(&str, Vec<(usize, usize)>)]) {
+    fn assert_expanded(input: &str, expected: &[Vec<(usize, usize)>]) {
         let syntax_set: SyntaxSet = syntect::dumps::from_uncompressed_data(include_bytes!(
             concat!(env!("OUT_DIR"), "/syntax_set.packdump")
         ))
@@ -690,344 +737,231 @@ mod tests {
 
     #[test]
     fn last_command() {
-        assert_expanded("!!", &[("  ", vec![(0, 2)])]);
-        assert_expanded("ls !!", &[("ls   ", vec![(3, 5)])]);
-        assert_expanded("ls; !!", &[("ls;   ", vec![(4, 6)])]);
-        assert_expanded(
-            r#"echo !! "!!""#,
-            &[(r#"echo    "  ""#, vec![(5, 7), (9, 11)])],
-        );
+        assert_expanded("!!", &[vec![(0, 2)]]);
+        assert_expanded("ls !!", &[vec![(3, 5)]]);
+        assert_expanded("ls; !!", &[vec![(4, 6)]]);
+        assert_expanded(r#"echo !! "!!""#, &[vec![(5, 7), (9, 11)]]);
     }
 
     #[test]
     fn previous_command_by_number() {
-        assert_expanded("!4", &[("  ", vec![(0, 2)])]);
-        assert_expanded("echo !4hello", &[("echo   hello", vec![(5, 7)])]);
-        assert_expanded("!20", &[("   ", vec![(0, 3)])]);
-        assert_expanded("echo !20hello", &[("echo    hello", vec![(5, 8)])]);
-        assert_expanded("!-4", &[("   ", vec![(0, 3)])]);
-        assert_expanded("echo !-4hello", &[("echo    hello", vec![(5, 8)])]);
-        assert_expanded("!-20", &[("    ", vec![(0, 4)])]);
-        assert_expanded("echo !-20hello", &[("echo     hello", vec![(5, 9)])]);
-        assert_expanded("!-20 foobar", &[("     foobar", vec![(0, 4)])]);
-        assert_expanded("!4echo", &[("  echo", vec![(0, 2)])]);
+        assert_expanded("!4", &[vec![(0, 2)]]);
+        assert_expanded("echo !4hello", &[vec![(5, 7)]]);
+        assert_expanded("!20", &[vec![(0, 3)]]);
+        assert_expanded("echo !20hello", &[vec![(5, 8)]]);
+        assert_expanded("!-4", &[vec![(0, 3)]]);
+        assert_expanded("echo !-4hello", &[vec![(5, 8)]]);
+        assert_expanded("!-20", &[vec![(0, 4)]]);
+        assert_expanded("echo !-20hello", &[vec![(5, 9)]]);
+        assert_expanded("!-20 foobar", &[vec![(0, 4)]]);
+        assert_expanded("!4echo", &[vec![(0, 2)]]);
     }
 
     #[test]
     fn previous_command_by_str() {
-        assert_expanded("!a", &[("  ", vec![(0, 2)])]);
-        assert_expanded("!a param", &[("   param", vec![(0, 2)])]);
-        assert_expanded("!ls", &[("   ", vec![(0, 3)])]);
-        assert_expanded("!?echo", &[("      ", vec![(0, 6)])]);
-        assert_expanded("!ls?", &[("    ", vec![(0, 4)])]);
-        assert_expanded("!?ls", &[("    ", vec![(0, 4)])]);
-        assert_expanded("!?ls?", &[("     ", vec![(0, 5)])]);
-        assert_expanded("!?ls:$?", &[("       ", vec![(0, 7)])]);
-        assert_expanded("!??", &[("   ", vec![(0, 3)])]);
-        assert_expanded(
-            "echo !ls:s/ls/ll/ && echo !:&",
-            &[("echo              && echo    ", vec![(5, 17), (26, 29)])],
-        );
+        assert_expanded("!a", &[vec![(0, 2)]]);
+        assert_expanded("!a param", &[vec![(0, 2)]]);
+        assert_expanded("!ls", &[vec![(0, 3)]]);
+        assert_expanded("!?echo", &[vec![(0, 6)]]);
+        assert_expanded("!ls?", &[vec![(0, 4)]]);
+        assert_expanded("!?ls", &[vec![(0, 4)]]);
+        assert_expanded("!?ls?", &[vec![(0, 5)]]);
+        assert_expanded("!?ls:$?", &[vec![(0, 7)]]);
+        assert_expanded("!??", &[vec![(0, 3)]]);
+        assert_expanded("echo !ls:s/ls/ll/ && echo !:&", &[vec![(5, 17), (26, 29)]]);
     }
 
     #[test]
     fn current_command() {
-        assert_expanded("echo !# hello", &[("echo    hello", vec![(5, 7)])]);
-        assert_expanded("echo !#hello", &[("echo   hello", vec![(5, 7)])]);
+        assert_expanded("echo !# hello", &[vec![(5, 7)]]);
+        assert_expanded("echo !#hello", &[vec![(5, 7)]]);
     }
 
     #[test]
     fn insulate() {
-        assert_expanded("echo !{ls}hello", &[("echo      hello", vec![(5, 10)])]);
-        assert_expanded("echo !{ls}-hello", &[("echo      -hello", vec![(5, 10)])]);
+        assert_expanded("echo !{ls}hello", &[vec![(5, 10)]]);
+        assert_expanded("echo !{ls}-hello", &[vec![(5, 10)]]);
     }
 
     #[test]
     fn word_designators() {
-        assert_expanded("vi !!:0", &[("vi     ", vec![(3, 7)])]);
-        assert_expanded("vi !!:20", &[("vi      ", vec![(3, 8)])]);
-        assert_expanded("vi !!:20.bak", &[("vi      .bak", vec![(3, 8)])]);
-        assert_expanded("vi !!:$", &[("vi     ", vec![(3, 7)])]);
-        assert_expanded("vi !!:$.bak", &[("vi     .bak", vec![(3, 7)])]);
-        assert_expanded("vi !!:^", &[("vi     ", vec![(3, 7)])]);
-        assert_expanded("vi !!:^.bak", &[("vi     .bak", vec![(3, 7)])]);
-        assert_expanded("vi !!:%", &[("vi     ", vec![(3, 7)])]);
-        assert_expanded("vi !^", &[("vi   ", vec![(3, 5)])]);
-        assert_expanded("vi !-", &[("vi   ", vec![(3, 5)])]);
-        assert_expanded("!% stop", &[("   stop", vec![(0, 2)])]);
-        assert_expanded("vi !*", &[("vi   ", vec![(3, 5)])]);
-        assert_expanded("vi !*10", &[("vi   10", vec![(3, 5)])]);
-        assert_expanded("vi !^.bak", &[("vi   .bak", vec![(3, 5)])]);
-        assert_expanded(
-            "command !!:$ next parameter",
-            &[("command      next parameter", vec![(8, 12)])],
-        );
-        assert_expanded("ls -l !!:$", &[("ls -l     ", vec![(6, 10)])]);
-
-        assert_expanded("!zsh-patina", &[("     patina", vec![(0, 5)])]);
-        assert_expanded(
-            r#"echo "!?cbr?-i""#,
-            &[(r#"echo "       i""#, vec![(6, 13)])],
-        );
+        assert_expanded("vi !!:0", &[vec![(3, 7)]]);
+        assert_expanded("vi !!:20", &[vec![(3, 8)]]);
+        assert_expanded("vi !!:20.bak", &[vec![(3, 8)]]);
+        assert_expanded("vi !!:$", &[vec![(3, 7)]]);
+        assert_expanded("vi !!:$.bak", &[vec![(3, 7)]]);
+        assert_expanded("vi !!:^", &[vec![(3, 7)]]);
+        assert_expanded("vi !!:^.bak", &[vec![(3, 7)]]);
+        assert_expanded("vi !!:%", &[vec![(3, 7)]]);
+        assert_expanded("vi !^", &[vec![(3, 5)]]);
+        assert_expanded("vi !-", &[vec![(3, 5)]]);
+        assert_expanded("!% stop", &[vec![(0, 2)]]);
+        assert_expanded("vi !*", &[vec![(3, 5)]]);
+        assert_expanded("vi !*10", &[vec![(3, 5)]]);
+        assert_expanded("vi !^.bak", &[vec![(3, 5)]]);
+        assert_expanded("command !!:$ next parameter", &[vec![(8, 12)]]);
+        assert_expanded("ls -l !!:$", &[vec![(6, 10)]]);
+        assert_expanded("!zsh-patina", &[vec![(0, 5)]]);
+        assert_expanded(r#"echo "!?cbr?-i""#, &[vec![(6, 13)]]);
     }
 
     #[test]
     fn both_designators() {
-        assert_expanded("ls -l !cp:2", &[("ls -l      ", vec![(6, 11)])]);
-        assert_expanded("ls -l !cp:$", &[("ls -l      ", vec![(6, 11)])]);
-        assert_expanded("ls -l !cp:^", &[("ls -l      ", vec![(6, 11)])]);
-        assert_expanded("ls -l !cp:*", &[("ls -l      ", vec![(6, 11)])]);
-        assert_expanded("ls -l !cp:2*", &[("ls -l       ", vec![(6, 12)])]);
-        assert_expanded("ls -l !cp:2*.bak", &[("ls -l       .bak", vec![(6, 12)])]);
-        assert_expanded("ls -l !tar:3-5", &[("ls -l         ", vec![(6, 14)])]);
-        assert_expanded("ls -l !tar:2-$", &[("ls -l         ", vec![(6, 14)])]);
-        assert_expanded("ls -l !tar:2-", &[("ls -l        ", vec![(6, 13)])]);
-        assert_expanded("ls -l !tar:$-", &[("ls -l        ", vec![(6, 13)])]);
-        assert_expanded("ls -l !tar:^-", &[("ls -l        ", vec![(6, 13)])]);
-        assert_expanded("ls -l !tar:%-", &[("ls -l        ", vec![(6, 13)])]);
-        assert_expanded(
-            "tar cvfz new-file.tar !tar:3-:p",
-            &[("tar cvfz new-file.tar          ", vec![(22, 31)])],
-        );
+        assert_expanded("ls -l !cp:2", &[vec![(6, 11)]]);
+        assert_expanded("ls -l !cp:$", &[vec![(6, 11)]]);
+        assert_expanded("ls -l !cp:^", &[vec![(6, 11)]]);
+        assert_expanded("ls -l !cp:*", &[vec![(6, 11)]]);
+        assert_expanded("ls -l !cp:2*", &[vec![(6, 12)]]);
+        assert_expanded("ls -l !cp:2*.bak", &[vec![(6, 12)]]);
+        assert_expanded("ls -l !tar:3-5", &[vec![(6, 14)]]);
+        assert_expanded("ls -l !tar:2-$", &[vec![(6, 14)]]);
+        assert_expanded("ls -l !tar:2-", &[vec![(6, 13)]]);
+        assert_expanded("ls -l !tar:$-", &[vec![(6, 13)]]);
+        assert_expanded("ls -l !tar:^-", &[vec![(6, 13)]]);
+        assert_expanded("ls -l !tar:%-", &[vec![(6, 13)]]);
+        assert_expanded("tar cvfz new-file.tar !tar:3-:p", &[vec![(22, 31)]]);
     }
 
     #[test]
     fn modifiers() {
-        assert_expanded("ls -l !!:$:r", &[("ls -l       ", vec![(6, 12)])]);
-        assert_expanded("ls -l !!:$:h", &[("ls -l       ", vec![(6, 12)])]);
-        assert_expanded("ls -l !!:$:h30", &[("ls -l         ", vec![(6, 14)])]);
-        assert_expanded("ls -l !!:$:t", &[("ls -l       ", vec![(6, 12)])]);
-        assert_expanded("ls -l !!:$:t30", &[("ls -l         ", vec![(6, 14)])]);
-        assert_expanded("!!:&", &[("    ", vec![(0, 4)])]);
-        assert_expanded("!!:g&", &[("     ", vec![(0, 5)])]);
+        assert_expanded("ls -l !!:$:r", &[vec![(6, 12)]]);
+        assert_expanded("ls -l !!:$:h", &[vec![(6, 12)]]);
+        assert_expanded("ls -l !!:$:h30", &[vec![(6, 14)]]);
+        assert_expanded("ls -l !!:$:t", &[vec![(6, 12)]]);
+        assert_expanded("ls -l !!:$:t30", &[vec![(6, 14)]]);
+        assert_expanded("!!:&", &[vec![(0, 4)]]);
+        assert_expanded("!!:g&", &[vec![(0, 5)]]);
     }
 
     #[test]
     fn substitutions() {
-        assert_expanded("!!:s/ls -l/cat", &[("              ", vec![(0, 14)])]);
-        assert_expanded("!!:s/ls -l/cat/", &[("               ", vec![(0, 15)])]);
-        assert_expanded(
-            "!!:s/ls -l/cat param",
-            &[("                    ", vec![(0, 20)])],
-        );
-        assert_expanded(
-            "!!:s/ls -l/cat/ param",
-            &[("                param", vec![(0, 15)])],
-        );
-        assert_expanded(
-            r#"!!:s/ls \//ls .\//"#,
-            &[(r#"                  "#, vec![(0, 18)])],
-        );
-        assert_expanded("!!:gs/foo/bar", &[("             ", vec![(0, 13)])]);
-        assert_expanded("!!:gs/foo/bar/", &[("              ", vec![(0, 14)])]);
-        assert_expanded("!!:s/foo/bar/:G", &[("               ", vec![(0, 15)])]);
+        assert_expanded("!!:s/ls -l/cat", &[vec![(0, 14)]]);
+        assert_expanded("!!:s/ls -l/cat/", &[vec![(0, 15)]]);
+        assert_expanded("!!:s/ls -l/cat param", &[vec![(0, 20)]]);
+        assert_expanded("!!:s/ls -l/cat/ param", &[vec![(0, 15)]]);
+        assert_expanded(r#"!!:s/ls \//ls .\//"#, &[vec![(0, 18)]]);
+        assert_expanded("!!:gs/foo/bar", &[vec![(0, 13)]]);
+        assert_expanded("!!:gs/foo/bar/", &[vec![(0, 14)]]);
+        assert_expanded("!!:s/foo/bar/:G", &[vec![(0, 15)]]);
 
-        assert_expanded("!!:s^ls -l^cat", &[("              ", vec![(0, 14)])]);
-        assert_expanded("!!:gs^foo^bar", &[("             ", vec![(0, 13)])]);
-        assert_expanded("!!:s#foo#bar", &[("            ", vec![(0, 12)])]);
-        assert_expanded("!!:s@foo@bar@:G", &[("               ", vec![(0, 15)])]);
-        assert_expanded(
-            r#"!!:s@foo\@@bar@:G"#,
-            &[("                 ", vec![(0, 17)])],
-        );
-        assert_expanded("!!:spfoopbar", &[("            ", vec![(0, 12)])]);
+        assert_expanded("!!:s^ls -l^cat", &[vec![(0, 14)]]);
+        assert_expanded("!!:gs^foo^bar", &[vec![(0, 13)]]);
+        assert_expanded("!!:s#foo#bar", &[vec![(0, 12)]]);
+        assert_expanded("!!:s@foo@bar@:G", &[vec![(0, 15)]]);
+        assert_expanded(r#"!!:s@foo\@@bar@:G"#, &[vec![(0, 17)]]);
+        assert_expanded("!!:spfoopbar", &[vec![(0, 12)]]);
     }
 
     #[test]
     fn quick_substitutions() {
-        assert_expanded("^ls -l^cat", &[("          ", vec![(0, 10)])]);
-        assert_expanded("^ls -l^cat^", &[("           ", vec![(0, 11)])]);
-        assert_expanded("^ls -l^cat param", &[("                ", vec![(0, 16)])]);
-        assert_expanded("^ls -l^cat^ param", &[("            param", vec![(0, 11)])]);
-        assert_expanded(r#"^ls \^^ls ./^"#, &[(r#"             "#, vec![(0, 13)])]);
-        assert_expanded("^foo^bar^:G", &[("           ", vec![(0, 11)])]);
-        assert_expanded(
-            "^foo^bar^:G echo !!",
-            &[("            echo   ", vec![(0, 11), (17, 19)])],
-        );
+        assert_expanded("^ls -l^cat", &[vec![(0, 10)]]);
+        assert_expanded("^ls -l^cat^", &[vec![(0, 11)]]);
+        assert_expanded("^ls -l^cat param", &[vec![(0, 16)]]);
+        assert_expanded("^ls -l^cat^ param", &[vec![(0, 11)]]);
+        assert_expanded(r#"^ls \^^ls ./^"#, &[vec![(0, 13)]]);
+        assert_expanded("^foo^bar^:G", &[vec![(0, 11)]]);
+        assert_expanded("^foo^bar^:G echo !!", &[vec![(0, 11), (17, 19)]]);
     }
 
     #[test]
     fn unicode() {
-        assert_expanded(
-            "foobar 😎 !:20 -r hello",
-            &[("foobar 😎      -r hello", vec![(12, 16)])],
-        );
-        assert_expanded(
-            "foobar !😎:20 -r hello",
-            &[("foobar          -r hello", vec![(7, 15)])],
-        );
+        assert_expanded("foobar 😎 !:20 -r hello", &[vec![(12, 16)]]);
+        assert_expanded("foobar !😎:20 -r hello", &[vec![(7, 15)]]);
     }
 
     #[test]
     fn single_quotes() {
-        assert_expanded(
-            "echo !! 'Hello!!' !! world",
-            &[("echo    'Hello!!'    world", vec![(5, 7), (18, 20)])],
-        );
-        assert_expanded(
-            "echo !! $'Hello!!' !! world",
-            &[("echo    $'Hello!!'    world", vec![(5, 7), (19, 21)])],
-        );
+        assert_expanded("echo !! 'Hello!!' !! world", &[vec![(5, 7), (18, 20)]]);
+        assert_expanded("echo !! $'Hello!!' !! world", &[vec![(5, 7), (19, 21)]]);
         assert_expanded(
             r#"echo !! 'Hello!!\'!!' !! world"#,
-            &[(r#"echo    'Hello!!\'!!'    world"#, vec![(5, 7), (22, 24)])],
+            &[vec![(5, 7), (22, 24)]],
         );
 
         assert_expanded(
             "echo !! 'Hello\n!!' !! world",
-            &[
-                ("echo    'Hello\n", vec![(5, 7)]),
-                ("!!'    world", vec![(4, 6)]),
-            ],
+            &[vec![(5, 7)], vec![(4, 6)]],
         );
 
         assert_expanded(
             "echo !! 'Hello\n' \n !! world",
-            &[
-                ("echo    'Hello\n", vec![(5, 7)]),
-                ("' \n", vec![]),
-                ("    world", vec![(1, 3)]),
-            ],
+            &[vec![(5, 7)], vec![], vec![(1, 3)]],
         );
 
         assert_expanded(
             "'\necho !! 'Hello\necho !!",
-            &[
-                ("'\n", vec![]),
-                ("echo !! 'Hello\n", vec![]),
-                ("echo   ", vec![(5, 7)]),
-            ],
+            &[vec![], vec![], vec![(5, 7)]],
         );
         assert_expanded(
             "$'\necho !! 'Hello\necho !!",
-            &[
-                ("$'\n", vec![]),
-                ("echo !! 'Hello\n", vec![]),
-                ("echo   ", vec![(5, 7)]),
-            ],
+            &[vec![], vec![], vec![(5, 7)]],
         );
     }
 
     #[test]
     fn new_line_after_history_expansion() {
-        assert_expanded(
-            "echo !!\nHello !! world",
-            &[
-                ("echo   \n", vec![(5, 7)]),
-                ("Hello    world", vec![(6, 8)]),
-            ],
-        );
+        assert_expanded("echo !!\nHello !! world", &[vec![(5, 7)], vec![(6, 8)]]);
     }
 
     #[test]
     fn escaped_bang() {
-        assert_expanded(
-            r#"echo Hello\!ls:1 world"#,
-            &[(r#"echo Hello\!ls:1 world"#, vec![])],
-        );
+        assert_expanded(r#"echo Hello\!ls:1 world"#, &[vec![]]);
     }
 
     #[test]
     fn no_history_expansion_at_end() {
-        assert_expanded("echo Hello!", &[("echo Hello!", vec![])]);
+        assert_expanded("echo Hello!", &[vec![]]);
     }
 
     #[test]
     fn no_history_expansion_if_followed_by() {
-        assert_expanded("!=", &[("!=", vec![])]);
-        assert_expanded("!(", &[("!(", vec![])]);
+        assert_expanded("!=", &[vec![]]);
+        assert_expanded("!(", &[vec![]]);
     }
 
     #[test]
     fn bang_without_history_expansion() {
-        assert_expanded("echo Hello! world", &[("echo Hello! world", vec![])]);
+        assert_expanded("echo Hello! world", &[vec![]]);
     }
 
     #[test]
     fn disable() {
-        assert_expanded(
-            r#"echo !! !" !!; echo !!"#,
-            &[(r#"echo       !!; echo !!"#, vec![(5, 7), (8, 10)])],
-        );
-        assert_expanded(
-            r#"echo "!!" !" !!; echo !!"#,
-            &[(r#"echo "  "    !!; echo !!"#, vec![(6, 8), (10, 12)])],
-        );
-        assert_expanded(r#"echo !"Hello!"#, &[(r#"echo   Hello!"#, vec![(5, 7)])]);
-        assert_expanded(
-            r#"echo !"Hello!; echo !!"#,
-            &[(r#"echo   Hello!; echo !!"#, vec![(5, 7)])],
-        );
-        assert_expanded(
-            r#"echo !"Hello!"world""#,
-            &[(r#"echo   Hello!"world""#, vec![(5, 7)])],
-        );
+        assert_expanded(r#"echo !! !" !!; echo !!"#, &[vec![(5, 7), (8, 10)]]);
+        assert_expanded(r#"echo "!!" !" !!; echo !!"#, &[vec![(6, 8), (10, 12)]]);
+        assert_expanded(r#"echo !"Hello!"#, &[vec![(5, 7)]]);
+        assert_expanded(r#"echo !"Hello!; echo !!"#, &[vec![(5, 7)]]);
+        assert_expanded(r#"echo !"Hello!"world""#, &[vec![(5, 7)]]);
         assert_expanded(
             r#"echo OK !! && echo !"Hello! && echo !!"#,
-            &[(
-                r#"echo OK    && echo   Hello! && echo !!"#,
-                vec![(8, 10), (19, 21)],
-            )],
+            &[vec![(8, 10), (19, 21)]],
         );
 
         // multi-line
         assert_expanded(
             "echo OK !! && echo !\"Hello! &&\necho !!",
-            &[
-                ("echo OK    && echo   Hello! &&\n", vec![(8, 10), (19, 21)]),
-                (r#"echo !!"#, vec![]),
-            ],
+            &[vec![(8, 10), (19, 21)], vec![]],
         );
 
         // escaped
-        assert_expanded(r#"echo "Hello\!""#, &[(r#"echo "Hello\!""#, vec![])]);
-        assert_expanded(
-            r#"echo "Hello\!" !!"#,
-            &[(r#"echo "Hello\!"   "#, vec![(15, 17)])],
-        );
+        assert_expanded(r#"echo "Hello\!""#, &[vec![]]);
+        assert_expanded(r#"echo "Hello\!" !!"#, &[vec![(15, 17)]]);
     }
 
     #[test]
     fn heredoc() {
-        assert_expanded(
-            "cat <<EOF\necho !!\nEOF",
-            &[
-                ("cat <<EOF\n", vec![]),
-                ("echo !!\n", vec![]),
-                ("EOF", vec![]),
-            ],
-        );
-        assert_expanded(
-            "cat <<EOF\necho !!",
-            &[("cat <<EOF\n", vec![]), ("echo !!", vec![])],
-        );
+        assert_expanded("cat <<EOF\necho !!\nEOF", &[vec![], vec![], vec![]]);
+        assert_expanded("cat <<EOF\necho !!", &[vec![], vec![]]);
         assert_expanded(
             "cat <<EOF\necho !!\nEOF\necho !!",
-            &[
-                ("cat <<EOF\n", vec![]),
-                ("echo !!\n", vec![]),
-                ("EOF\n", vec![]),
-                ("echo   ", vec![(5, 7)]),
-            ],
+            &[vec![], vec![], vec![], vec![(5, 7)]],
         );
         assert_expanded(
             "cat <<EOF\n^foo^bar\nEOF\necho !!",
-            &[
-                ("cat <<EOF\n", vec![]),
-                ("^foo^bar\n", vec![]),
-                ("EOF\n", vec![]),
-                ("echo   ", vec![(5, 7)]),
-            ],
+            &[vec![], vec![], vec![], vec![(5, 7)]],
         );
         assert_expanded(
             "echo \"$(cat <<EOF\necho !!\nEOF\n)\"",
-            &[
-                ("echo \"$(cat <<EOF\n", vec![]),
-                ("echo !!\n", vec![]),
-                ("EOF\n", vec![]),
-                (")\"", vec![]),
-            ],
+            &[vec![], vec![], vec![], vec![]],
         );
     }
 }
