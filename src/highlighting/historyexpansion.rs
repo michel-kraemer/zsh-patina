@@ -451,23 +451,40 @@ where
             modified.push_str(&next[*last_byte_start_index..byte_start_index]);
         }
 
-        // Replace history expansion with a single-quoted string. This hides
-        // them from the Syntect parser. Since history expansions are not
-        // allowed inside single-quoted strings, this is safe. The parser will
-        // produce the following operations (in the given order):
-        //
-        // - Push(string.quoted.single.shell),
-        //   - Push(punctuation.definition.string.begin.shell)
-        //   - Pop
-        //   - Push(punctuation.definition.string.end.shell)
-        //   - Pop
-        // - Pop
-        //
-        // HistoryExpansions::apply() will later replace these operations with a
-        // Push and a Pop for `meta.group.expansion.history.shell`.
         match byte_end_index - byte_start_index {
             0 => {}
-            1 => unreachable!("A history expansion with 1 character does not exist"),
+
+            // 1 character can only happen in case it's an incomplete quick
+            // substitution at the end of a line. Since quick substitutions have
+            // to appear at the beginning of the first line, this character must
+            // per definition be the only character in the line, so it's safe to
+            // leave it as it is. The parser will mark it as a callable and
+            // produce the following operations (in the given order):
+            //
+            // - Push(meta.function-call.shell),
+            //   - Push(variable.function.shell)
+            //   - Pop
+            // - Pop
+            //
+            // HistoryExpansions::apply() will later replace these operations
+            // with a Push and a Pop for `meta.group.expansion.history.shell`.
+            1 => modified.push('^'),
+
+            // Replace history expansions with 2 or more characters with a
+            // single-quoted string. This hides them from the Syntect parser.
+            // Since history expansions are not allowed inside single-quoted
+            // strings, this is safe. The parser will produce the following
+            // operations (in the given order):
+            //
+            // - Push(string.quoted.single.shell),
+            //   - Push(punctuation.definition.string.begin.shell)
+            //   - Pop
+            //   - Push(punctuation.definition.string.end.shell)
+            //   - Pop
+            // - Pop
+            //
+            // HistoryExpansions::apply() will later replace these operations
+            // with a Push and a Pop for `meta.group.expansion.history.shell`.
             len => {
                 modified.push('\'');
                 modified.push_str(&" ".repeat(len - 2));
@@ -475,11 +492,13 @@ where
             }
         }
 
-        expansions.push((
-            byte_start_index,
-            ExpansionOp::Push(self.expansion_history_scope),
-        ));
-        expansions.push((byte_end_index, ExpansionOp::Pop));
+        if byte_end_index - byte_start_index > 0 {
+            expansions.push((
+                byte_start_index,
+                ExpansionOp::Push(self.expansion_history_scope),
+            ));
+            expansions.push((byte_end_index, ExpansionOp::Pop));
+        }
 
         *last_byte_start_index = byte_end_index;
     }
@@ -637,7 +656,11 @@ impl HistoryExpansions {
                         result.push(j.next().unwrap());
                     }
 
-                    // remove operations for `string.quoted.single.shell` and
+                    // a) if the history expansion was an incomplete quick
+                    // substitution consisting of 1 character, remove operations
+                    // for `meta.function-call.shell` and `variable.function.shell`
+                    // b) if it had 2 or more characters, remove operations for
+                    // `string.quoted.single.shell` and
                     // `punctuation.definition.string.begin.shell`
                     result.pop();
                     result.pop();
@@ -645,18 +668,22 @@ impl HistoryExpansions {
                     result.push((ni.0, ScopeStackOp::Push(s)));
                 }
                 ExpansionOp::Pop => {
-                    // since we've replaced the history expansion with a single
+                    // Since we've replaced the history expansion with a single
                     // quoted-string, every element up to the end of the history
-                    // expansion belongs to this single-quoted string and can
-                    // be skipped
+                    // expansion belongs to this single-quoted string and can be
+                    // skipped. This also works in case the history expansion
+                    // was an incomplete quick substitution consisting of 1
+                    // character.
                     while let Some(nj) = j.peek()
                         && nj.0 < ni.0
                     {
                         j.next();
                     }
 
-                    // skip next two elements, which pop `punctuation.definition.string.end.shell`
-                    // and `string.quoted.single.shell`
+                    // skip next two elements, which either pop
+                    // `variable.function.shell` and `meta.function-call.shell`,
+                    // or `punctuation.definition.string.end.shell` and
+                    // `string.quoted.single.shell`
                     j.next();
                     j.next();
 
@@ -689,10 +716,14 @@ mod tests {
         for (e, he) in expected.iter().zip(history_expansions) {
             let mut expected_str = he.0.to_string();
             for w in he.1.ops.chunks(2) {
-                expected_str.replace_range(
-                    w[0].0..w[1].0,
-                    &format!("'{}'", " ".repeat(w[1].0 - w[0].0 - 2)),
-                );
+                if w[1].0 - w[0].0 == 1 {
+                    expected_str.replace_range(w[0].0..w[1].0, "^");
+                } else {
+                    expected_str.replace_range(
+                        w[0].0..w[1].0,
+                        &format!("'{}'", " ".repeat(w[1].0 - w[0].0 - 2)),
+                    );
+                }
             }
             assert_eq!(expected_str, he.0);
             assert_eq!(e.len() * 2, he.1.ops.len(), "{:?} != {:?}", e, he.1);
@@ -963,5 +994,11 @@ mod tests {
             "echo \"$(cat <<EOF\necho !!\nEOF\n)\"",
             &[vec![], vec![], vec![], vec![]],
         );
+    }
+
+    #[test]
+    fn incomplete() {
+        assert_expanded("^", &[vec![(0, 1)]]);
+        assert_expanded("^l", &[vec![(0, 2)]]);
     }
 }
