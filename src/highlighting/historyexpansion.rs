@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use syntect::parsing::{Scope, ScopeStackOp};
 
-use crate::highlighting::EXPANSION_HISTORY;
+use crate::highlighting::{EXPANSION_HISTORY, STRING_QUOTED_SINGLE, STRING_QUOTED_SINGLE_ANSI};
 
 /// Test if a character is a valid character in a history expansion string
 fn is_string_character(c: char) -> bool {
@@ -379,10 +379,6 @@ where
     /// The wrapped iterator
     inner: I,
 
-    /// `true` if we're currently inside a single-quoted string. This also
-    /// includes POSIX-quoted strings.
-    inside_single_quotes: bool,
-
     /// `true` if history expansion has been disabled for the rest of the
     /// command line using the character sequence `!"`.
     disabled: bool,
@@ -393,6 +389,12 @@ where
 
     /// Cached scope for history expansions
     expansion_history_scope: Scope,
+
+    /// Cached scope for single quotes
+    string_quoted_single_scope: Scope,
+
+    /// Cached scope for POSIX quotes
+    string_quoted_single_ansi_scope: Scope,
 }
 
 impl<'a, I> HistoryExpanded<'a, I>
@@ -403,14 +405,23 @@ where
     /// returned by the wrapped iterator will undergo history expansion.
     pub fn wrap(inner: I) -> Self {
         let expansion_history_scope = Scope::new(EXPANSION_HISTORY).unwrap();
+        let string_quoted_single_scope = Scope::new(STRING_QUOTED_SINGLE).unwrap();
+        let string_quoted_single_ansi_scope = Scope::new(STRING_QUOTED_SINGLE_ANSI).unwrap();
 
         Self {
             inner,
-            inside_single_quotes: false,
             disabled: false,
             first_non_empty_line_consumed: false,
             expansion_history_scope,
+            string_quoted_single_scope,
+            string_quoted_single_ansi_scope,
         }
+    }
+
+    fn is_inside_single_quote(&self, scope_stack: &[Scope]) -> bool {
+        scope_stack.iter().any(|s| {
+            *s == self.string_quoted_single_scope || *s == self.string_quoted_single_ansi_scope
+        })
     }
 
     fn handle_expansion(
@@ -441,23 +452,17 @@ where
 
         *last_byte_start_index = byte_end_index;
     }
-}
 
-impl<'a, I> Iterator for HistoryExpanded<'a, I>
-where
-    I: Iterator<Item = &'a str>,
-{
-    type Item = (Cow<'a, str>, HistoryExpansions);
-
-    fn next(&mut self) -> Option<(Cow<'a, str>, HistoryExpansions)> {
+    pub fn next(&mut self, scope_stack: &[Scope]) -> Option<(Cow<'a, str>, HistoryExpansions)> {
         let next = self.inner.next()?;
 
         if self.disabled {
             return Some((Cow::Borrowed(next), HistoryExpansions::empty()));
         }
 
-        if !self.inside_single_quotes && !next.contains('!') && !next.trim_start().starts_with('^')
-        {
+        let mut inside_single_quotes = self.is_inside_single_quote(scope_stack);
+
+        if !inside_single_quotes && !next.contains('!') && !next.trim_start().starts_with('^') {
             return Some((Cow::Borrowed(next), HistoryExpansions::empty()));
         }
 
@@ -501,8 +506,8 @@ where
         }
 
         while i < chars.len() {
-            if self.inside_single_quotes || chars[i].1 == '\'' {
-                let start = if self.inside_single_quotes { i } else { i + 1 };
+            if inside_single_quotes || chars[i].1 == '\'' {
+                let start = if inside_single_quotes { i } else { i + 1 };
 
                 // Look for the end of single quotes
                 match consume_until_non_escaped(&chars, start, '\'') {
@@ -510,12 +515,11 @@ where
                         // just skip everything inside single quotes on the same
                         // line, also skip the trailing single quote
                         i = j + 1;
-                        self.inside_single_quotes = false;
+                        inside_single_quotes = false;
                     }
                     None => {
-                        // No end of single quoted string found on this line.
-                        // Look for it in the next line.
-                        self.inside_single_quotes = true;
+                        // No end of single quoted string found on this line. We
+                        // can stop here.
                         break;
                     }
                 }
@@ -559,13 +563,13 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 enum ExpansionOp {
     Push(Scope),
     Pop,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct HistoryExpansions {
     ops: Vec<(usize, ExpansionOp)>,
 }
@@ -622,6 +626,11 @@ impl HistoryExpansions {
 mod tests {
     use std::borrow::Cow;
 
+    use syntect::{
+        parsing::{ParseState, ScopeStack, SyntaxSet},
+        util::LinesWithEndings,
+    };
+
     use crate::highlighting::historyexpansion::{ExpansionOp, HistoryExpanded, HistoryExpansions};
 
     fn assert_history_expansions(
@@ -650,7 +659,24 @@ mod tests {
     }
 
     fn assert_expanded(input: &str, expected: &[(&str, Vec<(usize, usize)>)]) {
-        let he = HistoryExpanded::wrap(input.lines()).collect::<Vec<_>>();
+        let syntax_set: SyntaxSet = syntect::dumps::from_uncompressed_data(include_bytes!(
+            concat!(env!("OUT_DIR"), "/syntax_set.packdump")
+        ))
+        .expect("Unable to load shell syntax");
+
+        let syntax = syntax_set.find_syntax_by_extension("sh").unwrap();
+        let mut parse_state = ParseState::new(syntax);
+
+        let mut scope_stack = ScopeStack::new();
+
+        let mut history_expanded =
+            HistoryExpanded::wrap(LinesWithEndings::from(input.trim_ascii_end()));
+        let mut he = Vec::new();
+        while let Some((line, expansions)) = history_expanded.next(&scope_stack.scopes) {
+            he.push((line.clone(), expansions.clone()));
+            let ops = expansions.apply(parse_state.parse_line(&line, &syntax_set).unwrap());
+            ops.iter().for_each(|op| scope_stack.apply(&op.1).unwrap());
+        }
         assert_history_expansions(expected, he);
     }
 
@@ -842,7 +868,7 @@ mod tests {
         assert_expanded(
             "echo !! 'Hello\n!!' !! world",
             &[
-                ("echo    'Hello", vec![(5, 7)]),
+                ("echo    'Hello\n", vec![(5, 7)]),
                 ("!!'    world", vec![(4, 6)]),
             ],
         );
@@ -850,9 +876,37 @@ mod tests {
         assert_expanded(
             "echo !! 'Hello\n' \n !! world",
             &[
-                ("echo    'Hello", vec![(5, 7)]),
-                ("' ", vec![]),
+                ("echo    'Hello\n", vec![(5, 7)]),
+                ("' \n", vec![]),
                 ("    world", vec![(1, 3)]),
+            ],
+        );
+
+        assert_expanded(
+            "'\necho !! 'Hello\necho !!",
+            &[
+                ("'\n", vec![]),
+                ("echo !! 'Hello\n", vec![]),
+                ("echo   ", vec![(5, 7)]),
+            ],
+        );
+        assert_expanded(
+            "$'\necho !! 'Hello\necho !!",
+            &[
+                ("$'\n", vec![]),
+                ("echo !! 'Hello\n", vec![]),
+                ("echo   ", vec![(5, 7)]),
+            ],
+        );
+    }
+
+    #[test]
+    fn new_line_after_history_expansion() {
+        assert_expanded(
+            "echo !!\nHello !! world",
+            &[
+                ("echo   \n", vec![(5, 7)]),
+                ("Hello    world", vec![(6, 8)]),
             ],
         );
     }
@@ -912,7 +966,7 @@ mod tests {
         assert_expanded(
             "echo OK !! && echo !\"Hello! &&\necho !!",
             &[
-                (r#"echo OK    && echo   Hello! &&"#, vec![(8, 10), (19, 21)]),
+                ("echo OK    && echo   Hello! &&\n", vec![(8, 10), (19, 21)]),
                 (r#"echo !!"#, vec![]),
             ],
         );

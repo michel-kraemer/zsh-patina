@@ -264,9 +264,9 @@ impl Highlighter {
         let mut i = 0;
         let mut byte_offset = 0;
         let mut result = Vec::new();
-        for (line, expansions) in
-            HistoryExpanded::wrap(LinesWithEndings::from(command.trim_ascii_end()))
-        {
+        let mut history_expanded =
+            HistoryExpanded::wrap(LinesWithEndings::from(command.trim_ascii_end()));
+        while let Some((line, expansions)) = history_expanded.next(&highlight_state.path.scopes) {
             if line.len() > self.max_line_length {
                 // skip lines that are too long
                 byte_offset += line.len();
@@ -359,8 +359,11 @@ impl Highlighter {
         let mut result = Vec::new();
         let mut stack = Vec::new();
         let mut stash = Vec::new();
-        for (line_number, (line, expansions)) in
-            HistoryExpanded::wrap(LinesWithEndings::from(command.trim_ascii_end())).enumerate()
+        let mut line_number = 0;
+        let mut history_expanded =
+            HistoryExpanded::wrap(LinesWithEndings::from(command.trim_ascii_end()));
+        while let Some((line, expansions)) =
+            history_expanded.next(&stack.iter().map(|(op, _, _, _)| *op).collect::<Vec<_>>())
         {
             let tokens = expansions.apply(ps.parse_line(&line, &self.syntax_set)?);
 
@@ -427,6 +430,7 @@ impl Highlighter {
             }
 
             offset += line.len();
+            line_number += 1;
         }
 
         // consume the remaining items on the stack
