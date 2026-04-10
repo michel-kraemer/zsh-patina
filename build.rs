@@ -64,6 +64,9 @@ fn main() -> Result<()> {
     scopes.push("dynamic.callable.function.shell".to_string());
     scopes.push("dynamic.callable.missing.shell".to_string());
 
+    // add scope for history expansions
+    scopes.push("meta.group.expansion.history.shell".to_string());
+
     // sort scopes
     scopes.sort_unstable();
 

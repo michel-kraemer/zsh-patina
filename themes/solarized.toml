@@ -31,6 +31,9 @@
 "variable.function" = "#b58900"
 "variable.language" = "#d33682"
 
+# history expansions
+"meta.group.expansion.history" = "#268bd2"
+
 # dynamic items
 "dynamic.callable" = "#b58900"
 "dynamic.callable.missing" = "#dc322f"

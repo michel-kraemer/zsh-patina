@@ -45,6 +45,9 @@
 # braces / structural punctuation
 "punctuation.section" = { foreground = "green", bold = true }
 
+# history expansions
+"meta.group.expansion.history" = "#87d75f"
+
 # dynamic items
 "dynamic.callable" = "green"
 "dynamic.callable.missing" = { foreground = "red", bold = true }

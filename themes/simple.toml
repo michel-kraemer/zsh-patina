@@ -23,6 +23,9 @@
 # braces
 "punctuation.section" = "yellow"
 
+# history expansions
+"meta.group.expansion.history" = "yellow"
+
 # dynamic items
 "dynamic.callable" = {}
 "dynamic.callable.missing" = "red"

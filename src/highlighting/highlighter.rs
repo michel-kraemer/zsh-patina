@@ -16,7 +16,10 @@ use syntect::{
 use super::*;
 use crate::{
     config::HighlightingConfig,
-    highlighting::dynamic::{DynamicScopes, DynamicTokenGroupBuilder, DynamicType},
+    highlighting::{
+        dynamic::{DynamicScopes, DynamicTokenGroupBuilder, DynamicType},
+        historyexpansion::HistoryExpanded,
+    },
     theme::{ScopeMapping, Theme, ThemeSource},
 };
 
@@ -235,6 +238,14 @@ impl Highlighter {
         &self.callable_choices
     }
 
+    fn should_highlight_dynamic(&self, dynamic_type: &DynamicType) -> bool {
+        match dynamic_type {
+            DynamicType::Unknown => true,
+            DynamicType::Callable => self.dynamic_callables_enabled,
+            DynamicType::Arguments => self.dynamic_arguments_enabled,
+        }
+    }
+
     pub fn highlight<P>(&self, command: &str, pwd: Option<&str>, predicate: P) -> Result<Vec<Span>>
     where
         P: Fn(&Range<usize>) -> bool,
@@ -253,7 +264,9 @@ impl Highlighter {
         let mut i = 0;
         let mut byte_offset = 0;
         let mut result = Vec::new();
-        for line in LinesWithEndings::from(command.trim_ascii_end()) {
+        let mut history_expanded =
+            HistoryExpanded::wrap(LinesWithEndings::from(command.trim_ascii_end()));
+        while let Some((line, expansions)) = history_expanded.next(&highlight_state.path.scopes) {
             if line.len() > self.max_line_length {
                 // skip lines that are too long
                 byte_offset += line.len();
@@ -265,9 +278,9 @@ impl Highlighter {
                 return Ok(result);
             }
 
-            let ops = parse_state.parse_line(line, &self.syntax_set)?;
+            let ops = expansions.apply(parse_state.parse_line(&line, &self.syntax_set)?);
             let ranges =
-                HighlightIterator::new(&mut highlight_state, &ops, line, &syntect_highlighter);
+                HighlightIterator::new(&mut highlight_state, &ops, &line, &syntect_highlighter);
 
             for r in ranges {
                 if r.1.is_empty() {
@@ -280,8 +293,14 @@ impl Highlighter {
 
                 if let Some(scope) = self.scope_mapping.decode(&r.0.foreground) {
                     let range = i..i + len;
-                    if predicate(&range) {
-                        self.highlight_other(range, scope, &mut result);
+                    if predicate(&range)
+                        && let Some(style) = resolve_static_style(scope, &self.theme)
+                    {
+                        result.push(Span {
+                            start: range.start,
+                            end: range.end,
+                            style: SpanStyle::Static(style),
+                        });
                     }
                 }
 
@@ -332,24 +351,6 @@ impl Highlighter {
         Ok(result)
     }
 
-    fn highlight_other(&self, range: Range<usize>, scope: &str, result: &mut Vec<Span>) {
-        if let Some(style) = resolve_static_style(scope, &self.theme) {
-            result.push(Span {
-                start: range.start,
-                end: range.end,
-                style: SpanStyle::Static(style),
-            });
-        }
-    }
-
-    fn should_highlight_dynamic(&self, dynamic_type: &DynamicType) -> bool {
-        match dynamic_type {
-            DynamicType::Unknown => true,
-            DynamicType::Callable => self.dynamic_callables_enabled,
-            DynamicType::Arguments => self.dynamic_arguments_enabled,
-        }
-    }
-
     pub fn tokenize(&self, command: &str) -> Result<Vec<Token>> {
         let syntax = self.syntax_set.find_syntax_by_extension("sh").unwrap();
 
@@ -358,8 +359,13 @@ impl Highlighter {
         let mut result = Vec::new();
         let mut stack = Vec::new();
         let mut stash = Vec::new();
-        for (line_number, line) in LinesWithEndings::from(command.trim_ascii_end()).enumerate() {
-            let tokens = ps.parse_line(line, &self.syntax_set)?;
+        let mut line_number = 0;
+        let mut history_expanded =
+            HistoryExpanded::wrap(LinesWithEndings::from(command.trim_ascii_end()));
+        while let Some((line, expansions)) =
+            history_expanded.next(&stack.iter().map(|(op, _, _, _)| *op).collect::<Vec<_>>())
+        {
+            let tokens = expansions.apply(ps.parse_line(&line, &self.syntax_set)?);
 
             for (i, s) in tokens {
                 match s {
@@ -424,6 +430,7 @@ impl Highlighter {
             }
 
             offset += line.len();
+            line_number += 1;
         }
 
         // consume the remaining items on the stack
@@ -1545,6 +1552,119 @@ mod tests {
                 cfg.static_span(27, 32, CONTROL_BREAK)?,
                 cfg.static_span(33, 34, OPERATOR_LOGICAL_CONTINUE)?,
                 cfg.static_span(35, 38, CONTROL_END)?,
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn history_expansions() -> Result<()> {
+        let cfg = test_cfg()?;
+
+        let highlighted = cfg.highlight("!!")?;
+        assert_eq!(highlighted, vec![cfg.static_span(0, 2, EXPANSION_HISTORY)?]);
+
+        let highlighted = cfg.highlight("ls !!")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 2, "ls"),
+                cfg.static_span(3, 5, EXPANSION_HISTORY)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight("ls; !!")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 2, "ls"),
+                cfg.static_span(2, 3, OPERATOR_LOGICAL_CONTINUE)?,
+                cfg.static_span(4, 6, EXPANSION_HISTORY)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight(r#"echo !! "!!""#)?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "echo"),
+                cfg.static_span(5, 7, EXPANSION_HISTORY)?,
+                cfg.static_span(8, 9, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(9, 11, EXPANSION_HISTORY)?,
+                cfg.static_span(11, 12, STRING_QUOTED_DOUBLE)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight("!-20 foobar")?;
+        assert_eq!(highlighted, vec![cfg.static_span(0, 4, EXPANSION_HISTORY)?]);
+
+        let highlighted = cfg.highlight("!4echo")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 2, EXPANSION_HISTORY)?,
+                cfg.static_span(2, 6, CALLABLE)?
+            ]
+        );
+
+        let highlighted = cfg.highlight("vi !!:0")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 2, "vi"),
+                cfg.static_span(3, 7, EXPANSION_HISTORY)?
+            ]
+        );
+
+        let highlighted = cfg.highlight("vi !!:20.bak")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 2, "vi"),
+                cfg.static_span(3, 8, EXPANSION_HISTORY)?
+            ]
+        );
+
+        let highlighted = cfg.highlight("command !!:$ next parameter")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 7, "command"),
+                cfg.static_span(8, 12, EXPANSION_HISTORY)?
+            ]
+        );
+
+        let highlighted = cfg.highlight("ls -l !!:$")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 2, "ls"),
+                cfg.static_span(2, 5, PARAMETER)?,
+                cfg.static_span(6, 10, EXPANSION_HISTORY)?
+            ]
+        );
+
+        let highlighted = cfg.highlight("!% stop")?;
+        assert_eq!(highlighted, vec![cfg.static_span(0, 2, EXPANSION_HISTORY)?]);
+
+        let highlighted = cfg.highlight("!zsh-patina")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 5, EXPANSION_HISTORY)?,
+                cfg.static_span(5, 11, CALLABLE)?
+            ]
+        );
+
+        let highlighted = cfg.highlight(r#"echo "!?cbr?-i""#)?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "echo"),
+                cfg.static_span(5, 6, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(6, 13, EXPANSION_HISTORY)?,
+                cfg.static_span(13, 15, STRING_QUOTED_DOUBLE)?,
             ]
         );
 
