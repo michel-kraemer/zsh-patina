@@ -62,24 +62,6 @@ fn consume_event_designator(chars: &[(usize, char)], mut i: usize) -> Option<usi
             }
         }
 
-        '{' => {
-            if i + 1 == chars.len() {
-                Some(i + 1)
-            } else {
-                // ignore what the history expansion looks like, just skip ahead
-                // to the end
-                let mut j = i + 1;
-                while j < chars.len() && chars[j].1 != '}' {
-                    j += 1;
-                }
-                if j == chars.len() {
-                    Some(j)
-                } else {
-                    Some(j + 1)
-                }
-            }
-        }
-
         c if is_string_character(c) => {
             if i + 1 == chars.len() {
                 Some(i + 1)
@@ -327,6 +309,21 @@ fn consume_history_expansion(chars: &[(usize, char)], mut i: usize) -> Option<us
     i = consume_bang(chars, i)?;
     if i == chars.len() {
         return None;
+    }
+
+    // insulated history expansions: !{...}
+    if chars[i].1 == '{' {
+        // ignore what the history expansion looks like, just skip ahead
+        // to the end
+        let mut j = i + 1;
+        while j < chars.len() && chars[j].1 != '}' {
+            j += 1;
+        }
+        return if j == chars.len() {
+            Some(j)
+        } else {
+            Some(j + 1)
+        };
     }
 
     // consume optional event designator
@@ -742,6 +739,7 @@ mod tests {
     #[test]
     fn insulate() {
         assert_expanded("echo !{ls}hello", &[("echo      hello", vec![(5, 10)])]);
+        assert_expanded("echo !{ls}-hello", &[("echo      -hello", vec![(5, 10)])]);
     }
 
     #[test]
