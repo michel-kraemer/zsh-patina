@@ -24,6 +24,7 @@ Besides normal static highlighting, zsh-patina is able to dynamically detect whe
   * [Build from source (for the brave ones)](#build-from-source-for-the-brave-ones)
 * [Configuration](#configuration)
 * [Theming](#theming)
+* [Completions (optional)](#completions-optional)
 * [Benchmarks](#benchmarks)
 * [Troubleshooting](#troubleshooting)
 * [How to remove the plugin](#how-to-remove-the-plugin)
@@ -401,6 +402,34 @@ extends = "nord"
 
 # ... or extend another custom theme
 # extends = "file:/path/to/another/theme.toml"
+```
+
+## Completions (optional)
+
+If you like, you can generate shell completions for zsh-patina with the following command:
+
+```shell
+zsh-patina completion
+```
+
+The command prints out a Zsh script that should be sourced as follows:
+
+```shell
+eval "$(/path/to/zsh-patina completion)"
+```
+
+Alternatively, you can permanently install the script to your site-functions directory:
+
+```shell
+zsh-patina completion > /usr/local/share/zsh/site-functions/_zsh-patina
+chmod +x /usr/local/share/zsh/site-functions/_zsh-patina
+```
+
+Or with Homebrew under macOS:
+
+```shell
+zsh-patina completion > "$(brew --prefix)/share/zsh/site-functions/_zsh-patina"
+chmod +x "$(brew --prefix)/share/zsh/site-functions/_zsh-patina"
 ```
 
 ## Benchmarks

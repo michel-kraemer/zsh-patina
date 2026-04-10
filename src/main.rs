@@ -9,7 +9,7 @@ use figment::{
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use crate::{
-    commands::{check, list_scopes, list_themes, tokenize},
+    commands::{check, completion, list_scopes, list_themes, tokenize},
     config::{Config, config_file_path, runtime_dir},
     daemon::{activate, start_daemon, status_daemon, stop_daemon},
 };
@@ -32,7 +32,7 @@ struct Args {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// Initialize zsh-patina in the current shell session.
+    /// Initialize zsh-patina in the current shell session
     ///
     /// The command prints out a Zsh script that should be eval'd as follows:
     ///
@@ -45,6 +45,24 @@ enum Command {
     ///     echo 'eval "$(/path/to/zsh-patina activate)"' >> $HOME/.zshrc
     #[command(verbatim_doc_comment)]
     Activate,
+
+    /// Generate shell completions for zsh-patina
+    ///
+    /// The command prints out a Zsh script that should be sourced as follows:
+    ///
+    ///     eval "$(/path/to/zsh-patina completion)"
+    ///
+    /// Alternatively, you can permanently install the script to your site-functions directory:
+    ///
+    ///    zsh-patina completion > /usr/local/share/zsh/site-functions/_zsh-patina
+    ///    chmod +x /usr/local/share/zsh/site-functions/_zsh-patina
+    ///
+    /// Or with Homebrew under macOS:
+    ///
+    ///     zsh-patina completion > "$(brew --prefix)/share/zsh/site-functions/_zsh-patina"
+    ///     chmod +x "$(brew --prefix)/share/zsh/site-functions/_zsh-patina"
+    #[command(verbatim_doc_comment)]
+    Completion,
 
     /// Start the highlighter daemon if it's not already running
     Start {
@@ -136,6 +154,10 @@ fn run() -> Result<()> {
 
     match args.command {
         Command::Activate => activate(&runtime_dir, &config),
+        Command::Completion => {
+            completion();
+            Ok(())
+        }
         Command::Start { no_daemon } => start_daemon(&runtime_dir, &config, no_daemon),
         Command::Stop => {
             stop_daemon(&runtime_dir);
