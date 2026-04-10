@@ -200,6 +200,7 @@ A flake is provided to make the executable the plugin requires available in `/ni
 
 zsh-patina can be configured through an optional configuration file at the following locations (in order of precedence):
 
+* `$ZSH_PATINA_CONFIG_FILE` if set
 * `$XDG_CONFIG_HOME/zsh-patina/config.toml` (if `$XDG_CONFIG_HOME` is set)
 * `~/.config/zsh-patina/config.toml`
 
