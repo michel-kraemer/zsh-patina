@@ -2,7 +2,9 @@ use std::borrow::Cow;
 
 use syntect::parsing::{Scope, ScopeStackOp};
 
-use crate::highlighting::{EXPANSION_HISTORY, STRING_QUOTED_SINGLE, STRING_QUOTED_SINGLE_ANSI};
+use crate::highlighting::{
+    EXPANSION_HISTORY, STRING_QUOTED_SINGLE, STRING_QUOTED_SINGLE_ANSI, STRING_UNQUOTED_HEREDOC,
+};
 
 /// Test if a character is a valid character in a history expansion string
 fn is_string_character(c: char) -> bool {
@@ -395,6 +397,9 @@ where
 
     /// Cached scope for POSIX quotes
     string_quoted_single_ansi_scope: Scope,
+
+    /// Cached scope for heredocs
+    string_unquoted_heredoc_scope: Scope,
 }
 
 impl<'a, I> HistoryExpanded<'a, I>
@@ -407,6 +412,7 @@ where
         let expansion_history_scope = Scope::new(EXPANSION_HISTORY).unwrap();
         let string_quoted_single_scope = Scope::new(STRING_QUOTED_SINGLE).unwrap();
         let string_quoted_single_ansi_scope = Scope::new(STRING_QUOTED_SINGLE_ANSI).unwrap();
+        let string_unquoted_heredoc_scope = Scope::new(STRING_UNQUOTED_HEREDOC).unwrap();
 
         Self {
             inner,
@@ -415,6 +421,7 @@ where
             expansion_history_scope,
             string_quoted_single_scope,
             string_quoted_single_ansi_scope,
+            string_unquoted_heredoc_scope,
         }
     }
 
@@ -422,6 +429,10 @@ where
         scope_stack.iter().any(|s| {
             *s == self.string_quoted_single_scope || *s == self.string_quoted_single_ansi_scope
         })
+    }
+
+    fn is_inside_heredoc(&self, scope_stack: &[Scope]) -> bool {
+        scope_stack.contains(&self.string_unquoted_heredoc_scope)
     }
 
     fn handle_expansion(
@@ -456,7 +467,7 @@ where
     pub fn next(&mut self, scope_stack: &[Scope]) -> Option<(Cow<'a, str>, HistoryExpansions)> {
         let next = self.inner.next()?;
 
-        if self.disabled {
+        if self.disabled || self.is_inside_heredoc(scope_stack) {
             return Some((Cow::Borrowed(next), HistoryExpansions::empty()));
         }
 
@@ -976,6 +987,49 @@ mod tests {
         assert_expanded(
             r#"echo "Hello\!" !!"#,
             &[(r#"echo "Hello\!"   "#, vec![(15, 17)])],
+        );
+    }
+
+    #[test]
+    fn heredoc() {
+        assert_expanded(
+            "cat <<EOF\necho !!\nEOF",
+            &[
+                ("cat <<EOF\n", vec![]),
+                ("echo !!\n", vec![]),
+                ("EOF", vec![]),
+            ],
+        );
+        assert_expanded(
+            "cat <<EOF\necho !!",
+            &[("cat <<EOF\n", vec![]), ("echo !!", vec![])],
+        );
+        assert_expanded(
+            "cat <<EOF\necho !!\nEOF\necho !!",
+            &[
+                ("cat <<EOF\n", vec![]),
+                ("echo !!\n", vec![]),
+                ("EOF\n", vec![]),
+                ("echo   ", vec![(5, 7)]),
+            ],
+        );
+        assert_expanded(
+            "cat <<EOF\n^foo^bar\nEOF\necho !!",
+            &[
+                ("cat <<EOF\n", vec![]),
+                ("^foo^bar\n", vec![]),
+                ("EOF\n", vec![]),
+                ("echo   ", vec![(5, 7)]),
+            ],
+        );
+        assert_expanded(
+            "echo \"$(cat <<EOF\necho !!\nEOF\n)\"",
+            &[
+                ("echo \"$(cat <<EOF\n", vec![]),
+                ("echo !!\n", vec![]),
+                ("EOF\n", vec![]),
+                (")\"", vec![]),
+            ],
         );
     }
 }

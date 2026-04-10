@@ -30,6 +30,7 @@ const STRING_QUOTED_SINGLE_ANSI: &str = "string.quoted.single.ansi-c.shell";
 const STRING_QUOTED_DOUBLE: &str = "string.quoted.double.shell";
 const STRING_QUOTED_BEGIN: &str = "punctuation.definition.string.begin.shell";
 const STRING_QUOTED_END: &str = "punctuation.definition.string.end.shell";
+const STRING_UNQUOTED_HEREDOC: &str = "string.unquoted.heredoc.shell";
 
 const REDIRECTION: &str = "keyword.operator.assignment.redirection.shell";
 
