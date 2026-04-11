@@ -62,7 +62,12 @@ enum Command {
     ///     zsh-patina completion > "$(brew --prefix)/share/zsh/site-functions/_zsh-patina"
     ///     chmod +x "$(brew --prefix)/share/zsh/site-functions/_zsh-patina"
     #[command(verbatim_doc_comment)]
-    Completion,
+    Completion {
+        /// Output file to write the completion script to. If not provided, the
+        /// script is written to stdout.
+        #[arg(long)]
+        output_file: Option<String>,
+    },
 
     /// Start the highlighter daemon if it's not already running
     Start {
@@ -154,10 +159,7 @@ fn run() -> Result<()> {
 
     match args.command {
         Command::Activate => activate(&runtime_dir, &config),
-        Command::Completion => {
-            completion();
-            Ok(())
-        }
+        Command::Completion { output_file } => completion(output_file.as_deref()),
         Command::Start { no_daemon } => start_daemon(&runtime_dir, &config, no_daemon),
         Command::Stop => {
             stop_daemon(&runtime_dir);
