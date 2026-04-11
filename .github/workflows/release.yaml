@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   check-version:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v6
       - name: Get the release version from the tag
@@ -30,8 +30,27 @@ jobs:
     outputs:
       version: ${{ env.VERSION }}
 
-  build-release:
+  crate-metadata:
     needs: ['check-version']
+    name: Extract crate metadata
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Extract crate information
+        id: crate-metadata
+        run: |
+          cargo metadata --no-deps --format-version 1 | jq -r '"name=" + .packages[0].name' | tee -a $GITHUB_OUTPUT
+          cargo metadata --no-deps --format-version 1 | jq -r '"version=" + .packages[0].version' | tee -a $GITHUB_OUTPUT
+          cargo metadata --no-deps --format-version 1 | jq -r '"maintainer=" + .packages[0].authors[0]' | tee -a $GITHUB_OUTPUT
+          cargo metadata --no-deps --format-version 1 | jq -r '"homepage=" + .packages[0].homepage' | tee -a $GITHUB_OUTPUT
+    outputs:
+      name: ${{ steps.crate-metadata.outputs.name }}
+      version: ${{ steps.crate-metadata.outputs.version }}
+      maintainer: ${{ steps.crate-metadata.outputs.maintainer }}
+      homepage: ${{ steps.crate-metadata.outputs.homepage }}
+
+  build-release:
+    needs: ['crate-metadata']
     runs-on: ${{ matrix.os }}
     env:
       BUILD_CMD: cargo
@@ -40,20 +59,28 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
+            dpkg_arch: musl-linux-amd64
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+            dpkg_arch: amd64
           - os: ubuntu-latest
             target: i686-unknown-linux-musl
+            dpkg_arch: musl-linux-i686
           - os: ubuntu-latest
             target: i686-unknown-linux-gnu
+            dpkg_arch: i386
           - os: ubuntu-latest
             target: aarch64-unknown-linux-musl
+            dpkg_arch: aarch64-unknown-linux-musl
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
+            dpkg_arch: arm64
           - os: ubuntu-latest
             target: arm-unknown-linux-gnueabihf
+            dpkg_arch: armhf
           - os: ubuntu-latest
             target: arm-unknown-linux-musleabihf
+            dpkg_arch: musl-linux-armhf
           - os: macos-latest
             target: x86_64-apple-darwin
           - os: macos-latest
@@ -110,7 +137,9 @@ jobs:
             EXE_suffix=".exe"
           fi
 
-          BIN_PATH="target/${{ matrix.target }}/release-lto/zsh-patina${EXE_suffix}"
+          BIN_NAME="${{ needs.crate-metadata.outputs.name }}${EXE_suffix}"
+          BIN_PATH="target/${{ matrix.target }}/release-lto/${BIN_NAME}"
+          echo "BIN_NAME=${BIN_NAME}" >> $GITHUB_OUTPUT
           echo "BIN_PATH=${BIN_PATH}" >> $GITHUB_OUTPUT
 
       - name: Smoke test
@@ -129,13 +158,13 @@ jobs:
         if: matrix.os != 'windows-latest'
         shell: bash
         run: |
-          $BUILD_CMD run --profile release-lto --locked --target=${{ matrix.target }} -- completion --output-file "_zsh-patina"
+          $BUILD_CMD run --profile release-lto --locked --target=${{ matrix.target }} -- completion --output-file "_${{ needs.crate-metadata.outputs.name }}"
 
       - name: Generate shell completions (Windows)
         if: matrix.os == 'windows-latest'
         shell: msys2 {0}
         run: |
-          $BUILD_CMD run --profile release-lto --locked --target=${{ matrix.target }} -- completion --output-file "_zsh-patina"
+          $BUILD_CMD run --profile release-lto --locked --target=${{ matrix.target }} -- completion --output-file "_${{ needs.crate-metadata.outputs.name }}"
 
       - name: Create tarball
         id: package
@@ -146,7 +175,7 @@ jobs:
           then
             PKG_suffix=".zip"
           fi
-          PKG_BASENAME=zsh-patina-v${{ needs.check-version.outputs.version }}-${{ matrix.target }}
+          PKG_BASENAME=${{ needs.crate-metadata.outputs.name }}-v${{ needs.crate-metadata.outputs.version }}-${{ matrix.target }}
           PKG_NAME="${PKG_BASENAME}${PKG_suffix}"
           echo "PKG_NAME=${PKG_NAME}" >> $GITHUB_OUTPUT
 
@@ -162,7 +191,7 @@ jobs:
 
           # Shell completions
           mkdir "${ARCHIVE_DIR}/completion"
-          cp "_zsh-patina" "${ARCHIVE_DIR}/completion"
+          cp "_${{ needs.crate-metadata.outputs.name }}" "${ARCHIVE_DIR}/completion"
 
           # base compressed package
           pushd "${PKG_STAGING}/" >/dev/null
@@ -177,10 +206,99 @@ jobs:
           # Let subsequent steps know where to find the compressed package
           echo "PKG_PATH=${PKG_STAGING}/${PKG_NAME}" >> $GITHUB_OUTPUT
 
+      - name: Create Debian package
+        id: debian-package
+        if: startsWith(matrix.os, 'ubuntu')
+        shell: bash
+        run: |
+          # COPYRIGHT_YEARS="2026 - "$(date "+%Y")
+          COPYRIGHT_YEARS="2026"
+          DPKG_STAGING="debian-package"
+          DPKG_DIR="${DPKG_STAGING}/dpkg"
+          mkdir -p "${DPKG_DIR}"
+
+          DPKG_BASENAME=${{ needs.crate-metadata.outputs.name }}
+          DPKG_CONFLICTS=${{ needs.crate-metadata.outputs.name }}-musl
+          case ${{ matrix.target }} in *-musl*) DPKG_BASENAME=${{ needs.crate-metadata.outputs.name }}-musl ; DPKG_CONFLICTS=${{ needs.crate-metadata.outputs.name }} ;; esac;
+          DPKG_VERSION=${{ needs.crate-metadata.outputs.version }}
+          DPKG_ARCH="${{ matrix.dpkg_arch }}"
+          DPKG_NAME="${DPKG_BASENAME}_${DPKG_VERSION}_${DPKG_ARCH}.deb"
+          echo "DPKG_NAME=${DPKG_NAME}" >> $GITHUB_OUTPUT
+
+          # Binary
+          install -Dm755 "${{ steps.bin.outputs.BIN_PATH }}" "${DPKG_DIR}/usr/bin/${{ steps.bin.outputs.BIN_NAME }}"
+
+          # Autocompletion files
+          install -Dm644 _${{ needs.crate-metadata.outputs.name }} "${DPKG_DIR}/usr/share/zsh/vendor-completions/_${{ needs.crate-metadata.outputs.name }}"
+
+          # README and LICENSE
+          install -Dm644 "README.md" "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/README.md"
+          install -Dm644 "LICENSE" "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/LICENSE"
+
+          cat > "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/copyright" <<EOF
+          Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+          Upstream-Name: ${{ needs.crate-metadata.outputs.name }}
+          Source: ${{ needs.crate-metadata.outputs.homepage }}
+
+          Files: *
+          Copyright: ${{ needs.crate-metadata.outputs.maintainer }}
+          Copyright: $COPYRIGHT_YEARS ${{ needs.crate-metadata.outputs.maintainer }}
+
+          License: MIT
+            Permission is hereby granted, free of charge, to any person obtaining a copy
+            of this software and associated documentation files (the "Software"), to deal
+            in the Software without restriction, including without limitation the rights
+            to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+            copies of the Software, and to permit persons to whom the Software is
+            furnished to do so, subject to the following conditions:
+            .
+            The above copyright notice and this permission notice shall be included in all
+            copies or substantial portions of the Software.
+            .
+            THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+            IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+            FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+            AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+            LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+            OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+            SOFTWARE.
+          EOF
+          chmod 644 "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/copyright"
+
+          # control file
+          mkdir -p "${DPKG_DIR}/DEBIAN"
+          cat > "${DPKG_DIR}/DEBIAN/control" <<EOF
+          Package: ${DPKG_BASENAME}
+          Version: ${DPKG_VERSION}
+          Section: utils
+          Priority: optional
+          Maintainer: ${{ needs.crate-metadata.outputs.maintainer }}
+          Homepage: ${{ needs.crate-metadata.outputs.homepage }}
+          Architecture: ${DPKG_ARCH}
+          Provides: ${{ needs.crate-metadata.outputs.name }}
+          Conflicts: ${DPKG_CONFLICTS}
+          Description: \$ A blazingly fast Zsh syntax highlighter
+          EOF
+
+          DPKG_PATH="${DPKG_STAGING}/${DPKG_NAME}"
+          echo "DPKG_PATH=${DPKG_PATH}" >> $GITHUB_OUTPUT
+
+          # build dpkg
+          fakeroot dpkg-deb --build "${DPKG_DIR}" "${DPKG_PATH}"
+
       - name: Upload release archive
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          version="${{ needs.check-version.outputs.version }}"
+          version="${{ needs.crate-metadata.outputs.version }}"
           gh release upload "$version" ${{ steps.package.outputs.PKG_PATH }}
+
+      - name: "Upload Debian package"
+        if: steps.debian-package.outputs.DPKG_PATH
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          version="${{ needs.crate-metadata.outputs.version }}"
+          gh release upload "$version" ${{ steps.debian-package.outputs.DPKG_PATH }}
