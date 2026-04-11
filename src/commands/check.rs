@@ -92,7 +92,7 @@ pub fn check(
     } else {
         print_bullet(
             &format!(
-                "No configuration file found at `$ZSH_PATINA_CONFIG_FILE`, \
+                "No configuration file found at `$ZSH_PATINA_CONFIG_PATH`, \
                 `$XDG_CONFIG_HOME/zsh-patina/config.toml', or \
                 `{}/.config/zsh-patina/config.toml'. \
                 Using default settings.",
