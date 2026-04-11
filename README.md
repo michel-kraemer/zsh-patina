@@ -429,6 +429,8 @@ extends = "nord"
 
 ## Completions (optional)
 
+> Shell completions are installed automatically by the [`.deb` package](#deb-package-for-debianubuntu) and by [Homebrew](#homebrew-for-macos).
+
 If you like, you can generate shell completions for zsh-patina with the following command:
 
 ```shell
@@ -446,13 +448,6 @@ Alternatively, you can permanently install the script to your site-functions dir
 ```shell
 zsh-patina completion > /usr/local/share/zsh/site-functions/_zsh-patina
 chmod +x /usr/local/share/zsh/site-functions/_zsh-patina
-```
-
-Or with Homebrew under macOS:
-
-```shell
-zsh-patina completion > "$(brew --prefix)/share/zsh/site-functions/_zsh-patina"
-chmod +x "$(brew --prefix)/share/zsh/site-functions/_zsh-patina"
 ```
 
 ## Benchmarks
