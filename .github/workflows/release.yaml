@@ -119,11 +119,23 @@ jobs:
         run: |
           $BUILD_CMD run --profile release-lto --locked --target=${{ matrix.target }} -- list-scopes
 
-      - name: Smoke test
+      - name: Smoke test (Windows)
         if: matrix.os == 'windows-latest'
         shell: msys2 {0}
         run: |
           $BUILD_CMD run --profile release-lto --locked --target=${{ matrix.target }} -- list-scopes
+
+      - name: Generate shell completions
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: |
+          $BUILD_CMD run --profile release-lto --locked --target=${{ matrix.target }} -- completion --output-file "_zsh-patina"
+
+      - name: Generate shell completions (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: msys2 {0}
+        run: |
+          $BUILD_CMD run --profile release-lto --locked --target=${{ matrix.target }} -- completion --output-file "_zsh-patina"
 
       - name: Create tarball
         id: package
@@ -147,6 +159,10 @@ jobs:
 
           # README and LICENSE
           cp "README.md" "LICENSE" "$ARCHIVE_DIR"
+
+          # Shell completions
+          mkdir "${ARCHIVE_DIR}/completion"
+          cp "_zsh-patina" "${ARCHIVE_DIR}/completion"
 
           # base compressed package
           pushd "${PKG_STAGING}/" >/dev/null
