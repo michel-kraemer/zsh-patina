@@ -186,8 +186,8 @@ jobs:
           # Binary
           cp "${{ steps.bin.outputs.BIN_PATH }}" "$ARCHIVE_DIR"
 
-          # README and LICENSE
-          cp "README.md" "LICENSE" "$ARCHIVE_DIR"
+          # README, LICENSE, and CHANGELOG
+          cp "README.md" "LICENSE" "CHANGELOG.md" "$ARCHIVE_DIR"
 
           # Shell completions
           mkdir "${ARCHIVE_DIR}/completion"
@@ -231,9 +231,10 @@ jobs:
           # Autocompletion files
           install -Dm644 _${{ needs.crate-metadata.outputs.name }} "${DPKG_DIR}/usr/share/zsh/vendor-completions/_${{ needs.crate-metadata.outputs.name }}"
 
-          # README and LICENSE
+          # README, LICENSE, and CHANGELOG
           install -Dm644 "README.md" "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/README.md"
           install -Dm644 "LICENSE" "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/LICENSE"
+          install -Dm644 "CHANGELOG.md" "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/CHANGELOG.md"
 
           cat > "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/copyright" <<EOF
           Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
