@@ -21,6 +21,7 @@ Besides normal static highlighting, zsh-patina is able to dynamically detect whe
   * [`.deb` package (for Debian/Ubuntu)](#deb-package-for-debianubuntu)
   * [AUR (for Arch Linux users)](#aur-for-arch-linux-users)
   * [flake.nix (for Nix users)](#flakenix-for-nix-users)
+  * [scoop (for Windows users)](#scoop-for-windows-users)
   * [Pre-compiled binaries (for everyone)](#pre-compiled-binaries-for-everyone)
   * [Build from source (for the brave ones)](#build-from-source-for-the-brave-ones)
 * [Configuration](#configuration)
@@ -167,6 +168,41 @@ A flake is provided to make the executable the plugin requires available in `/ni
    ```shell
    exec zsh
    ```
+
+### Scoop (for Windows users)
+
+1. Install zsh. This can be done either thruough msys2 or cygwin, which can be installed
+   via scoop like this:
+   ```shell
+   scoop bucket add main
+
+   # For msys2
+   scoop install main/msys2
+
+   # For cygwin
+   scoop install main/cygwin
+   ```
+   Zsh can then be installed through the corresponding package manager.
+
+2. Install zsh-patina:
+
+    ```shell
+    scoop bucket add extras
+    scoop install extras/zsh-patina
+    ```
+    zsh-patina is automatically added to your PATH upon install.
+
+3. Activate the plugin in your `.zshrc` file:
+
+    ```shell
+    eval "$(zsh-patina activate)"
+    ```
+
+4. Restart your terminal, or run:
+
+    ```shell
+    exec zsh
+    ```
 
 ### Pre-compiled binaries (for everyone)
 
