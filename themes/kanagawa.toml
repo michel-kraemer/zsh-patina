@@ -1,0 +1,78 @@
+# This theme is based on Kanagawa.nvim (Copyright (c) 2021 Tommaso Laurenzi,
+# released under the MIT license, https://github.com/rebelot/kanagawa.nvim)
+
+# comments
+"comment" = "#727169"
+"punctuation.definition.comment.begin" = "#727169"
+
+# strings
+"string" = "#98bb6c"
+"punctuation.definition.string" = "#98bb6c"
+
+# regular expressions
+"keyword.control.regexp" = "#9cabca"
+"meta.regexp" = "#c0a36e"
+
+# escape characters
+"constant.character.escape" = "#c0a36e"
+
+# numbers
+"constant.numeric" = "#d27e99"
+
+# variables, commands, and parameters
+"variable" = "#dcd7ba"
+"variable.language" = "#e46876"
+"variable.parameter.option" = "#9cabca"
+"punctuation.definition.variable" = "#7fb4ca"
+
+# command arguments
+"meta.function-call.arguments" = "#b8b4d0"
+
+# home directory ~
+"variable.language.tilde" = "#b8b4d0"
+
+# keywords
+"keyword" = "#957fb8"
+"keyword.control.case.item" = "#9cabca"
+
+# general foreground color
+source = "#dcd7ba"
+
+# variable assignments
+"storage" = "#957fb8"
+
+# support terms (e.g. double braces, let)
+"support" = "#9cabca"
+"keyword.operator" = "#c0a36e"
+"keyword.operator.logical.continue" = "#9cabca" # semicolon
+
+# function names
+"entity.name.function" = "#7e9cd8"
+
+# invalid tokens
+"invalid" = "#e82424"
+
+# braces
+"punctuation.section.parens" = "#7fb4ca"
+
+# brace expansions
+"meta.group.expansion.brace" = "#c0a36e"
+
+# punctuation in general
+"punctuation" = "#9cabca"
+
+# curly braces
+"punctuation.section.expansion" = "#7fb4ca"
+
+# history expansions
+"meta.group.expansion.history" = "#7fb4ca"
+
+# fallback for any token not explicitly mentioned above
+"meta" = "#7fb4ca"
+
+# dynamic items
+"dynamic" = "#6a9589"
+"dynamic.callable.alias" = "#7aa89f"
+"dynamic.callable.builtin" = "#7fb4ca"
+"dynamic.callable.missing" = "#c34043"
+"dynamic.path" = { underline = true }

@@ -177,6 +177,7 @@ impl Highlighter {
                         "Failed to parse catppuccin-mocha theme".to_string()
                     }
                     ThemeSource::Classic => "Failed to parse classic theme".to_string(),
+                    ThemeSource::Kanagawa => "Failed to parse kanagawa theme".to_string(),
                     ThemeSource::Lavender => "Failed to parse lavender theme".to_string(),
                     ThemeSource::Nord => "Failed to parse nord theme".to_string(),
                     ThemeSource::Patina => "Failed to parse default theme".to_string(),

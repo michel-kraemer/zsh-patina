@@ -28,6 +28,7 @@ pub enum ThemeSource {
     CatppuccinMacchiato,
     CatppuccinMocha,
     Classic,
+    Kanagawa,
     Lavender,
     Nord,
     Patina,
@@ -58,6 +59,7 @@ impl<'de> Deserialize<'de> for ThemeSource {
             "catppuccin-macchiato" => Ok(ThemeSource::CatppuccinMacchiato),
             "catppuccin-mocha" => Ok(ThemeSource::CatppuccinMocha),
             "classic" => Ok(ThemeSource::Classic),
+            "kanagawa" => Ok(ThemeSource::Kanagawa),
             "lavender" => Ok(ThemeSource::Lavender),
             "nord" => Ok(ThemeSource::Nord),
             "patina" => Ok(ThemeSource::Patina),
@@ -82,6 +84,7 @@ impl Display for ThemeSource {
             ThemeSource::CatppuccinMacchiato => write!(f, "catppuccin-macchiato"),
             ThemeSource::CatppuccinMocha => write!(f, "catppuccin-mocha"),
             ThemeSource::Classic => write!(f, "classic"),
+            ThemeSource::Kanagawa => write!(f, "kanagawa"),
             ThemeSource::Lavender => write!(f, "lavender"),
             ThemeSource::Nord => write!(f, "nord"),
             ThemeSource::Patina => write!(f, "patina"),
@@ -222,6 +225,8 @@ impl Theme {
             }
             ThemeSource::Classic => toml::from_slice(include_bytes!("../themes/classic.toml"))
                 .context("Unable to load classic theme")?,
+            ThemeSource::Kanagawa => toml::from_slice(include_bytes!("../themes/kanagawa.toml"))
+                .context("Unable to load kanagawa theme")?,
             ThemeSource::Lavender => toml::from_slice(include_bytes!("../themes/lavender.toml"))
                 .context("Unable to load lavender theme")?,
             ThemeSource::Nord => toml::from_slice(include_bytes!("../themes/nord.toml"))
