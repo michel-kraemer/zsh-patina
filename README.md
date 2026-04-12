@@ -208,7 +208,7 @@ A flake is provided to make the executable the plugin requires available in `/ni
 
 ### Pre-compiled binaries (for everyone)
 
-1. Visit https://github.com/michel-kraemer/zsh-patina/releases/latest and download the appropriate archive for your system. There are binaries for Linux and macOS.
+1. Visit https://github.com/michel-kraemer/zsh-patina/releases/latest and download the appropriate archive for your system. There are binaries for Linux, macOS, and Windows (MSYS2/Cygwin).
 
 2. Extract the archive to an arbitrary directory. For example, if you want to extract it to `~/.zsh-patina`:
 
