@@ -242,7 +242,14 @@ theme = "patina"
 dynamic = true
 
 # ... or a table with the keys `callables` and `paths`.
-# dynamic = { callables = true, paths = true }
+# dynamic = { callables = true, paths = "complete" }
+#
+# Valid values for `paths` are:
+# "none"     - disable dynamic highlighting for paths
+# "partial"  - dynamically highlight paths even if only a prefix has been
+#              entered
+# "complete" - dynamically highlight paths only if they have been entered
+#              completely (default)
 
 # For performance reasons, highlighting is disabled for very long lines. This
 # option specifies the maximum length of a line (in bytes) up to which

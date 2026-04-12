@@ -15,9 +15,11 @@ use syntect::{
 
 use super::*;
 use crate::{
-    config::HighlightingConfig,
+    config::{DynamicConfigType, HighlightingConfig},
     highlighting::{
-        dynamic::{DynamicScopes, DynamicTokenGroupBuilder, DynamicType},
+        dynamic::{
+            DynamicHighlightingOptions, DynamicScopes, DynamicTokenGroupBuilder, DynamicType,
+        },
         historyexpansion::HistoryExpanded,
     },
     theme::{ScopeMapping, Theme, ThemeSource},
@@ -142,7 +144,7 @@ pub struct Highlighter {
     max_line_length: usize,
     timeout: Duration,
     dynamic_callables_enabled: bool,
-    dynamic_arguments_enabled: bool,
+    dynamic_arguments_type: DynamicConfigType,
     syntax_set: SyntaxSet,
     theme: Theme,
     scope_mapping: ScopeMapping,
@@ -219,7 +221,7 @@ impl Highlighter {
             max_line_length: config.max_line_length,
             timeout: config.timeout,
             dynamic_callables_enabled: config.dynamic.callables,
-            dynamic_arguments_enabled: config.dynamic.paths,
+            dynamic_arguments_type: config.dynamic.paths,
             syntax_set,
             theme,
             scope_mapping,
@@ -243,11 +245,17 @@ impl Highlighter {
         match dynamic_type {
             DynamicType::Unknown => true,
             DynamicType::Callable => self.dynamic_callables_enabled,
-            DynamicType::Arguments => self.dynamic_arguments_enabled,
+            DynamicType::Arguments => self.dynamic_arguments_type != DynamicConfigType::None,
         }
     }
 
-    pub fn highlight<P>(&self, command: &str, pwd: Option<&str>, predicate: P) -> Result<Vec<Span>>
+    pub fn highlight<P>(
+        &self,
+        command: &str,
+        cursor: Option<usize>,
+        pwd: Option<&str>,
+        predicate: P,
+    ) -> Result<Vec<Span>>
     where
         P: Fn(&Range<usize>) -> bool,
     {
@@ -261,6 +269,16 @@ impl Highlighter {
 
         let mut dynamic_builder = DynamicTokenGroupBuilder::new(self.dynamic_scopes);
         let mut mixins = Vec::new();
+
+        let dynamic_highlighting_options = pwd.map(|pwd| {
+            DynamicHighlightingOptions::new(
+                cursor,
+                pwd,
+                &self.home_dir,
+                &self.theme,
+                self.dynamic_arguments_type == DynamicConfigType::Partial,
+            )
+        });
 
         let mut i = 0;
         let mut byte_offset = 0;
@@ -309,13 +327,13 @@ impl Highlighter {
             }
 
             // perform dynamic highlighting
-            if (self.dynamic_callables_enabled || self.dynamic_arguments_enabled)
-                && let Some(pwd) = pwd
+            if (self.dynamic_callables_enabled
+                || self.dynamic_arguments_type != DynamicConfigType::None)
+                && let Some(dynamic_highlighting_options) = &dynamic_highlighting_options
             {
                 for g in dynamic_builder.build(&ops, byte_offset) {
                     if self.should_highlight_dynamic(&g.dynamic_type)
-                        && let Ok(group_spans) =
-                            g.highlight(command, pwd, &self.home_dir, &self.theme)
+                        && let Ok(group_spans) = g.highlight(command, dynamic_highlighting_options)
                     {
                         mixins.extend(group_spans);
                     }
@@ -326,12 +344,13 @@ impl Highlighter {
         }
 
         // perform dynamic highlighting for the remaining groups
-        if (self.dynamic_callables_enabled || self.dynamic_arguments_enabled)
-            && let Some(pwd) = pwd
+        if (self.dynamic_callables_enabled
+            || self.dynamic_arguments_type != DynamicConfigType::None)
+            && let Some(dynamic_highlighting_options) = &dynamic_highlighting_options
         {
             for g in dynamic_builder.finish(byte_offset) {
                 if self.should_highlight_dynamic(&g.dynamic_type)
-                    && let Ok(group_spans) = g.highlight(command, pwd, &self.home_dir, &self.theme)
+                    && let Ok(group_spans) = g.highlight(command, dynamic_highlighting_options)
                 {
                     mixins.extend(group_spans);
                 }
@@ -480,7 +499,7 @@ mod tests {
     impl TestCfg {
         fn highlight(&self, command: &str) -> Result<Vec<Span>> {
             self.highlighter
-                .highlight(command, Some(&self.pwd), |_| true)
+                .highlight(command, None, Some(&self.pwd), |_| true)
         }
 
         fn touch_file(&self, name: &str) -> Result<PathBuf> {
@@ -588,7 +607,7 @@ mod tests {
         let mut config = test_config();
         config.dynamic = DynamicConfig {
             callables: false,
-            paths: false,
+            paths: DynamicConfigType::None,
         };
         let mut cfg = test_cfg_with(config)?;
         cfg.touch_file("test.txt")?;
@@ -599,7 +618,7 @@ mod tests {
         let mut config = test_config();
         config.dynamic = DynamicConfig {
             callables: true,
-            paths: false,
+            paths: DynamicConfigType::None,
         };
         cfg.highlighter = HighlighterBuilder::new(&config).build()?;
 
@@ -608,7 +627,7 @@ mod tests {
 
         config.dynamic = DynamicConfig {
             callables: false,
-            paths: true,
+            paths: DynamicConfigType::default(),
         };
         cfg.highlighter = HighlighterBuilder::new(&config).build()?;
 

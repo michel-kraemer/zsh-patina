@@ -45,6 +45,32 @@ pub enum DynamicType {
     Arguments,
 }
 
+pub struct DynamicHighlightingOptions<'a> {
+    cursor: Option<usize>,
+    pwd: &'a str,
+    home_dir: &'a str,
+    theme: &'a Theme,
+    highlight_partial_paths: bool,
+}
+
+impl<'a> DynamicHighlightingOptions<'a> {
+    pub fn new(
+        cursor: Option<usize>,
+        pwd: &'a str,
+        home_dir: &'a str,
+        theme: &'a Theme,
+        highlight_partial_paths: bool,
+    ) -> Self {
+        Self {
+            cursor,
+            pwd,
+            home_dir,
+            theme,
+            highlight_partial_paths,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct DynamicTokenGroup {
     pub dynamic_type: DynamicType,
@@ -52,38 +78,30 @@ pub struct DynamicTokenGroup {
 }
 
 impl DynamicTokenGroup {
-    pub fn highlight(
-        &self,
-        line: &str,
-        pwd: &str,
-        home_dir: &str,
-        theme: &Theme,
-    ) -> Result<Vec<Span>> {
+    pub fn highlight(&self, line: &str, options: &DynamicHighlightingOptions) -> Result<Vec<Span>> {
         match self.dynamic_type {
             DynamicType::Unknown => Ok(Vec::new()), // nothing to do
-            DynamicType::Callable => self.highlight_callable(line, pwd, home_dir, theme),
-            DynamicType::Arguments => self.highlight_arguments(line, pwd, home_dir, theme),
+            DynamicType::Callable => self.highlight_callable(line, options),
+            DynamicType::Arguments => self.highlight_arguments(line, options),
         }
     }
 
     fn highlight_callable(
         &self,
         line: &str,
-        pwd: &str,
-        home_dir: &str,
-        theme: &Theme,
+        options: &DynamicHighlightingOptions,
     ) -> Result<Vec<Span>> {
         let mut result = Vec::new();
 
-        let parsed = self.parse(line, home_dir)?;
+        let parsed = self.parse(line, options.home_dir)?;
         for (p, range) in parsed.into_iter().take(1) {
             log::trace!("Dynamically highlighting callable: {p}");
-            let span_style = if p.contains('/') && is_path_executable(&p, pwd) {
+            let span_style = if p.contains('/') && is_path_executable(&p, options.pwd) {
                 log::trace!("Callable `{p}' is executable.");
-                if let Some(style) = resolve_static_style(DYNAMIC_CALLABLE_COMMAND, theme) {
+                if let Some(style) = resolve_static_style(DYNAMIC_CALLABLE_COMMAND, options.theme) {
                     Some(SpanStyle::Static(style))
                 } else {
-                    resolve_static_style(CALLABLE, theme).map(SpanStyle::Static)
+                    resolve_static_style(CALLABLE, options.theme).map(SpanStyle::Static)
                 }
             } else {
                 Some(SpanStyle::Dynamic(DynamicStyle::Callable {
@@ -106,22 +124,29 @@ impl DynamicTokenGroup {
     fn highlight_arguments(
         &self,
         line: &str,
-        pwd: &str,
-        home_dir: &str,
-        theme: &Theme,
+        options: &DynamicHighlightingOptions,
     ) -> Result<Vec<Span>> {
         let mut result = Vec::new();
 
-        let parsed = self.parse(line, home_dir)?;
+        let parsed = self.parse(line, options.home_dir)?;
         for (p, range) in parsed {
             log::trace!("Dynamically highlighting argument: {p}");
-            if let Some(t) = path_type(&p, pwd) {
+
+            // only perform highlighting of partial paths if it is enabled and
+            // if the cursor touches the prefix
+            let partial = options.highlight_partial_paths
+                && options
+                    .cursor
+                    .map(|c| (range.start..=range.end).contains(&c))
+                    .unwrap_or_default();
+
+            if let Some(t) = path_type(&p, options.pwd, partial) {
                 log::trace!("Argument `{p}' is {t:?}.");
                 let dynamic_scope = match t {
                     PathType::File => DYNAMIC_PATH_FILE,
                     PathType::Directory => DYNAMIC_PATH_DIRECTORY,
                 };
-                if let Some(style) = resolve_static_style(dynamic_scope, theme) {
+                if let Some(style) = resolve_static_style(dynamic_scope, options.theme) {
                     result.push(Span {
                         start: range.start,
                         end: range.end,
