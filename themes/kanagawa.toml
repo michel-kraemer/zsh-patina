@@ -35,6 +35,9 @@
 "keyword" = "#957fb8"
 "keyword.control.case.item" = "#9cabca"
 
+# general foreground color
+source = "#dcd7ba"
+
 # variable assignments
 "storage" = "#957fb8"
 
