@@ -19,8 +19,9 @@ Besides normal static highlighting, zsh-patina is able to dynamically detect whe
   * [Cargo (for Rust developers)](#cargo-for-rust-developers)
   * [Zinit (for Zinit users)](#zinit-for-zinit-users)
   * [`.deb` package (for Debian/Ubuntu)](#deb-package-for-debianubuntu)
-  * [AUR (for Arch Linux users)](#aur-for-arch-linux-users)
+  * [AUR (for Arch Linux)](#aur-for-arch-linux)
   * [flake.nix (for Nix users)](#flakenix-for-nix-users)
+  * [Scoop (for Windows)](#scoop-for-windows)
   * [Pre-compiled binaries (for everyone)](#pre-compiled-binaries-for-everyone)
   * [Build from source (for the brave ones)](#build-from-source-for-the-brave-ones)
 * [Configuration](#configuration)
@@ -106,7 +107,7 @@ zinit light michel-kraemer/zsh-patina
    exec zsh
    ```
 
-### AUR (for Arch Linux users)
+### AUR (for Arch Linux)
 
 1. Install zsh-patina:
 
@@ -160,6 +161,43 @@ A flake is provided to make the executable the plugin requires available in `/ni
 
    # Reference the executable direcly
    eval "$(${inputs.zsh-patina.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/zsh-patina activate)"
+   ```
+
+4. Restart your terminal, or run:
+
+   ```shell
+   exec zsh
+   ```
+
+### Scoop (for Windows)
+
+1. Install Zsh. This can be done either through [MSYS2](https://www.msys2.org/) or [Cygwin](https://cygwin.com/), which can be installed via Scoop like this:
+
+   ```shell
+   scoop bucket add main
+
+   # For MSYS2
+   scoop install main/msys2
+
+   # For Cygwin
+   scoop install main/cygwin
+   ```
+
+   Zsh can then be installed with the corresponding package manager.
+
+2. Install zsh-patina:
+
+   ```shell
+   scoop bucket add extras
+   scoop install extras/zsh-patina
+   ```
+
+   zsh-patina is automatically added to your PATH upon install.
+
+3. Initialize the plugin at the end of your `.zshrc` file:
+
+   ```shell
+   echo 'eval "$(zsh-patina activate)"' >> ~/.zshrc
    ```
 
 4. Restart your terminal, or run:
