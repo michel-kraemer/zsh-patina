@@ -218,6 +218,7 @@ impl<'de> Deserialize<'de> for DynamicConfig {
                 M: MapAccess<'de>,
             {
                 #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
                 struct Helper {
                     #[serde(default = "default_true")]
                     callables: bool,
