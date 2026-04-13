@@ -9,7 +9,7 @@ use figment::{
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use crate::{
-    commands::{check, completion, list_scopes, list_themes, tokenize},
+    commands::{check, completion, init_check_logger, list_scopes, list_themes, tokenize},
     config::{Config, config_file_path, runtime_dir},
     daemon::{activate, start_daemon, status_daemon, stop_daemon},
 };
@@ -30,7 +30,7 @@ struct Args {
     command: Command,
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, PartialEq, Eq)]
 enum Command {
     /// Initialize zsh-patina in the current shell session
     ///
@@ -106,45 +106,50 @@ enum Command {
 }
 
 fn run() -> Result<()> {
-    // initialize logger and configure custom format
-    env_logger::builder()
-        .format(|buf, record| {
-            let timestamp = buf.timestamp_micros();
-            let level = record.level();
-            let file = record.file();
-            let line = record.line();
-            let thread_id = std::thread::current().id();
-            if let Some(file) = file
-                && let Some(line) = line
-            {
-                writeln!(
-                    buf,
-                    "[{} {} {}:{} {:?}] {}",
-                    timestamp,
-                    level,
-                    file,
-                    line,
-                    thread_id,
-                    record.args()
-                )
-            } else {
-                writeln!(
-                    buf,
-                    "[{} {} {:?}] {}",
-                    timestamp,
-                    level,
-                    thread_id,
-                    record.args()
-                )
-            }
-        })
-        .init();
+    // parse arguments
+    let args = Args::parse();
+
+    // Initialize logger and configure custom format
+    if args.command == Command::Check {
+        // The check command sets its own logger
+        init_check_logger();
+    } else {
+        env_logger::builder()
+            .format(|buf, record| {
+                let timestamp = buf.timestamp_micros();
+                let level = record.level();
+                let file = record.file();
+                let line = record.line();
+                let thread_id = std::thread::current().id();
+                if let Some(file) = file
+                    && let Some(line) = line
+                {
+                    writeln!(
+                        buf,
+                        "[{} {} {}:{} {:?}] {}",
+                        timestamp,
+                        level,
+                        file,
+                        line,
+                        thread_id,
+                        record.args()
+                    )
+                } else {
+                    writeln!(
+                        buf,
+                        "[{} {} {:?}] {}",
+                        timestamp,
+                        level,
+                        thread_id,
+                        record.args()
+                    )
+                }
+            })
+            .init();
+    }
 
     let config_file_path = config_file_path()?;
     let runtime_dir = runtime_dir()?;
-
-    // parse arguments
-    let args = Args::parse();
 
     // load config file
     let config = if let Some(config_file_path) = &config_file_path {
