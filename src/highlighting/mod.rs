@@ -9,8 +9,10 @@ pub use highlighter::{Highlighter, HighlighterBuilder};
 use crate::theme::Theme;
 
 const ARGUMENTS: &str = "meta.function-call.arguments.shell";
-const DYNAMIC_PATH_DIRECTORY: &str = "dynamic.path.directory.shell";
-const DYNAMIC_PATH_FILE: &str = "dynamic.path.file.shell";
+const DYNAMIC_PATH_DIRECTORY_COMPLETE: &str = "dynamic.path.directory.complete.shell";
+const DYNAMIC_PATH_DIRECTORY_PARTIAL: &str = "dynamic.path.directory.partial.shell";
+const DYNAMIC_PATH_FILE_COMPLETE: &str = "dynamic.path.file.complete.shell";
+const DYNAMIC_PATH_FILE_PARTIAL: &str = "dynamic.path.file.partial.shell";
 
 const CALLABLE: &str = "variable.function.shell";
 const DYNAMIC_CALLABLE_ALIAS: &str = "dynamic.callable.alias.shell";

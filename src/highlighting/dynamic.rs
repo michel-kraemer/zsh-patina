@@ -140,11 +140,13 @@ impl DynamicTokenGroup {
                     .map(|c| (range.start..=range.end).contains(&c))
                     .unwrap_or_default();
 
-            if let Some(t) = path_type(&p, options.pwd, partial) {
+            if let Some((t, matched_partially)) = path_type(&p, options.pwd, partial) {
                 log::trace!("Argument `{p}' is {t:?}.");
-                let dynamic_scope = match t {
-                    PathType::File => DYNAMIC_PATH_FILE,
-                    PathType::Directory => DYNAMIC_PATH_DIRECTORY,
+                let dynamic_scope = match (t, matched_partially) {
+                    (PathType::File, true) => DYNAMIC_PATH_FILE_PARTIAL,
+                    (PathType::File, false) => DYNAMIC_PATH_FILE_COMPLETE,
+                    (PathType::Directory, true) => DYNAMIC_PATH_DIRECTORY_PARTIAL,
+                    (PathType::Directory, false) => DYNAMIC_PATH_DIRECTORY_COMPLETE,
                 };
                 if let Some(style) = resolve_static_style(dynamic_scope, options.theme) {
                     result.push(Span {

@@ -415,6 +415,13 @@ zsh-patina dynamically highlights commands, files, and directories based on whet
 "dynamic.callable.builtin" = "cyan"
 "dynamic.callable.command" = "cyan"
 "dynamic.callable.function" = "cyan"
+
+# Optional fine-grained scopes for files/directories, depending on whether
+# partial highlighting is enabled in the configuration or not
+"dynamic.path.file.complete" = { underline = true }
+"dynamic.path.file.partial" = { underline = true }
+"dynamic.path.directory.complete" = { underline = true }
+"dynamic.path.directory.partial" = { underline = true }
 ```
 
 The styles of the dynamic scopes are *mixed into* the normal styles, which means, first the normal styles are applied, and then every attribute of the dynamic style overwrites the normal style's attribute with the same name. For example, if `variable.function.shell` (the normal style for callables if dynamic highlighting is disabled) specifies that a callable should be highlighted in blue, and `dynamic.callable.command.shell` specifies `underline = true`, then any command that exists and can be executed will be highlighted in blue *and* underlined.
