@@ -21,3 +21,10 @@ Bash.sublime-syntax:
 * Add `select-args` context
 * Add `keyword.control.foreach.shell` and `keyword.control.end.shell` scopes
 * Add `foreach-args` context
+* Add precommand modifiers
+  * Scope `precommand.builtin.dash.shell`
+  * Scope `precommand.builtin.builtin.shell`
+  * Scope `precommand.builtin.command.shell`
+  * Scope `precommand.builtin.exec.shell`
+  * Scope `precommand.builtin.noglob.shell`
+* Add `exec-argv0` context
