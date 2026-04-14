@@ -78,18 +78,19 @@ impl DynamicTokenGroup {
         let parsed = self.parse(line, home_dir)?;
         for (p, range) in parsed.into_iter().take(1) {
             log::trace!("Dynamically highlighting callable: {p}");
-            let span_style = if p.contains('/') && is_path_executable(&p, pwd) {
-                log::trace!("Callable `{p}' is executable.");
-                if let Some(style) = resolve_static_style(DYNAMIC_CALLABLE_COMMAND, theme) {
-                    Some(SpanStyle::Static(style))
+            let span_style =
+                if p == "." || p == ".." || (p.contains('/') && is_path_executable(&p, pwd)) {
+                    log::trace!("Callable `{p}' is executable.");
+                    if let Some(style) = resolve_static_style(DYNAMIC_CALLABLE_COMMAND, theme) {
+                        Some(SpanStyle::Static(style))
+                    } else {
+                        resolve_static_style(CALLABLE, theme).map(SpanStyle::Static)
+                    }
                 } else {
-                    resolve_static_style(CALLABLE, theme).map(SpanStyle::Static)
-                }
-            } else {
-                Some(SpanStyle::Dynamic(DynamicStyle::Callable {
-                    parsed_callable: p,
-                }))
-            };
+                    Some(SpanStyle::Dynamic(DynamicStyle::Callable {
+                        parsed_callable: p,
+                    }))
+                };
 
             if let Some(span_style) = span_style {
                 result.push(Span {
