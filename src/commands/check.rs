@@ -1,8 +1,6 @@
 use std::{
-    fs::File,
-    io::{BufRead, BufReader},
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
 };
 
 use anyhow::Result;
@@ -43,33 +41,6 @@ fn print_bullet(message: &str, t: MessageType) {
 
     for l in textwrap::wrap(&message, wrap_options) {
         println!("{l}");
-    }
-}
-
-/// Gets `$ZDOTDIR` either from the environment variable or by spawning a zsh
-/// process. Returns `None` if `$ZDOTDIR` is not set or if there was an error
-/// while trying to get it.
-fn get_zdotdir() -> Result<Option<String>> {
-    if let Some(zdotdir) = std::env::var_os("ZDOTDIR")
-        && let Some(zdotdir) = zdotdir.to_str()
-    {
-        return Ok(Some(zdotdir.to_string()));
-    }
-
-    let output = Command::new("zsh").args(["-c", "echo $ZDOTDIR"]).output()?;
-
-    let val = String::from_utf8(output.stdout)?;
-    let val = val.trim().to_string();
-    Ok(if val.is_empty() { None } else { Some(val) })
-}
-
-/// Returns the path to the user's `.zshrc` file. If `$ZDOTDIR` is set, it returns
-/// `$ZDOTDIR/.zshrc`. Otherwise, it returns `~/.zshrc`.
-fn zshrc_path() -> Result<PathBuf> {
-    if let Some(zdotdir) = get_zdotdir()? {
-        Ok(PathBuf::from(zdotdir).join(".zshrc"))
-    } else {
-        Ok(PathBuf::from(shellexpand::full("~/.zshrc")?.as_ref()))
     }
 }
 
@@ -131,78 +102,127 @@ pub fn check(
 
     // check if `zsh-patina activate` is called in the zshrc file and if that
     // happens in the last line
-    match zshrc_path() {
-        Ok(ref zshrc_path) => match File::open(zshrc_path) {
-            Ok(f) => {
-                let reader = BufReader::new(f);
-                let mut activate_found = false;
-                let mut more_lines = false;
-                for l in reader.lines() {
-                    let l = l?;
-                    if l.is_empty() || l.trim().starts_with('#') {
-                        continue;
-                    } else {
-                        more_lines = true;
-                    }
-                    if l.contains("zsh-patina activate") {
-                        activate_found = true;
-                        more_lines = false;
-                    }
-                }
-                if !activate_found {
-                    print_bullet(
-                        &format!(
-                            "The string `zsh-patina activate' was not found \
-                            in your .zshrc file at {zshrc_path:?}. Please make \
-                            sure zsh-patina is activated when your shell is \
-                            started."
-                        ),
-                        MessageType::Warning,
-                    );
-                    has_warnings = true;
-                } else {
-                    if more_lines {
-                        print_bullet(
-                            &format!(
-                                "zsh-patina is not activated last in your \
-                                .zshrc file at {zshrc_path:?}. Make sure the \
-                                `zsh-patina activate' call happens at the end \
-                                of the file."
-                            ),
-                            MessageType::Warning,
-                        );
-                        has_warnings = true;
-                    } else {
-                        print_bullet(
-                            "zsh-patina is activated correctly in your \
-                            .zshrc file.",
-                            MessageType::Success,
-                        );
-                    }
-                }
-            }
-            Err(e) => {
-                print_bullet(
-                    &format!(
-                        "Failed to read {zshrc_path:?}. Unable to check if \
-                        zsh-patina is activated when the shell is started.\n\n{e}"
-                    ),
-                    MessageType::Warning,
-                );
-                has_warnings = true;
-            }
-        },
+    match Command::new("zsh")
+        .args(["-i", "-c", "typeset -f zsh-patina"])
+        .stderr(Stdio::null()) // suppress interactive shell noise
+        .output()
+    {
         Err(e) => {
             print_bullet(
                 &format!(
-                    "Failed to resolve path to .zshrc. Unable to check if \
-                    zsh-patina is activated when the shell is started.\n\n{e}"
+                    "Failed to spawn a Zsh process to check if zsh-patina is \
+                    `activated.\n\n{e}"
                 ),
                 MessageType::Warning,
             );
             has_warnings = true;
         }
+
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let function_body = stdout.trim();
+
+            if function_body.is_empty() {
+                print_bullet(
+                    "The `zsh-patina' shell function was not found in your \
+                    interactive shell session. Please make sure zsh-patina \
+                    is activated in your shell configuration.",
+                    MessageType::Error,
+                );
+                has_errors = true;
+            } else {
+                // extract the binary path from a line of the form:
+                // "/path/to/zsh-patina" "$@"
+                let extracted_path = function_body.lines().find_map(|line| {
+                    let trimmed = line.trim();
+                    let without_args = trimmed.strip_suffix("\"$@\"")?.trim_end();
+                    let inner = without_args.strip_prefix('"')?.strip_suffix('"')?;
+                    Some(PathBuf::from(inner))
+                });
+
+                match extracted_path {
+                    None => {
+                        print_bullet(
+                            "The `zsh-patina' shell function was found but its \
+                            body could not be parsed to verify the binary path.",
+                            MessageType::Warning,
+                        );
+                        has_warnings = true;
+                    }
+
+                    Some(function_path) => {
+                        let current_exe = std::env::current_exe()?;
+
+                        // Canonicalize both paths to resolve symlinks and
+                        // normalize them before comparing. If the path stored
+                        // in the function is stale, canonicalize will fail for
+                        // it while succeeding for current_exe, which we treat
+                        // as a mismatch.
+                        let fp = function_path.canonicalize().ok();
+                        let ce = current_exe.canonicalize().ok();
+
+                        if fp.is_some() && fp == ce {
+                            print_bullet(
+                                "zsh-patina is activated correctly.",
+                                MessageType::Success,
+                            );
+                        } else {
+                            print_bullet(
+                                &format!(
+                                    "The `zsh-patina' shell function points to \
+                                    `{}', but the current binary is at `{}'. \
+                                    Please re-run the activation command to \
+                                    update your shell configuration.",
+                                    function_path.to_string_lossy(),
+                                    current_exe.to_string_lossy()
+                                ),
+                                MessageType::Warning,
+                            );
+                            has_warnings = true;
+                        }
+                    }
+                }
+            }
+        }
     }
+
+    // check if the ZLE widget is registered correctly
+    match Command::new("zsh")
+        .args(["-i", "-c", "zle -l"])
+        .stderr(Stdio::null())
+        .output()
+    {
+        Err(e) => {
+            print_bullet(
+                &format!(
+                    "Failed to spawn a Zsh process to check for the \
+                    `_zsh_patina' ZLE widget.\n\n{e}"
+                ),
+                MessageType::Warning,
+            );
+            has_warnings = true;
+        }
+
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let widget_found = stdout.lines().any(|l| l.trim() == "_zsh_patina");
+
+            if widget_found {
+                print_bullet(
+                    "The ZLE widget is registered correctly.",
+                    MessageType::Success,
+                );
+            } else {
+                print_bullet(
+                    "The ZLE widget was not found in your interactive shell \
+                    session. It might have been removed by another Zsh plugin. \
+                    Please activate zsh-patina at the end of your .zshrc file.",
+                    MessageType::Error,
+                );
+                has_errors = true;
+            }
+        }
+    };
 
     println!();
     if has_errors {
