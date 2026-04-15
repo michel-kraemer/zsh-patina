@@ -7,8 +7,11 @@
 # For more details, see the README:
 # https://github.com/michel-kraemer/zsh-patina#how-to-install
 
+# this variable needs to be exported so `zsh-patina check` can find it
+export _ZSH_PATINA_PATH="<{zsh_patina_path}>"
+
 zsh-patina() {
-    "<{zsh_patina_path}>" "$@"
+    "$_ZSH_PATINA_PATH" "$@"
 }
 
 _zsh_patina_resolve_callable() {
