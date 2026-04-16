@@ -40,14 +40,18 @@ pub fn path_type(path: &str, pwd: &str) -> Option<PathType> {
 /// Check if the given path is an executable file.
 /// * If the path is relative, it is resolved against the provided `pwd`.
 /// * If the path is a directory, it is only considered executable if it
-///   contains a slash.
+///   ends with a slash or if it starts with one of '/', "./", "../".
 pub fn is_path_executable(path: &str, pwd: &str) -> bool {
     let Some(metadata) = metadata(path, pwd) else {
         return false;
     };
     let is_executable = (metadata.permissions().mode() & 0o111) != 0;
     if metadata.is_dir() {
-        is_executable && path.contains('/')
+        is_executable
+            && (path.ends_with('/')
+                || path.starts_with('/')
+                || path.starts_with("./")
+                || path.starts_with("../"))
     } else {
         is_executable
     }
@@ -139,8 +143,20 @@ mod tests {
         fs::create_dir(&sub).unwrap();
 
         let path = sub.to_str().unwrap();
-        assert!(path.contains('/'));
+        assert!(path.starts_with('/'));
         assert!(is_path_executable(path, "/"));
+
+        assert!(is_path_executable("../mydir", path));
+        assert!(!is_path_executable("../mydir2", path));
+
+        let pwd = dir.path().to_str().unwrap();
+        assert!(!is_path_executable("mydir", pwd));
+        assert!(is_path_executable("mydir/", pwd));
+        assert!(!is_path_executable("mydir2/", pwd));
+        assert!(is_path_executable("./mydir", pwd));
+        assert!(!is_path_executable("./mydir2", pwd));
+        assert!(is_path_executable("./mydir/", pwd));
+        assert!(!is_path_executable("./mydir2/", pwd));
     }
 
     #[test]
