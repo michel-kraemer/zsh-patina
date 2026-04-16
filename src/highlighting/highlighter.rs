@@ -1385,6 +1385,48 @@ mod tests {
             ]
         );
 
+        let highlighted = cfg.highlight(r"command -p -w echo")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(7, 10, PARAMETER)?,
+                cfg.dynamic_span(14, 18, "echo"),
+            ]
+        );
+
+        let highlighted = cfg.highlight(r"command -p echo file")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(7, 10, PARAMETER)?,
+                cfg.dynamic_span(11, 15, "echo"),
+            ]
+        );
+
+        let highlighted = cfg.highlight(r#"command -p echo "file""#)?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(7, 10, PARAMETER)?,
+                cfg.dynamic_span(11, 15, "echo"),
+                cfg.static_span(16, 22, STRING_QUOTED_DOUBLE)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight(r"command -p echo -V file")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(7, 10, PARAMETER)?,
+                cfg.dynamic_span(11, 15, "echo"),
+                cfg.static_span(15, 18, PARAMETER)?,
+            ]
+        );
+
         let highlighted = cfg.highlight(r"command -v echo")?;
         assert_eq!(
             highlighted,
@@ -1392,6 +1434,28 @@ mod tests {
                 cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
                 cfg.static_span(7, 10, PARAMETER)?,
                 cfg.dynamic_span(11, 15, "echo"),
+            ]
+        );
+
+        let highlighted = cfg.highlight(r"command -v echo file")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(7, 10, PARAMETER)?,
+                cfg.dynamic_span(11, 15, "echo"),
+                cfg.dynamic_span(16, 20, "file"),
+            ]
+        );
+
+        let highlighted = cfg.highlight(r#"command -v echo "file""#)?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(7, 10, PARAMETER)?,
+                cfg.dynamic_span(11, 15, "echo"),
+                cfg.dynamic_span(16, 22, "file"),
             ]
         );
 
@@ -1405,6 +1469,51 @@ mod tests {
             ]
         );
 
+        let highlighted = cfg.highlight(r"command -V echo file")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(7, 10, PARAMETER)?,
+                cfg.dynamic_span(11, 15, "echo"),
+                cfg.dynamic_span(16, 20, "file"),
+            ]
+        );
+
+        let highlighted = cfg.highlight(r"command -p -V echo file")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(7, 13, PARAMETER)?,
+                cfg.dynamic_span(14, 18, "echo"),
+                cfg.dynamic_span(19, 23, "file"),
+            ]
+        );
+
+        let highlighted = cfg.highlight(r"command -V -p echo file")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(7, 13, PARAMETER)?,
+                cfg.dynamic_span(14, 18, "echo"),
+                cfg.dynamic_span(19, 23, "file"),
+            ]
+        );
+
+        let highlighted = cfg.highlight(r"command -V echo -p file")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(7, 10, PARAMETER)?,
+                cfg.dynamic_span(11, 15, "echo"),
+                cfg.dynamic_span(16, 18, "-p"),
+                cfg.dynamic_span(19, 23, "file"),
+            ]
+        );
+
         let highlighted = cfg.highlight(r"command -pvV echo")?;
         assert_eq!(
             highlighted,
@@ -1412,6 +1521,17 @@ mod tests {
                 cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
                 cfg.static_span(7, 12, PARAMETER)?,
                 cfg.dynamic_span(13, 17, "echo"),
+            ]
+        );
+
+        let highlighted = cfg.highlight(r"command -pvV echo file")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(7, 12, PARAMETER)?,
+                cfg.dynamic_span(13, 17, "echo"),
+                cfg.dynamic_span(18, 22, "file"),
             ]
         );
 

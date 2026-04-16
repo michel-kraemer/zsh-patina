@@ -208,9 +208,12 @@ contexts:
     - match: \bcommand{{keyword_boundary_end}}
       scope: keyword.builtin.command.shell precommand.builtin.command.shell
       set:
-        - match: '{{start_of_option}}[pvV]+'
+        - match: '(?=(?:{{start_of_option}}[pvV]+)*{{start_of_option}}[pvV]*[vV])(?:{{start_of_option}}[pvV]+)+'
           scope: variable.parameter.option.shell
-        - match: '{{start_of_option}}'
+          push: command-argv
+        - match: '(?:{{start_of_option}}p+)+'
+          scope: variable.parameter.option.shell
+        - match: '{{start_of_option}}\w+'
           scope: invalid.illegal.unknown-precommand-parameter.shell
         - match: (?=\S)
           pop: true
@@ -326,14 +329,25 @@ contexts:
         - meta_scope: meta.group.foreach.shell
         - include: cmd-args-boilerplate
 
+  # `command` precommand: list of commands after `-v` or `-V`
+  command-argv:
+    - match: \s+
+    - match: (?=;|$|>|<)         # similar to {{cmd_boundary}} but without \s
+      pop: true
+    - match: (?=\S)
+      push: command-argv1
+
+  # `command` precommand: a single command
+  command-argv1:
+    - meta_content_scope: meta.function-call.shell variable.function.shell
+    - include: cmd-name-common
+    - match: (?=\s)
+      pop: true
+
+  # `exec` precommand: value of the `-a` parameter
   exec-argv0:
     - meta_content_scope: meta.function-call.arguments.shell
-    - include: string
-    - include: expansion-parameter
-    - include: expansion-arithmetic
-    - include: expansion-command
-    - include: expansion-tilde
-    - include: expansion-job
+    - include: cmd-name-common
     - match: (?=\s)
       pop: true
 

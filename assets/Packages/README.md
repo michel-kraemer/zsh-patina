@@ -1,5 +1,4 @@
-The files in this directory have been taken from the following repository and
-git tag:
+The files in this directory have been taken from the following repository and git tag:
 
     https://github.com/sublimehq/Packages/tree/v3211
 
@@ -7,24 +6,16 @@ See LICENSE file.
 
 ## Changes
 
-Some minor changes have been made to implement the Zsh syntax.
+Some minor changes have been made to the file `Bash.sublime-syntax` to implement the Zsh syntax.
 
-Bash.sublime-syntax:
+Show all commits:
 
-* `constant.character.escape.shell` scope:
-  * Added `\uNNNN` and `\UNNNNNNNN` escape sequences
-  * Limited `\xNN` escape sequence to two hex characters
-* Add `keyword.control.repeat.shell` scope
-* Add `keyword.control.flow.time.shell` scope
-* Add `keyword.control.flow.nocorrect.shell` scope
-* Add `keyword.control.select.shell` scope
-* Add `select-args` context
-* Add `keyword.control.foreach.shell` and `keyword.control.end.shell` scopes
-* Add `foreach-args` context
-* Add precommand modifiers
-  * Scope `precommand.builtin.dash.shell`
-  * Scope `precommand.builtin.builtin.shell`
-  * Scope `precommand.builtin.command.shell`
-  * Scope `precommand.builtin.exec.shell`
-  * Scope `precommand.builtin.noglob.shell`
-* Add `exec-argv0` context
+```shell
+git log -- assets/Packages/ShellScript/Bash.sublime-syntax
+```
+
+View the complete diff since the file was first committed:
+
+```shell
+FILE=assets/Packages/ShellScript/Bash.sublime-syntax; git diff $(git log --follow --format="%H" -- $FILE | tail -1)..HEAD -- $FILE
+```
