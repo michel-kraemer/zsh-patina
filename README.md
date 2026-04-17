@@ -171,21 +171,9 @@ A flake is provided to make the executable the plugin requires available in `/ni
 
 ### Scoop (for Windows)
 
-1. Install Zsh. This can be done either through [MSYS2](https://www.msys2.org/) or [Cygwin](https://cygwin.com/), which can be installed via Scoop like this:
+zsh-patina runs on Windows via [MSYS2](https://www.msys2.org/) or [Cygwin](https://cygwin.com/). Both environments provide a Unix-like terminal and allow you to run Zsh. Use the Scoop package manager to install zsh-patina as follows.
 
-   ```shell
-   scoop bucket add main
-
-   # For MSYS2
-   scoop install main/msys2
-
-   # For Cygwin
-   scoop install main/cygwin
-   ```
-
-   Zsh can then be installed with the corresponding package manager.
-
-2. Install zsh-patina:
+1. Install zsh-patina:
 
    ```shell
    scoop bucket add extras
@@ -194,13 +182,13 @@ A flake is provided to make the executable the plugin requires available in `/ni
 
    zsh-patina is automatically added to your PATH upon install.
 
-3. Initialize the plugin at the end of your `.zshrc` file:
+2. Initialize the plugin at the end of your `.zshrc` file:
 
    ```shell
    echo 'eval "$(zsh-patina activate)"' >> ~/.zshrc
    ```
 
-4. Restart your terminal, or run:
+3. Restart your terminal, or run:
 
    ```shell
    exec zsh
