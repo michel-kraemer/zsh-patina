@@ -2,6 +2,29 @@
 
 _Note: This project follows [Semantic Versioning]._
 
+## [1.5.0] - 2026-04-18
+
+**New features**
+
+- Add kanagawa theme (contributed by @antinomie8 🥳)
+- Add install instructions for the Scoop package manager on Windows (contributed by @marovira 🎊)
+- Add support for dynamic highlighting of partial paths. This feature is disabled by default and can be activated in zsh-patina's [configuration].
+- Add the possibility to highlight partial paths differently than complete ones
+- Add highlighting of the built-in precommands `-`, `builtin`, `command`, `exec`, and `noglob`
+- Deny unknown fields for the configuration of dynamic highlighting
+- Check if zsh-patina is active in the current shell session
+- Display more detailed warnings in the check command
+
+**Bug fixes**
+
+- Dynamically highlight directories ending with `/` or starting with `/`, `./`, `../` for consistency. This is similar to how the fish shell highlights directories.
+- Always highlight `..` as callable for consistency. This is similar to how `.` is highlighted.
+
+**Maintenance**
+
+- Add CHANGELOG.md
+- Deprecate scopes `dynamic.path.file.shell` and `dynamic.path.directory.shell`. Use `dynamic.path.file.partial`, `dynamic.path.file.complete` and `dynamic.path.directory.partial`, `dynamic.path.directory.complete` instead, or simply `dynamic.path.file` and `dynamic.path.directory`.
+
 ## [1.4.0] - 2026-04-11
 
 **New features**
@@ -99,6 +122,7 @@ _Note: This project follows [Semantic Versioning]._
 
 _First release._
 
+[1.5.0]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.5.0
 [1.4.0]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.4.0
 [1.3.1]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.3.1
 [1.3.0]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.3.0
@@ -107,6 +131,7 @@ _First release._
 [1.0.0]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.0.0
 [#10]: https://github.com/michel-kraemer/zsh-patina/issues/10
 [Catppuccin]: https://catppuccin.com/
+[configuration]: https://github.com/michel-kraemer/zsh-patina#configuration
 [Cygwin]: https://cygwin.com/
 [fsh-default-theme]: https://github.com/zdharma-continuum/fast-syntax-highlighting/blob/master/themes/default.ini
 [MSYS2]: https://www.msys2.org/
