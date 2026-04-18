@@ -200,6 +200,37 @@ contexts:
     - match: \bend{{keyword_boundary_end}}
       scope: keyword.control.end.shell
       set: [cmd-post, cmd-args]
+    # precommand modifiers (see https://linux.die.net/man/1/zshmisc)
+    - match: (?<!\w)-{{keyword_boundary_end}}
+      scope: keyword.builtin.dash.shell precommand.builtin.dash.shell
+    - match: \bbuiltin{{keyword_boundary_end}}
+      scope: keyword.builtin.builtin.shell precommand.builtin.builtin.shell
+    - match: \bcommand{{keyword_boundary_end}}
+      scope: keyword.builtin.command.shell precommand.builtin.command.shell
+      set:
+        - match: '(?=(?:{{start_of_option}}[pvV]+)*{{start_of_option}}[pvV]*[vV])(?:{{start_of_option}}[pvV]+)+'
+          scope: variable.parameter.option.shell
+          push: command-argv
+        - match: '(?:{{start_of_option}}p+)+'
+          scope: variable.parameter.option.shell
+        - match: '{{start_of_option}}\w+'
+          scope: invalid.illegal.unknown-precommand-parameter.shell
+        - match: (?=\S)
+          pop: true
+    - match: \bexec{{keyword_boundary_end}}
+      scope: keyword.builtin.exec.shell precommand.builtin.exec.shell
+      set:
+        - match: '{{start_of_option}}[cl]*a\s*'
+          scope: variable.parameter.option.shell
+          push: exec-argv0
+        - match: '{{start_of_option}}[cl]+'
+          scope: variable.parameter.option.shell
+        - match: '{{start_of_option}}\w+'
+          scope: invalid.illegal.unknown-precommand-parameter.shell
+        - match: (?=\S)
+          pop: true
+    - match: \bnoglob{{keyword_boundary_end}}
+      scope: keyword.builtin.noglob.shell precommand.builtin.noglob.shell
 
   case-preamble:
     - match: \bin(?=[^\w_-])
@@ -297,6 +328,28 @@ contexts:
       set:
         - meta_scope: meta.group.foreach.shell
         - include: cmd-args-boilerplate
+
+  # `command` precommand: list of commands after `-v` or `-V`
+  command-argv:
+    - match: \s+
+    - match: (?=;|$|>|<)         # similar to {{cmd_boundary}} but without \s
+      pop: true
+    - match: (?=\S)
+      push: command-argv1
+
+  # `command` precommand: a single command
+  command-argv1:
+    - meta_content_scope: meta.function-call.shell variable.function.shell
+    - include: cmd-name-common
+    - match: (?=\s)
+      pop: true
+
+  # `exec` precommand: value of the `-a` parameter
+  exec-argv0:
+    - meta_content_scope: meta.function-call.arguments.shell
+    - include: cmd-name-common
+    - match: (?=\s)
+      pop: true
 
   expansion-and-string:
     - include: string

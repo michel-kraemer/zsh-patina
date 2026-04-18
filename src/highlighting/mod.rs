@@ -39,6 +39,16 @@ const REDIRECTION: &str = "keyword.operator.assignment.redirection.shell";
 #[cfg(test)]
 const COMMENT: &str = "comment.line.number-sign.shell";
 #[cfg(test)]
+const KEYWORD_BUILTIN_BUILTIN: &str = "keyword.builtin.builtin.shell";
+#[cfg(test)]
+const KEYWORD_BUILTIN_COMMAND: &str = "keyword.builtin.command.shell";
+#[cfg(test)]
+const KEYWORD_BUILTIN_DASH: &str = "keyword.builtin.dash.shell";
+#[cfg(test)]
+const KEYWORD_BUILTIN_EXEC: &str = "keyword.builtin.exec.shell";
+#[cfg(test)]
+const KEYWORD_BUILTIN_NOGLOB: &str = "keyword.builtin.noglob.shell";
+#[cfg(test)]
 const CONTROL_BREAK: &str = "keyword.control.break.shell";
 #[cfg(test)]
 const CONTROL_CASE: &str = "keyword.control.case.shell";
@@ -72,6 +82,8 @@ const OPERATOR_ARITHMETIC: &str = "keyword.operator.arithmetic.shell";
 const OPERATOR_LOGICAL_AND: &str = "keyword.operator.logical.and.shell";
 #[cfg(test)]
 const OPERATOR_LOGICAL_CONTINUE: &str = "keyword.operator.logical.continue.shell";
+#[cfg(test)]
+const OPERATOR_REGEXP_QUANTIFIER: &str = "keyword.operator.regexp.quantifier.shell";
 #[cfg(test)]
 const PARAMETER: &str = "variable.parameter.option.shell";
 
