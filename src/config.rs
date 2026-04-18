@@ -99,17 +99,73 @@ impl Default for HighlightingConfig {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Default, Debug)]
+pub enum DynamicConfigType {
+    /// Disable dynamic highlighting for paths
+    None,
+
+    /// Dynamically highlight paths even if only a prefix has been entered
+    Partial,
+
+    /// Dynamically highlight paths only if they have been entered completely
+    #[default]
+    Complete,
+}
+
+impl<'de> Deserialize<'de> for DynamicConfigType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct DynamicConfigTypeVisitor;
+
+        impl<'de> Visitor<'de> for DynamicConfigTypeVisitor {
+            type Value = DynamicConfigType;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str(r#"a string with value "none", "partial", "complete""#)
+            }
+
+            fn visit_bool<E>(self, v: bool) -> Result<DynamicConfigType, E> {
+                Ok(if v {
+                    DynamicConfigType::default()
+                } else {
+                    DynamicConfigType::None
+                })
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match v {
+                    "none" => Ok(DynamicConfigType::None),
+                    "partial" => Ok(DynamicConfigType::Partial),
+                    "complete" => Ok(DynamicConfigType::Complete),
+                    "true" => Ok(DynamicConfigType::default()),
+                    "false" => Ok(DynamicConfigType::None),
+                    _ => Err(E::custom(format!(
+                        r#"Invalid value: `{v}'. Expected one of "none", "partial", "complete""#,
+                    ))),
+                }
+            }
+        }
+
+        deserializer.deserialize_any(DynamicConfigTypeVisitor)
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct DynamicConfig {
     pub callables: bool,
-    pub paths: bool,
+    pub paths: DynamicConfigType,
 }
 
 impl Default for DynamicConfig {
     fn default() -> Self {
         Self {
             callables: true,
-            paths: true,
+            paths: DynamicConfigType::default(),
         }
     }
 }
@@ -119,7 +175,9 @@ impl Serialize for DynamicConfig {
     where
         S: Serializer,
     {
-        if self.callables == self.paths {
+        if (self.callables && self.paths == DynamicConfigType::default())
+            || (!self.callables && self.paths == DynamicConfigType::None)
+        {
             serializer.serialize_bool(self.callables)
         } else {
             let mut map = serializer.serialize_map(Some(2))?;
@@ -147,7 +205,11 @@ impl<'de> Deserialize<'de> for DynamicConfig {
             fn visit_bool<E>(self, v: bool) -> Result<DynamicConfig, E> {
                 Ok(DynamicConfig {
                     callables: v,
-                    paths: v,
+                    paths: if v {
+                        DynamicConfigType::default()
+                    } else {
+                        DynamicConfigType::None
+                    },
                 })
             }
 
@@ -156,11 +218,12 @@ impl<'de> Deserialize<'de> for DynamicConfig {
                 M: MapAccess<'de>,
             {
                 #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
                 struct Helper {
                     #[serde(default = "default_true")]
                     callables: bool,
-                    #[serde(default = "default_true")]
-                    paths: bool,
+                    #[serde(default)]
+                    paths: DynamicConfigType,
                 }
 
                 fn default_true() -> bool {

@@ -15,9 +15,11 @@ use syntect::{
 
 use super::*;
 use crate::{
-    config::HighlightingConfig,
+    config::{DynamicConfigType, HighlightingConfig},
     highlighting::{
-        dynamic::{DynamicScopes, DynamicTokenGroupBuilder, DynamicType},
+        dynamic::{
+            DynamicHighlightingOptions, DynamicScopes, DynamicTokenGroupBuilder, DynamicType,
+        },
         historyexpansion::HistoryExpanded,
     },
     theme::{ScopeMapping, Theme, ThemeSource},
@@ -142,7 +144,7 @@ pub struct Highlighter {
     max_line_length: usize,
     timeout: Duration,
     dynamic_callables_enabled: bool,
-    dynamic_arguments_enabled: bool,
+    dynamic_arguments_type: DynamicConfigType,
     syntax_set: SyntaxSet,
     theme: Theme,
     scope_mapping: ScopeMapping,
@@ -219,7 +221,7 @@ impl Highlighter {
             max_line_length: config.max_line_length,
             timeout: config.timeout,
             dynamic_callables_enabled: config.dynamic.callables,
-            dynamic_arguments_enabled: config.dynamic.paths,
+            dynamic_arguments_type: config.dynamic.paths,
             syntax_set,
             theme,
             scope_mapping,
@@ -243,11 +245,17 @@ impl Highlighter {
         match dynamic_type {
             DynamicType::Unknown => true,
             DynamicType::Callable => self.dynamic_callables_enabled,
-            DynamicType::Arguments => self.dynamic_arguments_enabled,
+            DynamicType::Arguments => self.dynamic_arguments_type != DynamicConfigType::None,
         }
     }
 
-    pub fn highlight<P>(&self, command: &str, pwd: Option<&str>, predicate: P) -> Result<Vec<Span>>
+    pub fn highlight<P>(
+        &self,
+        command: &str,
+        cursor: Option<usize>,
+        pwd: Option<&str>,
+        predicate: P,
+    ) -> Result<Vec<Span>>
     where
         P: Fn(&Range<usize>) -> bool,
     {
@@ -261,6 +269,16 @@ impl Highlighter {
 
         let mut dynamic_builder = DynamicTokenGroupBuilder::new(self.dynamic_scopes);
         let mut mixins = Vec::new();
+
+        let dynamic_highlighting_options = pwd.map(|pwd| {
+            DynamicHighlightingOptions::new(
+                cursor,
+                pwd,
+                &self.home_dir,
+                &self.theme,
+                self.dynamic_arguments_type == DynamicConfigType::Partial,
+            )
+        });
 
         let mut i = 0;
         let mut byte_offset = 0;
@@ -309,13 +327,13 @@ impl Highlighter {
             }
 
             // perform dynamic highlighting
-            if (self.dynamic_callables_enabled || self.dynamic_arguments_enabled)
-                && let Some(pwd) = pwd
+            if (self.dynamic_callables_enabled
+                || self.dynamic_arguments_type != DynamicConfigType::None)
+                && let Some(dynamic_highlighting_options) = &dynamic_highlighting_options
             {
                 for g in dynamic_builder.build(&ops, byte_offset) {
                     if self.should_highlight_dynamic(&g.dynamic_type)
-                        && let Ok(group_spans) =
-                            g.highlight(command, pwd, &self.home_dir, &self.theme)
+                        && let Ok(group_spans) = g.highlight(command, dynamic_highlighting_options)
                     {
                         mixins.extend(group_spans);
                     }
@@ -326,12 +344,13 @@ impl Highlighter {
         }
 
         // perform dynamic highlighting for the remaining groups
-        if (self.dynamic_callables_enabled || self.dynamic_arguments_enabled)
-            && let Some(pwd) = pwd
+        if (self.dynamic_callables_enabled
+            || self.dynamic_arguments_type != DynamicConfigType::None)
+            && let Some(dynamic_highlighting_options) = &dynamic_highlighting_options
         {
             for g in dynamic_builder.finish(byte_offset) {
                 if self.should_highlight_dynamic(&g.dynamic_type)
-                    && let Ok(group_spans) = g.highlight(command, pwd, &self.home_dir, &self.theme)
+                    && let Ok(group_spans) = g.highlight(command, dynamic_highlighting_options)
                 {
                     mixins.extend(group_spans);
                 }
@@ -480,7 +499,7 @@ mod tests {
     impl TestCfg {
         fn highlight(&self, command: &str) -> Result<Vec<Span>> {
             self.highlighter
-                .highlight(command, Some(&self.pwd), |_| true)
+                .highlight(command, None, Some(&self.pwd), |_| true)
         }
 
         fn touch_file(&self, name: &str) -> Result<PathBuf> {
@@ -576,8 +595,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 3, "cp🐑"),
-                cfg.mixed_span(4, 15, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
-                cfg.static_span(16, 17, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(4, 15, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(16, 17, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
         Ok(())
@@ -588,7 +607,7 @@ mod tests {
         let mut config = test_config();
         config.dynamic = DynamicConfig {
             callables: false,
-            paths: false,
+            paths: DynamicConfigType::None,
         };
         let mut cfg = test_cfg_with(config)?;
         cfg.touch_file("test.txt")?;
@@ -599,7 +618,7 @@ mod tests {
         let mut config = test_config();
         config.dynamic = DynamicConfig {
             callables: true,
-            paths: false,
+            paths: DynamicConfigType::None,
         };
         cfg.highlighter = HighlighterBuilder::new(&config).build()?;
 
@@ -608,7 +627,7 @@ mod tests {
 
         config.dynamic = DynamicConfig {
             callables: false,
-            paths: true,
+            paths: DynamicConfigType::default(),
         };
         cfg.highlighter = HighlighterBuilder::new(&config).build()?;
 
@@ -617,7 +636,7 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 2, CALLABLE)?,
-                cfg.static_span(3, 11, DYNAMIC_PATH_FILE)?
+                cfg.static_span(3, 11, DYNAMIC_PATH_FILE_COMPLETE)?
             ]
         );
 
@@ -636,7 +655,7 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(3, 11, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(3, 11, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -645,7 +664,7 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.mixed_span(3, 13, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(3, 13, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -654,7 +673,7 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.mixed_span(5, 15, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(5, 15, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
                 cfg.static_span(18, 28, STRING_QUOTED_DOUBLE)?,
             ]
         );
@@ -674,9 +693,9 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(3, 5, DYNAMIC_PATH_FILE)?,
-                cfg.mixed_span(5, 12, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
-                cfg.static_span(12, 13, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(3, 5, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(5, 12, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(12, 13, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -685,7 +704,7 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.mixed_span(3, 15, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(3, 15, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -694,9 +713,9 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(3, 7, DYNAMIC_PATH_FILE)?,
-                cfg.mixed_span(7, 9, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE)?,
-                cfg.static_span(9, 14, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(3, 7, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(7, 9, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(9, 14, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -705,7 +724,7 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.mixed_span(3, 13, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(3, 13, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -714,7 +733,7 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.mixed_span(3, 14, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(3, 14, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -734,8 +753,58 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(3, 11, DYNAMIC_PATH_FILE)?,
-                cfg.static_span(12, 16, DYNAMIC_PATH_DIRECTORY)?,
+                cfg.static_span(3, 11, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(12, 16, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn argument_is_partial_file() -> Result<()> {
+        let mut config = test_config();
+        config.dynamic = DynamicConfig {
+            callables: true,
+            paths: DynamicConfigType::Partial,
+        };
+        let cfg = test_cfg_with(config)?;
+        cfg.touch_file("test.txt")?;
+
+        let highlighted = cfg
+            .highlighter
+            .highlight("ls te", Some(5), Some(&cfg.pwd), |_| true)?;
+
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 2, "ls"),
+                cfg.static_span(3, 5, DYNAMIC_PATH_FILE_PARTIAL)?,
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn argument_is_partial_directory() -> Result<()> {
+        let mut config = test_config();
+        config.dynamic = DynamicConfig {
+            callables: true,
+            paths: DynamicConfigType::Partial,
+        };
+        let cfg = test_cfg_with(config)?;
+        cfg.create_dir("dest")?;
+
+        let highlighted = cfg
+            .highlighter
+            .highlight("rm de", Some(5), Some(&cfg.pwd), |_| true)?;
+
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 2, "rm"),
+                cfg.static_span(3, 5, DYNAMIC_PATH_DIRECTORY_PARTIAL)?,
             ]
         );
 
@@ -788,7 +857,7 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "ls"),
-                cfg.mixed_span(3, 4, TILDE_VARIABLE, DYNAMIC_PATH_DIRECTORY)?,
+                cfg.mixed_span(3, 4, TILDE_VARIABLE, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
             ]
         );
 
@@ -797,8 +866,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "ls"),
-                cfg.mixed_span(3, 4, TILDE_VARIABLE, DYNAMIC_PATH_DIRECTORY)?,
-                cfg.static_span(4, 5, DYNAMIC_PATH_DIRECTORY)?,
+                cfg.mixed_span(3, 4, TILDE_VARIABLE, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+                cfg.static_span(4, 5, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
             ]
         );
 
@@ -807,9 +876,9 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "ls"),
-                cfg.mixed_span(3, 4, TILDE_VARIABLE, DYNAMIC_PATH_DIRECTORY)?,
-                cfg.static_span(4, 5, DYNAMIC_PATH_DIRECTORY)?,
-                cfg.static_span(6, 14, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(3, 4, TILDE_VARIABLE, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+                cfg.static_span(4, 5, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+                cfg.static_span(6, 14, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -871,7 +940,7 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 3, "foo"),
-                cfg.static_span(4, 12, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(4, 12, DYNAMIC_PATH_FILE_COMPLETE)?,
                 cfg.static_span(12, 15, PARAMETER)?,
             ]
         );
@@ -935,7 +1004,7 @@ mod tests {
             vec![
                 cfg.dynamic_span(0, 4, "echo"),
                 cfg.static_span(11, 12, REDIRECTION)?,
-                cfg.static_span(13, 21, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(13, 21, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -945,7 +1014,7 @@ mod tests {
             vec![
                 cfg.dynamic_span(0, 4, "echo"),
                 cfg.static_span(10, 11, REDIRECTION)?,
-                cfg.static_span(11, 19, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(11, 19, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -956,7 +1025,7 @@ mod tests {
                 cfg.dynamic_span(0, 4, "echo"),
                 cfg.static_span(5, 11, ENVIRONMENT_VARIABLE)?,
                 cfg.static_span(16, 17, REDIRECTION)?,
-                cfg.static_span(17, 25, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(17, 25, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -967,7 +1036,7 @@ mod tests {
                 cfg.dynamic_span(0, 4, "echo"),
                 cfg.static_span(10, 14, ENVIRONMENT_VARIABLE)?,
                 cfg.static_span(14, 15, REDIRECTION)?,
-                cfg.static_span(15, 23, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(15, 23, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -1029,8 +1098,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 5, "touch"),
-                cfg.mixed_span(6, 8, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE)?,
-                cfg.static_span(8, 15, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(6, 8, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(8, 15, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -1057,9 +1126,9 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(3, 7, DYNAMIC_PATH_FILE)?,
-                cfg.mixed_span(7, 9, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE)?,
-                cfg.static_span(9, 17, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(3, 7, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(7, 9, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(9, 17, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -1104,9 +1173,9 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.mixed_span(3, 9, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
-                cfg.mixed_span(9, 15, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE)?,
-                cfg.mixed_span(15, 20, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(3, 9, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(9, 15, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(15, 20, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -1115,9 +1184,9 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(3, 7, DYNAMIC_PATH_FILE)?,
-                cfg.mixed_span(7, 11, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE)?,
-                cfg.static_span(11, 16, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(3, 7, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(7, 11, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(11, 16, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -1144,9 +1213,9 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.mixed_span(3, 9, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
-                cfg.mixed_span(9, 17, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE)?,
-                cfg.mixed_span(17, 23, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(3, 9, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(9, 17, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(17, 23, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -1155,11 +1224,11 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(3, 7, DYNAMIC_PATH_FILE)?,
-                cfg.mixed_span(7, 9, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
-                cfg.mixed_span(9, 17, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE)?,
-                cfg.mixed_span(17, 18, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
-                cfg.static_span(18, 23, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(3, 7, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(7, 9, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(9, 17, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(17, 18, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(18, 23, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -1199,9 +1268,9 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.mixed_span(3, 9, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
-                cfg.mixed_span(9, 25, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE)?,
-                cfg.mixed_span(25, 30, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(3, 9, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(9, 25, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(25, 30, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -1210,9 +1279,9 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.mixed_span(3, 9, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
-                cfg.mixed_span(9, 25, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE)?,
-                cfg.mixed_span(25, 30, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE)?,
+                cfg.mixed_span(3, 9, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(9, 25, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(25, 30, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -1235,7 +1304,7 @@ mod tests {
                 cfg.static_span(14, 51, STRING_QUOTED_DOUBLE)?,
                 cfg.static_span(52, 54, OPERATOR_LOGICAL_AND)?,
                 cfg.dynamic_span(55, 60, "touch"),
-                cfg.static_span(61, 69, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(61, 69, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -1263,7 +1332,7 @@ mod tests {
             vec![
                 cfg.dynamic_span(0, 2, "ls"),
                 cfg.static_span(3, 12, ENVIRONMENT_VARIABLE)?,
-                cfg.static_span(21, 29, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(21, 29, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -1273,7 +1342,7 @@ mod tests {
             vec![
                 cfg.dynamic_span(0, 2, "ls"),
                 cfg.static_span(11, 20, ENVIRONMENT_VARIABLE)?,
-                cfg.static_span(29, 37, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(29, 37, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -1306,7 +1375,7 @@ mod tests {
                 cfg.dynamic_span(0, 2, "ls"),
                 cfg.static_span(11, 13, ENVIRONMENT_VARIABLE)?,
                 cfg.dynamic_span(13, 17, "echo"),
-                cfg.static_span(18, 24, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(18, 24, DYNAMIC_PATH_FILE_COMPLETE)?,
                 cfg.static_span(24, 25, ENVIRONMENT_VARIABLE)?,
             ]
         );
@@ -1318,12 +1387,12 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(3, 11, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(3, 11, DYNAMIC_PATH_FILE_COMPLETE)?,
                 cfg.static_span(20, 22, ENVIRONMENT_VARIABLE)?,
                 cfg.dynamic_span(22, 26, "echo"),
-                cfg.static_span(27, 33, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(27, 33, DYNAMIC_PATH_FILE_COMPLETE)?,
                 cfg.static_span(33, 34, ENVIRONMENT_VARIABLE)?,
-                cfg.static_span(35, 44, DYNAMIC_PATH_FILE)?,
+                cfg.static_span(35, 44, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 

@@ -56,8 +56,10 @@ fn main() -> Result<()> {
     let mut scopes = scopes.into_iter().collect::<Vec<_>>();
 
     // add dynamic scopes
-    scopes.push("dynamic.path.directory.shell".to_string());
-    scopes.push("dynamic.path.file.shell".to_string());
+    scopes.push("dynamic.path.directory.complete.shell".to_string());
+    scopes.push("dynamic.path.directory.partial.shell".to_string());
+    scopes.push("dynamic.path.file.complete.shell".to_string());
+    scopes.push("dynamic.path.file.partial.shell".to_string());
     scopes.push("dynamic.callable.alias.shell".to_string());
     scopes.push("dynamic.callable.builtin.shell".to_string());
     scopes.push("dynamic.callable.command.shell".to_string());

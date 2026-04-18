@@ -1,13 +1,61 @@
 use std::{
     fs::{self, Metadata},
     os::unix::fs::PermissionsExt,
-    path::Path,
+    path::{Component, Path},
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum PathType {
     File,
     Directory,
+}
+
+/// Find a file or directory that starts with the given prefix and return its
+/// metadata.
+/// * If the prefix is relative, it is resolved against the provided `pwd`.
+/// * If multiple files or directories match the prefix, the function returns
+///   the first one returned by `read_dir`, which is not guaranteed to be in any
+///   particular order.
+/// * If the prefix does not match any file or directory, or if the user lacks
+///   permission to access it, the function returns `None`.
+fn find_by_prefix(prefix: &str, pwd: &str) -> Option<(Metadata, bool)> {
+    let path = Path::new(prefix);
+    let path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        Path::new(pwd).join(path)
+    };
+
+    let mut comps = path.components();
+    let last = comps.next_back()?;
+    let (parent, name) = match last {
+        Component::CurDir => return metadata(comps.as_path().to_str()?, pwd).map(|m| (m, false)),
+        Component::ParentDir => {
+            return metadata(comps.as_path().parent()?.to_str()?, pwd).map(|m| (m, false));
+        }
+        Component::Normal(name) => (comps.as_path(), name),
+        _ => return None,
+    };
+
+    for entry in parent.read_dir().ok()? {
+        let Ok(entry) = entry else {
+            continue;
+        };
+        if entry
+            .file_name()
+            .as_encoded_bytes()
+            .starts_with(name.as_encoded_bytes())
+        {
+            return entry.metadata().ok().map(|m| {
+                (
+                    m,
+                    entry.file_name().as_encoded_bytes() != name.as_encoded_bytes(),
+                )
+            });
+        }
+    }
+
+    None
 }
 
 /// Get the metadata of the given path
@@ -25,15 +73,26 @@ fn metadata(path: &str, pwd: &str) -> Option<Metadata> {
 }
 
 /// Get the type of the given path (file or directory).
+///
 /// * If the path is relative, it is resolved against the provided `pwd`.
+/// * If `partial` is `true`, the function will attempt to find a file or
+///   directory that starts with the given path.
 /// * If the path does not exist or the user lacks permission to access it, the
 ///   function returns `None`.
-pub fn path_type(path: &str, pwd: &str) -> Option<PathType> {
-    let metadata = metadata(path, pwd)?;
-    Some(if metadata.is_dir() {
-        PathType::Directory
+///
+/// Returns a tuple of the path type and a boolean indicating whether the path
+/// was matched partially (i.e. if `partial` is `true` and the path was found by
+/// prefix).
+pub fn path_type(path: &str, pwd: &str, partial: bool) -> Option<(PathType, bool)> {
+    let (metadata, matched_partially) = if partial && !path.ends_with('/') {
+        find_by_prefix(path, pwd)?
     } else {
-        PathType::File
+        (metadata(path, pwd)?, false)
+    };
+    Some(if metadata.is_dir() {
+        (PathType::Directory, matched_partially)
+    } else {
+        (PathType::File, matched_partially)
     })
 }
 
@@ -99,8 +158,8 @@ mod tests {
         fs::write(&file_path, "content").unwrap();
 
         assert_eq!(
-            path_type(file_path.to_str().unwrap(), "/"),
-            Some(PathType::File)
+            path_type(file_path.to_str().unwrap(), "/", false),
+            Some((PathType::File, false))
         );
     }
 
@@ -111,8 +170,70 @@ mod tests {
         fs::create_dir(&sub).unwrap();
 
         assert_eq!(
-            path_type(sub.to_str().unwrap(), "/"),
-            Some(PathType::Directory)
+            path_type(sub.to_str().unwrap(), "/", false),
+            Some((PathType::Directory, false))
+        );
+    }
+
+    #[test]
+    fn path_type_file_partial() {
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("afile");
+        fs::write(&file_path, "content").unwrap();
+
+        assert_eq!(path_type("afi", dir.path().to_str().unwrap(), false), None);
+        assert_eq!(
+            path_type("afile/", dir.path().to_str().unwrap(), false),
+            None
+        );
+
+        assert_eq!(
+            path_type("afi", dir.path().to_str().unwrap(), true),
+            Some((PathType::File, true))
+        );
+        assert_eq!(
+            path_type("afile", dir.path().to_str().unwrap(), true),
+            Some((PathType::File, false))
+        );
+
+        let sub = dir.path().join("subdir");
+        fs::create_dir(&sub).unwrap();
+
+        assert_eq!(
+            path_type("../afi", sub.to_str().unwrap(), true),
+            Some((PathType::File, true))
+        );
+    }
+
+    #[test]
+    fn path_type_directory_partial() {
+        let dir = tempfile::tempdir().unwrap();
+        let sub = dir.path().join("subdir");
+        fs::create_dir(&sub).unwrap();
+
+        assert_eq!(path_type("sub", dir.path().to_str().unwrap(), false), None);
+
+        assert_eq!(
+            path_type("sub", dir.path().to_str().unwrap(), true),
+            Some((PathType::Directory, true))
+        );
+
+        assert_eq!(
+            path_type("subdir", dir.path().to_str().unwrap(), true),
+            Some((PathType::Directory, false))
+        );
+        assert_eq!(
+            path_type("subdir/", dir.path().to_str().unwrap(), true),
+            Some((PathType::Directory, false))
+        );
+
+        assert_eq!(
+            path_type(".", sub.to_str().unwrap(), true),
+            Some((PathType::Directory, false))
+        );
+        assert_eq!(
+            path_type("..", sub.to_str().unwrap(), true),
+            Some((PathType::Directory, false))
         );
     }
 

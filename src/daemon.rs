@@ -356,7 +356,7 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
         // multi-byte characters
         let line_len = line.chars().count();
 
-        // determine in which line we are currently
+        // determine in which line we are currently (line_len contains trailing \n)
         if (total_len..total_len + line_len).contains(&cursor) {
             cursor_line = i;
             cursor_line_found = true;
@@ -410,19 +410,24 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
         .min(cursor.saturating_add(term_cols * term_rows));
 
     // perform highlighting
-    let result = highlighter.highlight(&lines, pwd.as_deref(), |range| {
-        // skip spans in the pre-buffer
-        if range.end <= pre_buffer_total_len {
-            return false;
-        }
+    let result = highlighter.highlight(
+        &lines,
+        Some(pre_buffer_total_len + cursor),
+        pwd.as_deref(),
+        |range| {
+            // skip spans in the pre-buffer
+            if range.end <= pre_buffer_total_len {
+                return false;
+            }
 
-        // subtract pre-buffer offset
-        let start = range.start.saturating_sub(pre_buffer_total_len);
-        let end = range.end.saturating_sub(pre_buffer_total_len);
+            // subtract pre-buffer offset
+            let start = range.start.saturating_sub(pre_buffer_total_len);
+            let end = range.end.saturating_sub(pre_buffer_total_len);
 
-        // skip spans outside the current terminal window
-        start < max && end > min
-    })?;
+            // skip spans outside the current terminal window
+            start < max && end > min
+        },
+    )?;
 
     // merge consecutive spans with the same style
     let mut merged: Vec<Span> = Vec::new();
@@ -698,7 +703,7 @@ fn start_daemon_internal(
     // background task to not delay the main thread
     let init_highlighter = Arc::clone(&highlighter);
     pool.spawn(move || {
-        let _ = init_highlighter.highlight("echo Welcome to zsh-patina!", None, |_| true);
+        let _ = init_highlighter.highlight("echo Welcome to zsh-patina!", None, None, |_| true);
     });
 
     // bind the Unix domain socket

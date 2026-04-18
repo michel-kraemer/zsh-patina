@@ -6,8 +6,41 @@ use std::{
 };
 
 use anyhow::Result;
+use log::{Level, LevelFilter, Metadata, Record};
 
 use crate::{config::Config, daemon::is_daemon_running, theme::Theme};
+
+static CHECK_LOGGER: CheckLogger = CheckLogger;
+
+struct CheckLogger;
+
+impl log::Log for CheckLogger {
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        metadata.level() <= Level::Info
+    }
+
+    fn log(&self, record: &Record) {
+        if self.enabled(record.metadata()) {
+            let t = match record.metadata().level() {
+                log::Level::Error => MessageType::Error,
+                log::Level::Warn => MessageType::Warning,
+                log::Level::Info => MessageType::Info,
+                _ => return,
+            };
+            print_bullet(&format!("{}", record.args()), t);
+        }
+    }
+
+    fn flush(&self) {}
+}
+
+/// Initializes the logger for the `check` command. This logger always prints to
+/// the console (regardless of any environment variable), and it uses the same
+/// format as the `check` command.
+pub fn init_check_logger() {
+    log::set_logger(&CHECK_LOGGER).unwrap();
+    log::set_max_level(LevelFilter::Info);
+}
 
 /// This function can be called at the start of the program to quickly check the
 /// configuration (e.g. when the daemon is activated). Unlike [`check`], it does

@@ -256,6 +256,32 @@ impl Theme {
             theme.scopes = merged_scopes;
         }
 
+        // rename deprecated scopes
+        if let Some(v) = theme.scopes.remove("dynamic.path.file.shell") {
+            log::warn!(
+                "The scope `dynamic.path.file.shell' is deprecated. Please use `dynamic.path.file.partial', `dynamic.path.file.complete', or simply `dynamic.path.file'. Theme source: `{source}'."
+            );
+            if theme.scopes.contains_key("dynamic.path.file") {
+                log::warn!(
+                    "The theme already contains a scope `dynamic.path.file'. `dynamic.path.file.shell' will be ignored."
+                );
+            } else {
+                theme.scopes.insert("dynamic.path.file".to_string(), v);
+            }
+        }
+        if let Some(v) = theme.scopes.remove("dynamic.path.directory.shell") {
+            log::warn!(
+                "The scope `dynamic.path.directory.shell' is deprecated. Please use `dynamic.path.directory.partial', `dynamic.path.directory.complete', or simply `dynamic.path.directory'. Theme source: `{source}'."
+            );
+            if theme.scopes.contains_key("dynamic.path.directory") {
+                log::warn!(
+                    "The theme already contains a scope `dynamic.path.directory'. `dynamic.path.directory.shell' will be ignored."
+                );
+            } else {
+                theme.scopes.insert("dynamic.path.directory".to_string(), v);
+            }
+        }
+
         Ok(theme)
     }
 
