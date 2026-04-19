@@ -8,7 +8,7 @@ use termcolor::{BufferWriter, Color as TermColor, ColorChoice, ColorSpec, WriteC
 use crate::{
     color::Color,
     config::{Config, HighlightingConfig},
-    highlighting::{Highlighter, Span, SpanStyle},
+    highlighting::{Highlighter, HighlightingRequest, Span, SpanStyle},
     theme::{Style, Theme, ThemeSource},
 };
 
@@ -120,7 +120,8 @@ where
     let highlighter = Highlighter::new(&config, home_dir.clone())?;
 
     let cmd = "gh repo fork michel-kraemer/zsh-patina --clone --remote";
-    let spans = highlighter.highlight(cmd, None, Some(&home_dir), |_| true)?;
+    let request = HighlightingRequest::default().with_pwd(home_dir.as_str());
+    let spans = highlighter.highlight(cmd, &request)?;
     print_command(cmd, &spans, highlighter.theme(), stdout)?;
 
     let zsh_patina_dir = temp_dir.path().join("zsh-patina");
@@ -130,28 +131,29 @@ where
     fs::write(patina_toml, "")?;
 
     let cmd = "cd zsh-patina";
-    let spans = highlighter.highlight(cmd, None, Some(&home_dir), |_| true)?;
+    let spans = highlighter.highlight(cmd, &request)?;
     print_command(cmd, &spans, highlighter.theme(), stdout)?;
 
     let project_dir = zsh_patina_dir.to_string_lossy().to_string();
+    let request = request.with_pwd(project_dir.as_str());
 
     let cmd = r##"while read -r line; do [[ $line =~ ^(.*=).*\"[^\"]+\"$ ]] && print "${match[1]} $(($RANDOM%255))" || print "$line"; done < themes/patina.toml > themes/random.toml"##;
-    let spans = highlighter.highlight(cmd, None, Some(&project_dir), |_| true)?;
+    let spans = highlighter.highlight(cmd, &request)?;
     print_command(cmd, &spans, highlighter.theme(), stdout)?;
 
     let random_toml = themes_dir.join("random.toml");
     fs::write(random_toml, "")?;
 
     let cmd = "git add themes/random.toml";
-    let spans = highlighter.highlight(cmd, None, Some(&project_dir), |_| true)?;
+    let spans = highlighter.highlight(cmd, &request)?;
     print_command(cmd, &spans, highlighter.theme(), stdout)?;
 
     let cmd = r#"git commit -m "🌈 Add my super duper random color theme""#;
-    let spans = highlighter.highlight(cmd, None, Some(&project_dir), |_| true)?;
+    let spans = highlighter.highlight(cmd, &request)?;
     print_command(cmd, &spans, highlighter.theme(), stdout)?;
 
     let cmd = "git push -u origin main";
-    let spans = highlighter.highlight(cmd, None, Some(&project_dir), |_| true)?;
+    let spans = highlighter.highlight(cmd, &request)?;
     print_command(cmd, &spans, highlighter.theme(), stdout)?;
 
     Ok(())

@@ -20,7 +20,10 @@ use std::{
 use crate::{
     commands::check_config,
     config::Config,
-    highlighting::{DynamicStyle, Highlighter, HighlighterBuilder, Span, SpanStyle, StaticStyle},
+    highlighting::{
+        DynamicStyle, Highlighter, HighlighterBuilder, HighlightingRequest, Span, SpanStyle,
+        StaticStyle,
+    },
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -410,11 +413,10 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
         .min(cursor.saturating_add(term_cols * term_rows));
 
     // perform highlighting
-    let result = highlighter.highlight(
-        &lines,
-        Some(pre_buffer_total_len + cursor),
-        pwd.as_deref(),
-        |range| {
+    let request = HighlightingRequest::default()
+        .with_cursor(pre_buffer_total_len + cursor)
+        .with_pwd(pwd.as_deref())
+        .with_predicate(|range| {
             // skip spans in the pre-buffer
             if range.end <= pre_buffer_total_len {
                 return false;
@@ -426,8 +428,8 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
 
             // skip spans outside the current terminal window
             start < max && end > min
-        },
-    )?;
+        });
+    let result = highlighter.highlight(&lines, &request)?;
 
     // merge consecutive spans with the same style
     let mut merged: Vec<Span> = Vec::new();
@@ -703,7 +705,10 @@ fn start_daemon_internal(
     // background task to not delay the main thread
     let init_highlighter = Arc::clone(&highlighter);
     pool.spawn(move || {
-        let _ = init_highlighter.highlight("echo Welcome to zsh-patina!", None, None, |_| true);
+        let _ = init_highlighter.highlight(
+            "echo Welcome to zsh-patina!",
+            &HighlightingRequest::default(),
+        );
     });
 
     // bind the Unix domain socket

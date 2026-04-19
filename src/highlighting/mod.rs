@@ -4,7 +4,7 @@ mod dynamic;
 mod highlighter;
 mod historyexpansion;
 
-pub use highlighter::{Highlighter, HighlighterBuilder};
+pub use highlighter::{Highlighter, HighlighterBuilder, HighlightingRequest};
 
 use crate::theme::Theme;
 

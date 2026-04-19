@@ -139,6 +139,66 @@ impl<'a> HighlighterBuilder<'a> {
     }
 }
 
+/// Options for the calling [`Highlighter::highlight`]
+pub struct HighlightingRequest<'a, P>
+where
+    P: Fn(&Range<usize>) -> bool + Copy,
+{
+    cursor: Option<usize>,
+    pwd: Option<&'a str>,
+    predicate: P,
+}
+
+impl<'a, P> HighlightingRequest<'a, P>
+where
+    P: Fn(&Range<usize>) -> bool + Copy,
+{
+    /// Set the cursor position in the command (character index)
+    pub fn with_cursor(&self, cursor: usize) -> Self {
+        Self {
+            cursor: Some(cursor),
+            ..*self
+        }
+    }
+
+    /// Set the current working directory
+    pub fn with_pwd<'b, O>(&self, pwd: O) -> HighlightingRequest<'b, P>
+    where
+        O: Into<Option<&'b str>>,
+    {
+        HighlightingRequest {
+            cursor: self.cursor,
+            pwd: pwd.into(),
+            predicate: self.predicate,
+        }
+    }
+
+    /// Set the predicate function that determines which spans should be
+    /// highlighted The predicate function takes a character index range and
+    /// returns `true` if the span within that range should be highlighted, and
+    /// `false` otherwise.
+    pub fn with_predicate<Q>(&self, predicate: Q) -> HighlightingRequest<'a, Q>
+    where
+        Q: Fn(&Range<usize>) -> bool + Copy,
+    {
+        HighlightingRequest {
+            cursor: self.cursor,
+            pwd: self.pwd,
+            predicate,
+        }
+    }
+}
+
+impl Default for HighlightingRequest<'_, fn(&Range<usize>) -> bool> {
+    fn default() -> Self {
+        Self {
+            cursor: None,
+            pwd: None,
+            predicate: |_: &Range<usize>| true,
+        }
+    }
+}
+
 pub struct Highlighter {
     home_dir: String,
     max_line_length: usize,
@@ -249,15 +309,9 @@ impl Highlighter {
         }
     }
 
-    pub fn highlight<P>(
-        &self,
-        command: &str,
-        cursor: Option<usize>,
-        pwd: Option<&str>,
-        predicate: P,
-    ) -> Result<Vec<Span>>
+    pub fn highlight<P>(&self, command: &str, request: &HighlightingRequest<P>) -> Result<Vec<Span>>
     where
-        P: Fn(&Range<usize>) -> bool,
+        P: Fn(&Range<usize>) -> bool + Copy,
     {
         let start = Instant::now();
 
@@ -270,9 +324,9 @@ impl Highlighter {
         let mut dynamic_builder = DynamicTokenGroupBuilder::new(self.dynamic_scopes);
         let mut mixins = Vec::new();
 
-        let dynamic_highlighting_options = pwd.map(|pwd| {
+        let dynamic_highlighting_options = request.pwd.map(|pwd| {
             DynamicHighlightingOptions::new(
-                cursor,
+                request.cursor,
                 pwd,
                 &self.home_dir,
                 &self.theme,
@@ -312,7 +366,7 @@ impl Highlighter {
 
                 if let Some(scope) = self.scope_mapping.decode(&r.0.foreground) {
                     let range = i..i + len;
-                    if predicate(&range)
+                    if (request.predicate)(&range)
                         && let Some(style) = resolve_static_style(scope, &self.theme)
                     {
                         result.push(Span {
@@ -363,7 +417,7 @@ impl Highlighter {
                 result,
                 mixins
                     .into_iter()
-                    .filter(|m| predicate(&(m.start..m.end)))
+                    .filter(|m| (request.predicate)(&(m.start..m.end)))
                     .collect(),
             );
         }
@@ -498,8 +552,8 @@ mod tests {
 
     impl TestCfg {
         fn highlight(&self, command: &str) -> Result<Vec<Span>> {
-            self.highlighter
-                .highlight(command, None, Some(&self.pwd), |_| true)
+            let request = HighlightingRequest::default().with_pwd(self.pwd.as_str());
+            self.highlighter.highlight(command, &request)
         }
 
         fn touch_file(&self, name: &str) -> Result<PathBuf> {
@@ -771,9 +825,10 @@ mod tests {
         let cfg = test_cfg_with(config)?;
         cfg.touch_file("test.txt")?;
 
-        let highlighted = cfg
-            .highlighter
-            .highlight("ls te", Some(5), Some(&cfg.pwd), |_| true)?;
+        let request = HighlightingRequest::default()
+            .with_cursor(5)
+            .with_pwd(cfg.pwd.as_str());
+        let highlighted = cfg.highlighter.highlight("ls te", &request)?;
 
         assert_eq!(
             highlighted,
@@ -796,9 +851,10 @@ mod tests {
         let cfg = test_cfg_with(config)?;
         cfg.create_dir("dest")?;
 
-        let highlighted = cfg
-            .highlighter
-            .highlight("rm de", Some(5), Some(&cfg.pwd), |_| true)?;
+        let request = HighlightingRequest::default()
+            .with_cursor(5)
+            .with_pwd(cfg.pwd.as_str());
+        let highlighted = cfg.highlighter.highlight("rm de", &request)?;
 
         assert_eq!(
             highlighted,
