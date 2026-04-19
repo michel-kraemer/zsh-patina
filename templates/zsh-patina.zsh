@@ -164,6 +164,10 @@ _zsh_patina() {
             header="${header} yank_active=$YANK_ACTIVE yank_start=$YANK_START yank_end=$YANK_END zle_highlight_paste=$REPLY"
         fi
 
+        if [[ ! -o banghist ]]; then
+            header="${header} banghist=0"
+        fi
+
         # send header
         print -r -- $header
 

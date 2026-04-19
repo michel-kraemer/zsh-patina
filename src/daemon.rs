@@ -206,6 +206,7 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
 
     let mut pwd = None;
     let mut cmd = None;
+    let mut history_expansions_enabled = true;
 
     let mut region_active = None;
     let mut mark = None;
@@ -264,6 +265,12 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
 
             "pwd" => pwd = Some(decode_string(value)),
             "cmd" => cmd = Some(value),
+            "banghist" => {
+                history_expansions_enabled = value
+                    .parse::<u8>()
+                    .context("Unable to parse banghist option")?
+                    > 0;
+            }
 
             "region_active" => region_active = Some(value),
             "mark" => {
@@ -416,6 +423,7 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
     let request = HighlightingRequest::default()
         .with_cursor(pre_buffer_total_len + cursor)
         .with_pwd(pwd.as_deref())
+        .with_history_expansions(history_expansions_enabled)
         .with_predicate(|range| {
             // skip spans in the pre-buffer
             if range.end <= pre_buffer_total_len {

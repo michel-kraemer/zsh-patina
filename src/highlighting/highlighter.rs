@@ -146,6 +146,7 @@ where
 {
     cursor: Option<usize>,
     pwd: Option<&'a str>,
+    history_expansions_enabled: bool,
     predicate: P,
 }
 
@@ -167,9 +168,16 @@ where
         O: Into<Option<&'b str>>,
     {
         HighlightingRequest {
-            cursor: self.cursor,
             pwd: pwd.into(),
-            predicate: self.predicate,
+            ..*self
+        }
+    }
+
+    /// Enable or disable highlighting of history expansions
+    pub fn with_history_expansions(&self, enabled: bool) -> Self {
+        Self {
+            history_expansions_enabled: enabled,
+            ..*self
         }
     }
 
@@ -184,6 +192,7 @@ where
         HighlightingRequest {
             cursor: self.cursor,
             pwd: self.pwd,
+            history_expansions_enabled: self.history_expansions_enabled,
             predicate,
         }
     }
@@ -194,6 +203,7 @@ impl Default for HighlightingRequest<'_, fn(&Range<usize>) -> bool> {
         Self {
             cursor: None,
             pwd: None,
+            history_expansions_enabled: true,
             predicate: |_: &Range<usize>| true,
         }
     }
@@ -339,6 +349,10 @@ impl Highlighter {
         let mut result = Vec::new();
         let mut history_expanded =
             HistoryExpanded::wrap(LinesWithEndings::from(command.trim_ascii_end()));
+        if !request.history_expansions_enabled {
+            history_expanded.disable();
+        }
+
         while let Some((line, expansions)) = history_expanded.next(&highlight_state.path.scopes) {
             if line.len() > self.max_line_length {
                 // skip lines that are too long
@@ -553,6 +567,17 @@ mod tests {
     impl TestCfg {
         fn highlight(&self, command: &str) -> Result<Vec<Span>> {
             let request = HighlightingRequest::default().with_pwd(self.pwd.as_str());
+            self.highlighter.highlight(command, &request)
+        }
+
+        fn highlight_with_request<P>(
+            &self,
+            command: &str,
+            request: HighlightingRequest<P>,
+        ) -> Result<Vec<Span>>
+        where
+            P: Fn(&Range<usize>) -> bool + Copy,
+        {
             self.highlighter.highlight(command, &request)
         }
 
@@ -2177,6 +2202,30 @@ mod tests {
                 cfg.static_span(13, 15, STRING_QUOTED_DOUBLE)?,
             ]
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn history_expansions_disabled() -> Result<()> {
+        let cfg = test_cfg()?;
+
+        let highlighted = cfg.highlight("ls !!")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 2, "ls"),
+                cfg.static_span(3, 5, EXPANSION_HISTORY)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight_with_request(
+            "ls !!",
+            HighlightingRequest::default()
+                .with_history_expansions(false)
+                .with_pwd(cfg.pwd.as_str()),
+        )?;
+        assert_eq!(highlighted, vec![cfg.dynamic_span(0, 2, "ls")]);
 
         Ok(())
     }

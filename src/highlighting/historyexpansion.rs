@@ -422,6 +422,10 @@ where
         }
     }
 
+    pub fn disable(&mut self) {
+        self.disabled = true;
+    }
+
     fn is_inside_single_quote(&self, scope_stack: &[Scope]) -> bool {
         scope_stack.iter().any(|s| {
             *s == self.string_quoted_single_scope || *s == self.string_quoted_single_ansi_scope
