@@ -14,40 +14,84 @@ zsh-patina() {
     "$_ZSH_PATINA_PATH" "$@"
 }
 
-_zsh_patina_resolve_callable() {
-    local word=$1
-    local -A seen=()
+_zsh_patina_resolve_alias() {
+    local content=$1
+    shift
+    local -a visited=("$@")
 
-    local IFS=' '$'\t'$'\n' # make sure `read` splits at whitespace
+    # Count lines in content
+    local count=0
+    if [[ -n "$content" ]]; then
+        count=$(( ${#${content//[^$'\n']/}} + 1 ))
+    fi
 
-    # resolve alias to real command
-    while (( $+aliases[(e)$word] || $+galiases[(e)$word] )); do
-        # check for cycles
-        (( $+seen[$word] )) && break
+    if ! zsocket "$socket_path" 2>/dev/null; then
+        # this should not happen because we've already connected to the daemon before
+        zle -M "zsh-patina: failed to connect to socket at $socket_path."
+        REPLY=m
+        return
+    fi
+    local fd=$REPLY
 
-        seen[$word]=1
+    {
+        # build header
+        local header="ver=<{version}> cmd=resolve buffer_line_count=$count pwd=$_ZSH_PATINA_ENCODED_PWD"
 
-        # extract the first term (n.b. don't use `read -r` as it would not
-        # resolve escaped characters)
-        if (( $+aliases[(e)$word] )); then
-            read word _ <<< "$aliases[$word]"
-        else
-            read word _ <<< "$galiases[$word]"
+        # send header
+        print -r -- $header
+
+        # send lines
+        if (( count != 0 )); then
+            print -r -- "$content"
+        fi
+    } >&$fd || {
+        zle -M  "zsh-patina: Write to socket failed"
+        exec {fd}>&-
+        REPLY=m
+        return
+    }
+
+    # read response lines and recursively resolve each callable
+    local result=a
+    local line
+    while IFS= read -r -u $fd line; do
+        [[ -z "$line" ]] && continue
+
+        _zsh_patina_decode_string $line
+        line=$REPLY
+
+        _zsh_patina_resolve_callable "$line" "${visited[@]}"
+        if [[ "$REPLY" == m ]]; then
+            result=m
+            break
         fi
     done
 
-    if (( ${#seen} )); then
-        # We've resolved an alias. Check whether it is a function, builtin, or
-        # command. Otherwise, check if it is executable (an executable file or
-        # directory). This is consistent with how the daemon checks for existing
-        # callables. Paths without slashes don't need to be checked as they
-        # should already be contained in $commands)
-        if (( $+functions[(e)$word] || $+builtins[(e)$word] || $+commands[(e)$word] )) ||
-            [[ "$word" == */* && -x "$word" ]]; then
-            REPLY=a
-        else
+    # close socket connection
+    exec {fd}>&-
+
+    REPLY=$result
+}
+
+_zsh_patina_resolve_callable() {
+    local word=$1
+    shift
+    local -a visited=("$@")
+
+    if (( $+aliases[(e)$word] )); then
+        if (( ${visited[(Ie)$word]} )); then
+            # cycle detected: treat this as invalid
             REPLY=m
+            return
         fi
+        _zsh_patina_resolve_alias "$aliases[$word]" "$word" "${visited[@]}"
+    elif (( $+galiases[(e)$word] )); then
+        if (( ${visited[(Ie)$word]} )); then
+            # cycle detected: treat this as invalid
+            REPLY=m
+            return
+        fi
+        _zsh_patina_resolve_alias "$galiases[$word]" "$word" "${visited[@]}"
     elif (( $+functions[(e)$word] )); then
         REPLY=f
     elif (( $+builtins[(e)$word] )); then

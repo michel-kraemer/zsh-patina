@@ -458,6 +458,18 @@ fn handle_connection(mut stream: UnixStream, highlighter: Arc<Highlighter>) -> R
 
     log::trace!("Highlighting result: {merged:?}");
 
+    // handle "resolve" command - return list of dynamic callables
+    if cmd == Some("resolve") {
+        for s in merged {
+            if let SpanStyle::Dynamic(DynamicStyle::Callable { parsed_callable }) = s.style {
+                stream
+                    .write_all(format!("{}\n", encode_string(parsed_callable)).as_bytes())
+                    .context("Unable to send response")?;
+            }
+        }
+        return Ok(());
+    }
+
     for s in merged {
         // write response
         let message = match s.style {
