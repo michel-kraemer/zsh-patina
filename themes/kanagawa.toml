@@ -67,6 +67,9 @@ source = "#dcd7ba"
 # history expansions
 "meta.group.expansion.history" = "#7fb4ca"
 
+# reset command substitutions to the theme's default foreground color
+"meta.group.expansion.command.parens" = { foreground = "#dcd7ba" }
+
 # fallback for any token not explicitly mentioned above
 "meta" = "#7fb4ca"
 

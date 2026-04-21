@@ -55,6 +55,9 @@ source = "#cdd6f4"
 # history expansions
 "meta.group.expansion.history" = "#f38ba8"
 
+# reset command substitutions to the theme's default foreground color
+"meta.group.expansion.command.parens" = { foreground = "#cdd6f4" }
+
 # dynamic items
 "dynamic.callable" = "#89b4fa"
 "dynamic.callable.missing" = "#f38ba8"

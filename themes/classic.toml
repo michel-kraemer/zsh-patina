@@ -48,6 +48,9 @@
 # history expansions
 "meta.group.expansion.history" = "#87d75f"
 
+# reset command substitutions to terminal defaults
+"meta.group.expansion.command.parens" = {}
+
 # dynamic items
 "dynamic.callable" = "green"
 "dynamic.callable.missing" = { foreground = "red", bold = true }
