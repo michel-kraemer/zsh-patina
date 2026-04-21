@@ -404,6 +404,17 @@ background = "red"
 bold = true
 ```
 
+More specific scope entries completely replace less specific ones: no attributes are inherited or merged.
+
+For example, if you use:
+
+```toml
+"variable" = { foreground = "blue", underline = true }
+"variable.parameter" = { foreground = "magenta" }
+```
+
+Then `variable.parameter` will be magenta but not underlined. In consequence, setting the `{}` style will reset the highlighting of that scope to your terminal's defaults.
+
 Note that as of Zsh 5.9, it's unfortunately not possible to show text on the command line in italics as the ZLE (Zsh Line Editor) only supports [bold and underlined](https://zsh.sourceforge.io/Doc/Release/Zsh-Line-Editor.html#Character-Highlighting).
 
 ### Scopes
