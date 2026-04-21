@@ -51,9 +51,6 @@ _zsh_patina_resolve_alias() {
         return
     }
 
-    # close socket connection
-    exec {fd}>&-
-
     # read response lines and recursively resolve each callable
     local result=a
     local line
@@ -69,6 +66,9 @@ _zsh_patina_resolve_alias() {
             break
         fi
     done
+
+    # close socket connection
+    exec {fd}>&-
 
     REPLY=$result
 }
