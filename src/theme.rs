@@ -150,6 +150,7 @@ impl<'de> Deserialize<'de> for Style {
                 M: MapAccess<'de>,
             {
                 #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
                 struct Helper {
                     foreground: Option<Color>,
                     background: Option<Color>,
