@@ -51,24 +51,27 @@ _zsh_patina_resolve_alias() {
         return
     }
 
-    # read response lines and recursively resolve each callable
-    local result=a
+    # read the full response
+    local -a lines=()
     local line
     while IFS= read -r -u $fd line; do
         [[ -z "$line" ]] && continue
-
         _zsh_patina_decode_string $line
-        line=$REPLY
+        lines+=("$REPLY")
+    done
 
+    # close socket connection before recursion
+    exec {fd}>&-
+
+    # recursively resolve each callable
+    local result=a
+    for line in "${lines[@]}"; do
         _zsh_patina_resolve_callable "$line" "${visited[@]}"
         if [[ "$REPLY" == m ]]; then
             result=m
             break
         fi
     done
-
-    # close socket connection
-    exec {fd}>&-
 
     REPLY=$result
 }
