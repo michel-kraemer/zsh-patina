@@ -53,6 +53,12 @@ const CONTROL_BREAK: &str = "keyword.control.break.shell";
 #[cfg(test)]
 const CONTROL_CASE: &str = "keyword.control.case.shell";
 #[cfg(test)]
+const CONTROL_CASE_BEGIN: &str = "keyword.control.case.begin.shell";
+#[cfg(test)]
+const CONTROL_CASE_END: &str = "keyword.control.case.end.shell";
+#[cfg(test)]
+const CONTROL_CASE_IN: &str = "keyword.control.case.in.shell";
+#[cfg(test)]
 const CONTROL_CASE_ITEM: &str = "keyword.control.case.item.shell";
 #[cfg(test)]
 const CONTROL_DO: &str = "keyword.control.do.shell";
@@ -64,6 +70,8 @@ const CONTROL_END: &str = "keyword.control.end.shell";
 const CONTROL_ESAC: &str = "keyword.control.esac.shell";
 #[cfg(test)]
 const CONTROL_FOREACH: &str = "keyword.control.foreach.shell";
+#[cfg(test)]
+const CONTROL_HEREDOC: &str = "keyword.control.heredoc-token.shell";
 #[cfg(test)]
 const CONTROL_IN: &str = "keyword.control.in.shell";
 #[cfg(test)]
@@ -78,6 +86,8 @@ const CONTROL_TIME: &str = "keyword.control.flow.time.shell";
 const ENVIRONMENT_VARIABLE: &str = "variable.other.readwrite.shell";
 #[cfg(test)]
 const OPERATOR_ARITHMETIC: &str = "keyword.operator.arithmetic.shell";
+#[cfg(test)]
+const OPERATOR_ASSIGNMENT_REDIRECTION: &str = "keyword.operator.assignment.redirection.shell";
 #[cfg(test)]
 const OPERATOR_LOGICAL_AND: &str = "keyword.operator.logical.and.shell";
 #[cfg(test)]

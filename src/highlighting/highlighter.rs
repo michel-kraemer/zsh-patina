@@ -2206,6 +2206,42 @@ mod tests {
         Ok(())
     }
 
+    /// see https://github.com/michel-kraemer/zsh-patina/issues/45
+    #[test]
+    fn case_with_heredoc() -> Result<()> {
+        let cmd = r#"
+            case "$a" in
+                *) cat
+            esac <<'EOF'
+            A
+            B
+            C
+            EOF"#;
+
+        let cfg = test_cfg()?;
+        let highlighted = cfg.highlight(cmd)?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(13, 17, CONTROL_CASE_BEGIN)?,
+                cfg.static_span(18, 19, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(19, 21, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(21, 22, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(23, 25, CONTROL_CASE_IN)?,
+                cfg.static_span(42, 43, OPERATOR_REGEXP_QUANTIFIER)?,
+                cfg.static_span(43, 44, CONTROL_CASE_ITEM)?,
+                cfg.dynamic_span(45, 48, "cat"),
+                cfg.static_span(61, 65, CONTROL_CASE_END)?,
+                cfg.static_span(66, 68, OPERATOR_ASSIGNMENT_REDIRECTION)?,
+                cfg.static_span(68, 69, STRING_QUOTED_SINGLE)?,
+                cfg.static_span(69, 72, CONTROL_HEREDOC)?,
+                cfg.static_span(72, 131, STRING_UNQUOTED_HEREDOC)?,
+            ]
+        );
+
+        Ok(())
+    }
+
     #[test]
     fn history_expansions_disabled() -> Result<()> {
         let cfg = test_cfg()?;

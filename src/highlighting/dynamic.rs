@@ -588,14 +588,20 @@ impl DynamicTokenGroupBuilder {
                         ClearAmount::TopN(n) => n.min(self.stack.len()),
                         ClearAmount::All => self.stack.len(),
                     };
-
                     let mut to_stash = Vec::new();
-                    let mut to_group_stash = Vec::new();
                     for _ in 0..count {
                         to_stash.push(self.stack.pop().unwrap());
-                        to_group_stash.push(self.group_stack.pop().unwrap());
                     }
                     self.stash.push(to_stash);
+
+                    let group_count = match *clear_amount {
+                        ClearAmount::TopN(n) => n.min(self.group_stack.len()),
+                        ClearAmount::All => self.group_stack.len(),
+                    };
+                    let mut to_group_stash = Vec::new();
+                    for _ in 0..group_count {
+                        to_group_stash.push(self.group_stack.pop().unwrap());
+                    }
                     self.group_stash.push(to_group_stash);
                 }
 
