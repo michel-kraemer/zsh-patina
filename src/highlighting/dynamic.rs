@@ -594,8 +594,19 @@ impl DynamicTokenGroupBuilder {
                     }
                     self.stash.push(to_stash);
 
+                    // stash only as many groups as there are `arguments_scope`
+                    // or `callable_scope` items in the scope stash
                     let group_count = match *clear_amount {
-                        ClearAmount::TopN(n) => n.min(self.group_stack.len()),
+                        ClearAmount::TopN(_) => self
+                            .stash
+                            .last()
+                            .unwrap()
+                            .iter()
+                            .filter(|s| {
+                                **s == self.scopes.arguments_scope
+                                    || **s == self.scopes.callable_scope
+                            })
+                            .count(),
                         ClearAmount::All => self.group_stack.len(),
                     };
                     let mut to_group_stash = Vec::new();
@@ -642,5 +653,55 @@ impl DynamicTokenGroupBuilder {
         }
 
         result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use syntect::parsing::{ClearAmount, Scope, ScopeStackOp};
+
+    /// Tests that `Clear(TopN(1))` does not incorrectly stash an open group
+    /// when the cleared scope is not a group-creating scope
+    #[test]
+    fn clear_topn_does_not_stash_open_group() {
+        let scopes = DynamicScopes::new();
+        let args_scope = Scope::new("meta.function-call.arguments.shell").unwrap();
+        let tilde_scope = Scope::new("variable.language.tilde.shell").unwrap();
+        let heredoc_body_scope = Scope::new("string.unquoted.heredoc.shell").unwrap();
+
+        let mut builder = DynamicTokenGroupBuilder::new(scopes);
+
+        // Op sequence (byte offsets):
+        //  0  Push(args_scope)         -> arguments group opened
+        //  5  Push(heredoc_body_scope) -> PoisonPill pushed into the group
+        // 10  Clear(TopN(1))           -> heredoc_body_scope cleared (NOT a group creator)
+        // 10  Push(tilde_scope)        -> between Clear and Restore
+        // 15  Pop(1)                   -> pops tilde_scope
+        // 15  Restore                  -> heredoc_body_scope comes back
+        // 20  Pop(1)                   -> pops heredoc_body_scope (via on_pop)
+        // 25  Pop(1)                   -> pops args_scope -> group finalized
+        let groups = builder.build(
+            &[
+                (0, ScopeStackOp::Push(args_scope)),
+                (5, ScopeStackOp::Push(heredoc_body_scope)),
+                (10, ScopeStackOp::Clear(ClearAmount::TopN(1))),
+                (10, ScopeStackOp::Push(tilde_scope)),
+                (15, ScopeStackOp::Pop(1)),
+                (15, ScopeStackOp::Restore),
+                (20, ScopeStackOp::Pop(1)),
+                (25, ScopeStackOp::Pop(1)),
+            ],
+            0,
+        );
+
+        assert_eq!(groups.len(), 1);
+        let group = &groups[0];
+        assert_eq!(group.dynamic_type, DynamicType::Arguments);
+
+        // the tilde token at 10..15 must be present
+        let tilde = group.tokens.iter().find(|t| t.scope == DynamicScope::Tilde);
+        assert!(tilde.is_some());
+        assert_eq!(tilde.unwrap().byte_range, 10..15);
     }
 }
