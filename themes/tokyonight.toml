@@ -20,6 +20,9 @@
 # history expansions
 "meta.group.expansion.history" = "#E6C384"
 
+# reset command substitutions to terminal defaults
+"meta.group.expansion.command.parens" = {}
+
 # dynamic items
 "dynamic.callable" = "#7DCFFF"
 "dynamic.callable.missing" = "#F7768E"
