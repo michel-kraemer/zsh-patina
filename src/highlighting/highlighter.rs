@@ -2094,6 +2094,77 @@ mod tests {
     }
 
     #[test]
+    fn nice() -> Result<()> {
+        let cfg = test_cfg()?;
+
+        let highlighted = cfg.highlight("nice ls")?;
+        assert_eq!(
+            highlighted,
+            vec![cfg.dynamic_span(0, 4, "nice"), cfg.dynamic_span(5, 7, "ls")]
+        );
+
+        let highlighted = cfg.highlight("nice -n 5 date")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "nice"),
+                cfg.static_span(4, 8, PARAMETER)?,
+                cfg.dynamic_span(10, 14, "date")
+            ]
+        );
+
+        let highlighted = cfg.highlight("nice -n 5 date")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "nice"),
+                cfg.static_span(4, 8, PARAMETER)?,
+                cfg.dynamic_span(10, 14, "date")
+            ]
+        );
+
+        let highlighted = cfg.highlight("nice -n5 date")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "nice"),
+                cfg.static_span(4, 7, PARAMETER)?,
+                cfg.dynamic_span(9, 13, "date")
+            ]
+        );
+
+        let highlighted = cfg.highlight("nice -n 16 nice -n -35 date")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "nice"),
+                cfg.static_span(4, 8, PARAMETER)?,
+                cfg.dynamic_span(11, 15, "nice"),
+                cfg.static_span(15, 19, PARAMETER)?,
+                cfg.dynamic_span(23, 27, "date")
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn nohup() -> Result<()> {
+        let cfg = test_cfg()?;
+
+        let highlighted = cfg.highlight("nohup ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 5, "nohup"),
+                cfg.dynamic_span(6, 8, "ls")
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn history_expansions() -> Result<()> {
         let cfg = test_cfg()?;
 

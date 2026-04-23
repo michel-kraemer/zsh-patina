@@ -231,6 +231,19 @@ contexts:
           pop: true
     - match: \bnoglob{{keyword_boundary_end}}
       scope: keyword.builtin.noglob.shell precommand.builtin.noglob.shell
+    # external precommands - note that they have to have the scope
+    # `variable.function.shell` because they may or may not be installed on the
+    # system and we want to highlight them in the same way as other callables.
+    - match: \bnice{{keyword_boundary_end}}
+      scope: meta.function-call.shell variable.function.shell
+      set:
+        - match: '{{start_of_option}}n\s*'
+          scope: variable.parameter.option.shell
+          push: single-argument
+        - match: (?=\S)
+          pop: true
+    - match: \bnohup{{keyword_boundary_end}}
+      scope: meta.function-call.shell variable.function.shell
 
   case-preamble:
     - match: \bin(?=[^\w_-])
@@ -348,6 +361,13 @@ contexts:
   exec-argv0:
     - meta_content_scope: meta.function-call.arguments.shell
     - include: cmd-name-common
+    - match: (?=\s)
+      pop: true
+
+  # single argument
+  single-argument:
+    - meta_content_scope: meta.function-call.arguments.shell
+    - include: cmd-args-common
     - match: (?=\s)
       pop: true
 
