@@ -1685,6 +1685,42 @@ mod tests {
             ]
         );
 
+        let highlighted = cfg.highlight(r"command -- echo")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                // both static spans have the same color in the patina theme and
+                // will be merged
+                // cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                // cfg.static_span(7, 10, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(0, 10, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.dynamic_span(11, 15, "echo"),
+            ]
+        );
+
+        let highlighted = cfg.highlight(r"command -p -- echo")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(7, 10, PARAMETER)?,
+                cfg.static_span(10, 13, OPERATOR_END_OF_OPTIONS)?,
+                cfg.dynamic_span(14, 18, "echo"),
+            ]
+        );
+
+        let highlighted = cfg.highlight(r"command -v -- echo file")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(7, 10, PARAMETER)?,
+                cfg.static_span(10, 13, OPERATOR_END_OF_OPTIONS)?,
+                cfg.dynamic_span(14, 18, "echo"),
+                cfg.dynamic_span(19, 23, "file"),
+            ]
+        );
+
         Ok(())
     }
 
@@ -1841,6 +1877,59 @@ mod tests {
                 cfg.static_span(4, 9, PARAMETER)?,
                 cfg.dynamic_span(13, 19, "foobar"),
                 cfg.static_span(20, 22, ENVIRONMENT_VARIABLE)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight(r"exec -- foobar")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                // both static spans have the same color in the patina theme and
+                // will be merged
+                // cfg.static_span(0, 4, KEYWORD_BUILTIN_EXEC)?,
+                // cfg.static_span(5, 7, OPERATOR_END_OF_OPTIONS)?,
+                cfg.static_span(0, 7, KEYWORD_BUILTIN_EXEC)?,
+                cfg.dynamic_span(8, 14, "foobar"),
+            ]
+        );
+
+        let highlighted = cfg.highlight(r#"(exec -a foobar -- zsh -c 'echo "$0"')"#)?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(1, 5, KEYWORD_BUILTIN_EXEC)?,
+                cfg.static_span(5, 9, PARAMETER)?,
+                cfg.static_span(15, 18, OPERATOR_END_OF_OPTIONS)?,
+                cfg.dynamic_span(19, 22, "zsh"),
+                cfg.static_span(22, 25, PARAMETER)?,
+                cfg.static_span(26, 37, STRING_QUOTED_SINGLE)?,
+            ]
+        );
+
+        // here, '--' is argv[0]
+        let highlighted = cfg.highlight(r#"(exec -a -- zsh -c 'echo "$0"')"#)?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(1, 5, KEYWORD_BUILTIN_EXEC)?,
+                cfg.static_span(5, 9, PARAMETER)?,
+                cfg.dynamic_span(12, 15, "zsh"),
+                cfg.static_span(15, 18, PARAMETER)?,
+                cfg.static_span(19, 30, STRING_QUOTED_SINGLE)?,
+            ]
+        );
+
+        // here, '--' is argv[0]
+        let highlighted = cfg.highlight(r#"(exec -a -- -- zsh -c 'echo "$0"')"#)?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(1, 5, KEYWORD_BUILTIN_EXEC)?,
+                cfg.static_span(5, 9, PARAMETER)?,
+                cfg.static_span(11, 14, OPERATOR_END_OF_OPTIONS)?,
+                cfg.dynamic_span(15, 18, "zsh"),
+                cfg.static_span(18, 21, PARAMETER)?,
+                cfg.static_span(22, 33, STRING_QUOTED_SINGLE)?,
             ]
         );
 
@@ -2145,6 +2234,17 @@ mod tests {
             ]
         );
 
+        let highlighted = cfg.highlight("nice -n 5 -- date")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "nice"),
+                cfg.static_span(4, 8, PARAMETER)?,
+                cfg.static_span(9, 12, OPERATOR_END_OF_OPTIONS)?,
+                cfg.dynamic_span(13, 17, "date")
+            ]
+        );
+
         Ok(())
     }
 
@@ -2158,6 +2258,16 @@ mod tests {
             vec![
                 cfg.dynamic_span(0, 5, "nohup"),
                 cfg.dynamic_span(6, 8, "ls")
+            ]
+        );
+
+        let highlighted = cfg.highlight("nohup -- ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 5, "nohup"),
+                cfg.static_span(5, 8, OPERATOR_END_OF_OPTIONS)?,
+                cfg.dynamic_span(9, 11, "ls")
             ]
         );
 

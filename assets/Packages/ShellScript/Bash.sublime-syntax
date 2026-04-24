@@ -42,6 +42,7 @@ first_line_match: |
 variables:
   call_token: \./
   cmd_boundary: (?=\s|;|$|>|<)
+  end_of_options: (?:\s+|^)--(?=\s|$)
   extension: \.sh
   identifier: '[[:alpha:]_][[:alnum:]_]*'
   identifier_non_posix: '[^{{metachar}}\d][^{{metachar}}=]*'
@@ -65,6 +66,7 @@ variables:
   reset_or: \s*(\|\|)
   reset_pipe: \s*(\|)
   reset_semicolon: \s*(;)(?![;&])
+  start_of_short_option: (?:\s+|^)-(?=[\w$])
   start_of_option: (?:\s+|^)--?(?=[\w$])
   varassign: '[+\-?]?='
 #-------------------------------------------------------------------------------
@@ -208,27 +210,23 @@ contexts:
     - match: \bcommand{{keyword_boundary_end}}
       scope: keyword.builtin.command.shell precommand.builtin.command.shell
       set:
-        - match: '(?=(?:{{start_of_option}}[pvV]+)*{{start_of_option}}[pvV]*[vV])(?:{{start_of_option}}[pvV]+)+'
-          scope: variable.parameter.option.shell
+        - match: '((?=(?:{{start_of_short_option}}[pvV]+)*{{start_of_short_option}}[pvV]*[vV])(?:{{start_of_short_option}}[pvV]+)+)({{end_of_options}})?'
+          captures:
+            1: variable.parameter.option.shell
+            2: keyword.operator.end-of-options.shell
           push: command-argv
-        - match: '(?:{{start_of_option}}p+)+'
+        - match: '(?:{{start_of_short_option}}p+)+'
           scope: variable.parameter.option.shell
-        - match: '{{start_of_option}}\w+'
-          scope: invalid.illegal.unknown-precommand-parameter.shell
-        - match: (?=\S)
-          pop: true
+        - include: precommand-end-of-options
     - match: \bexec{{keyword_boundary_end}}
       scope: keyword.builtin.exec.shell precommand.builtin.exec.shell
       set:
-        - match: '{{start_of_option}}[cl]*a\s*'
+        - match: '{{start_of_short_option}}[cl]*a\s*'
           scope: variable.parameter.option.shell
           push: exec-argv0
-        - match: '{{start_of_option}}[cl]+'
+        - match: '{{start_of_short_option}}[cl]+'
           scope: variable.parameter.option.shell
-        - match: '{{start_of_option}}\w+'
-          scope: invalid.illegal.unknown-precommand-parameter.shell
-        - match: (?=\S)
-          pop: true
+        - include: precommand-end-of-options
     - match: \bnoglob{{keyword_boundary_end}}
       scope: keyword.builtin.noglob.shell precommand.builtin.noglob.shell
     # external precommands - note that they have to have the scope
@@ -237,13 +235,14 @@ contexts:
     - match: \bnice{{keyword_boundary_end}}
       scope: meta.function-call.shell variable.function.shell
       set:
-        - match: '{{start_of_option}}n\s*'
+        - match: '{{start_of_short_option}}n\s*'
           scope: variable.parameter.option.shell
           push: single-argument
-        - match: (?=\S)
-          pop: true
+        - include: precommand-end-of-options
     - match: \bnohup{{keyword_boundary_end}}
       scope: meta.function-call.shell variable.function.shell
+      set:
+        - include: precommand-end-of-options
 
   case-preamble:
     - match: \bin(?=[^\w_-])
@@ -369,6 +368,15 @@ contexts:
     - meta_content_scope: meta.function-call.arguments.shell
     - include: cmd-args-common
     - match: (?=\s)
+      pop: true
+
+  precommand-end-of-options:
+    - match: '{{start_of_short_option}}\w+'
+      scope: invalid.illegal.unknown-precommand-parameter.shell
+    - match: '{{end_of_options}}'
+      scope: keyword.operator.end-of-options.shell
+      pop: true
+    - match: (?=\S)
       pop: true
 
   expansion-and-string:
@@ -875,7 +883,7 @@ contexts:
     - match: (?={{is_end_of_interpolation}})
       pop: true
     - include: cmd-args-common
-    - match: (?:\s+|^)--(?=\s|$)
+    - match: '{{end_of_options}}'
       scope: keyword.operator.end-of-options.shell
       set:
         - meta_content_scope: meta.function-call.arguments.shell
@@ -885,7 +893,7 @@ contexts:
     - match: (?={{is_end_of_interpolation}}|`) # <-------------- extra backtick
       pop: true
     - include: cmd-args-common
-    - match: (?:\s+|^)--(?=\s|$)
+    - match: '{{end_of_options}}'
       scope: keyword.operator.end-of-options.shell
       set:
         - meta_content_scope: meta.function-call.arguments.shell
