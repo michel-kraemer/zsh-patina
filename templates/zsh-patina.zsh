@@ -83,19 +83,29 @@ _zsh_patina_resolve_callable() {
 
     if (( $+aliases[(e)$word] )); then
         if (( ${visited[(Ie)$word]} )); then
-            # cycle detected: treat this as invalid
-            REPLY=m
+            if [[ "$word" != "$visited[1]" ]]; then
+                # cycle detected: treat this as invalid
+                REPLY=m
+                return
+            fi
+        else
+            _zsh_patina_resolve_alias "$aliases[$word]" "$word" "${visited[@]}"
             return
         fi
-        _zsh_patina_resolve_alias "$aliases[$word]" "$word" "${visited[@]}"
     elif (( $+galiases[(e)$word] )); then
         if (( ${visited[(Ie)$word]} )); then
-            # cycle detected: treat this as invalid
-            REPLY=m
+            if [[ "$word" != "$visited[1]" ]]; then
+                # cycle detected: treat this as invalid
+                REPLY=m
+                return
+            fi
+        else
+            _zsh_patina_resolve_alias "$galiases[$word]" "$word" "${visited[@]}"
             return
         fi
-        _zsh_patina_resolve_alias "$galiases[$word]" "$word" "${visited[@]}"
-    elif (( $+functions[(e)$word] )); then
+    fi
+
+    if (( $+functions[(e)$word] )); then
         REPLY=f
     elif (( $+builtins[(e)$word] )); then
         REPLY=b
