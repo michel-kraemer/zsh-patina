@@ -27,6 +27,8 @@ jobs:
           toolchain: ${{ steps.extract_metadata.outputs.msrv }}
       - name: Run tests
         run: cargo --version && cargo test
+      - name: Run integration tests
+        run: cargo test -- --ignored
 
   build:
     runs-on: ubuntu-latest
