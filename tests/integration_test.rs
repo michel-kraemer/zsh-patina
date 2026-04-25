@@ -18,11 +18,7 @@ use testcontainers::{
 
 /// Common setup code required by every test in this module
 async fn setup() -> GenericImage {
-    // emit bollard tracing events to stdout
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .with_test_writer()
-        .try_init();
+    let _ = env_logger::try_init();
 
     if std::env::var_os("USE_PREBUILT_IMAGE").is_none() {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
