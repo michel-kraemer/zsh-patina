@@ -80,17 +80,19 @@ _zsh_patina_resolve_callable() {
     local word=$1
     shift
     local -a visited=("$@")
-    local alias_content
+    local matched_alias
 
     if (( $+aliases[(e)$word] )); then
-        alias_content=$aliases[$word]
+        matched_alias=$aliases[$word]
     elif (( $+galiases[(e)$word] )); then
-        alias_content=$galiases[$word]
+        matched_alias=$galiases[$word]
+    else
+        unset matched_alias
     fi
 
     # recursively resolve unvisited aliases
-    if (( $+alias_content && ! ${visited[(Ie)$word]} )); then
-        _zsh_patina_resolve_alias "$alias_content" "$word" "${visited[@]}"
+    if (( $+matched_alias && ! ${visited[(Ie)$word]} )); then
+        _zsh_patina_resolve_alias "$matched_alias" "$word" "${visited[@]}"
         return
     fi
 
