@@ -80,8 +80,8 @@ _zsh_patina_resolve_callable() {
     local word=$1
     shift
     local -a visited=("$@")
-    local matched_alias
 
+    local matched_alias
     if (( $+aliases[(e)$word] )); then
         matched_alias=$aliases[$word]
     elif (( $+galiases[(e)$word] )); then

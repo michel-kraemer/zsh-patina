@@ -178,4 +178,33 @@ async fn resolve_alias() {
         &["0 2 fg=red"],
     )
     .await;
+
+    // self-referencing alias (not a cycle!)
+    run_highlight(
+        &image,
+        &["alias grep='grep --color'"],
+        "grep",
+        &["0 4 fg=cyan"],
+    )
+    .await;
+
+    // valid: grep points to the alias g, and g then points to the command grep
+    // invalid: g points to the alias grep, and grep then points to the missing command g
+    run_highlight(
+        &image,
+        &["alias grep='g --color'", "alias g='grep'"],
+        "grep && g",
+        &["0 4 fg=cyan", "5 7 fg=blue", "8 9 fg=red"],
+    )
+    .await;
+
+    // valid: the alias grep points to the command grep
+    // valid: g points to the alias grep, which points to the command grep
+    run_highlight(
+        &image,
+        &["alias grep='grep --color'", "alias g='grep'"],
+        "grep && g",
+        &["0 4 fg=cyan", "5 7 fg=blue", "8 9 fg=cyan"],
+    )
+    .await;
 }
