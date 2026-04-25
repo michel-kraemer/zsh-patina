@@ -24,36 +24,41 @@ async fn setup() -> GenericImage {
         .with_test_writer()
         .try_init();
 
-    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let profile = if cfg!(debug_assertions) {
-        "dev"
-    } else {
-        "release"
-    };
+    if std::env::var_os("USE_PREBUILT_IMAGE").is_none() {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let profile = if cfg!(debug_assertions) {
+            "dev"
+        } else {
+            "release"
+        };
 
-    // Build Docker image - may take a few minutes on the first run. It's a
-    // shame that testcontainers doesn't support .dockerignore, so we have to
-    // pass in all required files and directories manually. If the build fails
-    // and you only get a cryptic error message, run the test with:
-    //
-    // RUST_LOG=debug cargo test -- --ignored --no-capture
-    //
-    // This will give you debug output from bollard. Unfortunately, all build
-    // messages are base64 encoded. You have to decode them manually to find the
-    // relevant error message.
-    GenericBuildableImage::new("michelkraemer/zsh-patina-test", "latest")
-        .with_dockerfile(manifest_dir.join("tests/Dockerfile"))
-        .with_file(manifest_dir.join("Cargo.toml"), "Cargo.toml")
-        .with_file(manifest_dir.join("Cargo.lock"), "Cargo.lock")
-        .with_file(manifest_dir.join("build.rs"), "build.rs")
-        .with_file(manifest_dir.join("src"), "src")
-        .with_file(manifest_dir.join("assets"), "assets")
-        .with_file(manifest_dir.join("templates"), "templates")
-        .with_file(manifest_dir.join("themes"), "themes")
-        .with_file(manifest_dir.join("askama.toml"), "askama.toml")
-        .build_image_with(BuildImageOptions::new().with_build_arg("PROFILE", profile))
-        .await
-        .expect("failed to build Docker image")
+        // Build Docker image - may take a few minutes on the first run. It's a
+        // shame that testcontainers doesn't support .dockerignore, so we have
+        // to pass in all required files and directories manually. If the build
+        // fails and you only get a cryptic error message, run the test with:
+        //
+        // RUST_LOG=debug cargo test -- --ignored --no-capture
+        //
+        // This will give you debug output from bollard. Unfortunately, all
+        // build messages are base64 encoded. You have to decode them manually
+        // to find the relevant error message.
+        GenericBuildableImage::new("michelkraemer/zsh-patina-test", "latest")
+            .with_dockerfile(manifest_dir.join("tests/Dockerfile"))
+            .with_file(manifest_dir.join("Cargo.toml"), "Cargo.toml")
+            .with_file(manifest_dir.join("Cargo.lock"), "Cargo.lock")
+            .with_file(manifest_dir.join("build.rs"), "build.rs")
+            .with_file(manifest_dir.join("src"), "src")
+            .with_file(manifest_dir.join("assets"), "assets")
+            .with_file(manifest_dir.join("templates"), "templates")
+            .with_file(manifest_dir.join("themes"), "themes")
+            .with_file(manifest_dir.join("askama.toml"), "askama.toml")
+            .build_image_with(BuildImageOptions::new().with_build_arg("PROFILE", profile))
+            .await
+            .expect("failed to build Docker image")
+    } else {
+        // use existing pre-built image on CI server
+        GenericImage::new("michelkraemer/zsh-patina-test", "latest")
+    }
 }
 
 /// Runs zsh-patina in a container and highlights the given buffer. Compares

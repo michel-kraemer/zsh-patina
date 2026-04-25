@@ -27,7 +27,20 @@ jobs:
           toolchain: ${{ steps.extract_metadata.outputs.msrv }}
       - name: Run tests
         run: cargo --version && cargo test
+
+      # Run integration tests
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          push: false
+          tags: michelkraemer/zsh-patina-test:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
       - name: Run integration tests
+        env:
+          USE_PREBUILT_IMAGE: true
         run: cargo test -- --ignored
 
   build:
