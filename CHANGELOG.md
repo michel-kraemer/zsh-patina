@@ -2,6 +2,22 @@
 
 _Note: This project follows [Semantic Versioning]._
 
+## [1.5.1] - 2026-04-25
+
+**Bug fixes**
+
+- Respect `BANGHIST` option
+- Fix crash caused by heredoc
+- Correctly highlight aliases even if they consist of complex commands or command chains, or if they spawn a subshell (support for self-recursive aliases contributed by @ccjmne 🚀)
+- Deny unknown fields in theme styles
+- Reset command substitution base highlighting to theme defaults (contributed by @ccjmne 🥳)
+- Document default highlighting style mechanism (contributed by @ccjmne 😎)
+
+**Maintenance**
+
+- Add Docker-based integration tests
+- Cache build artifacts during CI
+
 ## [1.5.0] - 2026-04-18
 
 **New features**

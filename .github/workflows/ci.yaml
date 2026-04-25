@@ -14,6 +14,9 @@ jobs:
       - name: Install MSRV
         uses: dtolnay/rust-toolchain@stable
 
+      # Cache Rust/Cargo build artifacts
+      - uses: Swatinem/rust-cache@v2
+
       # Get MSRV from Cargo.toml
       - name: Extract metadata
         id: extract_metadata
@@ -28,6 +31,36 @@ jobs:
       - name: Run tests
         run: cargo --version && cargo test
 
+  integration-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # Install Rust
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Cache Rust/Cargo build artifacts
+      - uses: Swatinem/rust-cache@v2
+
+      # Run integration tests
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          file: tests/Dockerfile
+          push: false
+          load: true # make image available locally
+          tags: michelkraemer/zsh-patina-test:latest
+          build-args: |
+            "PROFILE=dev"
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Run integration tests
+        env:
+          USE_PREBUILT_IMAGE: true
+        run: cargo test -- --ignored
+
   build:
     runs-on: ubuntu-latest
     steps:
@@ -37,6 +70,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt,clippy
+
+      # Cache Rust/Cargo build artifacts
+      - uses: Swatinem/rust-cache@v2
 
       # Check code
       - run: cargo fmt -- --check

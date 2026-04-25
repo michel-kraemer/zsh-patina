@@ -92,7 +92,7 @@ zinit light michel-kraemer/zsh-patina
 2. Install the package. For example:
 
    ```shell
-   sudo dpkg -i zsh-patina_1.5.0_amd64.deb
+   sudo dpkg -i zsh-patina_1.5.1_amd64.deb
    ```
 
 3. Initialize the plugin at the end of your `.zshrc` file:
@@ -202,7 +202,7 @@ zsh-patina runs on Windows via [MSYS2](https://www.msys2.org/) or [Cygwin](https
 
    ```shell
    mkdir ~/.zsh-patina
-   tar xfz zsh-patina-v1.5.0-aarch64-apple-darwin.tar.gz -C ~/.zsh-patina --strip-components 1
+   tar xfz zsh-patina-v1.5.1-aarch64-apple-darwin.tar.gz -C ~/.zsh-patina --strip-components 1
    ```
 
 3. Initialize the plugin at the end of your `.zshrc` file:

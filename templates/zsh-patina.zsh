@@ -81,21 +81,22 @@ _zsh_patina_resolve_callable() {
     shift
     local -a visited=("$@")
 
+    local matched_alias
     if (( $+aliases[(e)$word] )); then
-        if (( ${visited[(Ie)$word]} )); then
-            # cycle detected: treat this as invalid
-            REPLY=m
-            return
-        fi
-        _zsh_patina_resolve_alias "$aliases[$word]" "$word" "${visited[@]}"
+        matched_alias=$aliases[$word]
     elif (( $+galiases[(e)$word] )); then
-        if (( ${visited[(Ie)$word]} )); then
-            # cycle detected: treat this as invalid
-            REPLY=m
-            return
-        fi
-        _zsh_patina_resolve_alias "$galiases[$word]" "$word" "${visited[@]}"
-    elif (( $+functions[(e)$word] )); then
+        matched_alias=$galiases[$word]
+    else
+        unset matched_alias
+    fi
+
+    # recursively resolve unvisited aliases
+    if (( $+matched_alias && ! ${visited[(Ie)$word]} )); then
+        _zsh_patina_resolve_alias "$matched_alias" "$word" "${visited[@]}"
+        return
+    fi
+
+    if (( $+functions[(e)$word] )); then
         REPLY=f
     elif (( $+builtins[(e)$word] )); then
         REPLY=b
