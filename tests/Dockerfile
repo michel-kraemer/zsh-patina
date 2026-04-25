@@ -1,13 +1,13 @@
-FROM rust:alpine AS planner
-RUN cargo install --locked cargo-chef
+FROM rust:alpine AS chef 
+RUN cargo install --locked cargo-chef 
 WORKDIR /build
+
+FROM chef AS planner
 COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
-FROM rust:alpine AS builder
+FROM chef AS builder
 ARG PROFILE=debug
-RUN cargo install --locked cargo-chef
-WORKDIR /build
 COPY --from=planner /build/recipe.json recipe.json
 RUN cargo chef cook --profile=${PROFILE} --recipe-path recipe.json
 COPY . .
