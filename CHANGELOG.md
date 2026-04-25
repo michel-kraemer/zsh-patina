@@ -138,6 +138,7 @@ _Note: This project follows [Semantic Versioning]._
 
 _First release._
 
+[1.5.1]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.5.1
 [1.5.0]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.5.0
 [1.4.0]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.4.0
 [1.3.1]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.3.1
