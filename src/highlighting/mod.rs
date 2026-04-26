@@ -39,19 +39,9 @@ const REDIRECTION: &str = "keyword.operator.assignment.redirection.shell";
 #[cfg(test)]
 const COMMENT: &str = "comment.line.number-sign.shell";
 #[cfg(test)]
-const KEYWORD_BUILTIN_BUILTIN: &str = "keyword.builtin.builtin.shell";
+const INTEGER: &str = "constant.numeric.integer.decimal.shell";
 #[cfg(test)]
-const KEYWORD_BUILTIN_COMMAND: &str = "keyword.builtin.command.shell";
-#[cfg(test)]
-const KEYWORD_BUILTIN_DASH: &str = "keyword.builtin.dash.shell";
-#[cfg(test)]
-const KEYWORD_BUILTIN_EXEC: &str = "keyword.builtin.exec.shell";
-#[cfg(test)]
-const KEYWORD_BUILTIN_NOGLOB: &str = "keyword.builtin.noglob.shell";
-#[cfg(test)]
-const CONTROL_BREAK: &str = "keyword.control.break.shell";
-#[cfg(test)]
-const CONTROL_CASE: &str = "keyword.control.case.shell";
+const CONTROL_BREAK: &str = "keyword.control.flow.break.shell";
 #[cfg(test)]
 const CONTROL_CASE_BEGIN: &str = "keyword.control.case.begin.shell";
 #[cfg(test)]
@@ -67,8 +57,6 @@ const CONTROL_DONE: &str = "keyword.control.done.shell";
 #[cfg(test)]
 const CONTROL_END: &str = "keyword.control.end.shell";
 #[cfg(test)]
-const CONTROL_ESAC: &str = "keyword.control.esac.shell";
-#[cfg(test)]
 const CONTROL_FOREACH: &str = "keyword.control.foreach.shell";
 #[cfg(test)]
 const CONTROL_HEREDOC: &str = "keyword.control.heredoc-token.shell";
@@ -77,13 +65,20 @@ const CONTROL_IN: &str = "keyword.control.in.shell";
 #[cfg(test)]
 const CONTROL_NOCORRECT: &str = "keyword.control.flow.nocorrect.shell";
 #[cfg(test)]
-const CONTROL_REPEAT: &str = "keyword.control.flow.repeat.shell";
+const CONTROL_REPEAT: &str = "keyword.control.repeat.shell";
 #[cfg(test)]
 const CONTROL_SELECT: &str = "keyword.control.select.shell";
 #[cfg(test)]
 const CONTROL_TIME: &str = "keyword.control.flow.time.shell";
 #[cfg(test)]
 const ENVIRONMENT_VARIABLE: &str = "variable.other.readwrite.shell";
+#[cfg(test)]
+const GROUP_FOREACH: &str = "meta.group.foreach.shell";
+#[cfg(test)]
+const GROUP_SELECT: &str = "meta.group.select.shell";
+#[cfg(test)]
+const INVALID_UNKNOWN_PRECOMMAND_PARAMETER: &str =
+    "invalid.illegal.unknown-precommand-parameter.shell";
 #[cfg(test)]
 const OPERATOR_ARITHMETIC: &str = "keyword.operator.arithmetic.shell";
 #[cfg(test)]
@@ -98,6 +93,40 @@ const OPERATOR_LOGICAL_CONTINUE: &str = "keyword.operator.logical.continue.shell
 const OPERATOR_REGEXP_QUANTIFIER: &str = "keyword.operator.regexp.quantifier.shell";
 #[cfg(test)]
 const PARAMETER: &str = "variable.parameter.option.shell";
+#[cfg(test)]
+const POST_CMD: &str = "meta.post-cmd.shell";
+#[cfg(test)]
+const PRECOMMAND_BUILTIN: &str = "precommand.builtin.builtin.shell";
+#[cfg(test)]
+const PRECOMMAND_COMMAND: &str = "precommand.builtin.command.shell";
+#[cfg(test)]
+const PRECOMMAND_DASH: &str = "precommand.builtin.dash.shell";
+#[cfg(test)]
+const PRECOMMAND_EXEC: &str = "precommand.builtin.exec.shell";
+#[cfg(test)]
+const PRECOMMAND_NOGLOB: &str = "precommand.builtin.noglob.shell";
+#[cfg(test)]
+const PUNCTUATION_COMMENT_BEGIN: &str = "punctuation.definition.comment.begin.shell";
+#[cfg(test)]
+const PUNCTUATION_COMPOUND_BEGIN: &str = "punctuation.definition.compound.begin.shell";
+#[cfg(test)]
+const PUNCTUATION_COMPOUND_END: &str = "punctuation.definition.compound.end.shell";
+#[cfg(test)]
+const PUNCTUATION_EXPANSION_PARAMETER_BEGIN: &str =
+    "punctuation.section.expansion.parameter.begin.shell";
+#[cfg(test)]
+const PUNCTUATION_EXPANSION_PARAMETER_END: &str =
+    "punctuation.section.expansion.parameter.end.shell";
+#[cfg(test)]
+const PUNCTUATION_PARAMETER: &str = "punctuation.definition.parameter.shell";
+#[cfg(test)]
+const PUNCTUATION_PARENS_BEGIN: &str = "punctuation.section.parens.begin.shell";
+#[cfg(test)]
+const PUNCTUATION_PARENS_END: &str = "punctuation.section.parens.end.shell";
+#[cfg(test)]
+const PUNCTUATION_TERMINATOR_CASE: &str = "punctuation.terminator.case.shell";
+#[cfg(test)]
+const PUNCTUATION_VARIABLE: &str = "punctuation.definition.variable.shell";
 
 /// A span of text with a foreground color. The range is specified in terms of
 /// character indices, not byte indices.
