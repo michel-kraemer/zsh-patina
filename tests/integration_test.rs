@@ -8,13 +8,49 @@
 //! Be aware that the first run may take a few minutes as the Docker image is
 //! built.
 use std::path::Path;
+use std::sync::LazyLock;
 
 use pretty_assertions::assert_eq;
+use tempfile::NamedTempFile;
 use testcontainers::{
     GenericBuildableImage, GenericImage, ImageExt,
-    core::{BuildImageOptions, WaitFor, wait::ExitWaitStrategy},
+    core::{BuildImageOptions, Mount, WaitFor, wait::ExitWaitStrategy},
     runners::{AsyncBuilder, AsyncRunner},
 };
+use tokio::fs;
+
+const DYNAMIC_CALLABLE_ALIAS: &str = "dynamic.callable.alias.shell";
+const DYNAMIC_CALLABLE_COMMAND: &str = "dynamic.callable.command.shell";
+const DYNAMIC_CALLABLE_MISSING: &str = "dynamic.callable.missing.shell";
+const OPERATOR_LOGICAL_AND: &str = "keyword.operator.logical.and.shell";
+const PUNCTUATION_PARAMETER: &str = "punctuation.definition.parameter.shell";
+const PARAMETER: &str = "variable.parameter.option.shell";
+
+static TEST_THEME: LazyLock<toml::Table> = LazyLock::new(|| {
+    include_str!(concat!(env!("OUT_DIR"), "/test_theme.toml"))
+        .parse()
+        .expect("test_theme.toml must be valid TOML")
+});
+
+/// Look up a scope name in the test theme and return a region_highlight entry
+/// string for the given start/end positions. Foreground-only scopes produce
+/// `"<start> <end> fg=<n>"`, background-only scopes produce
+/// `"<start> <end> bg=<n>"`.
+fn h(start: usize, end: usize, scope: &str) -> String {
+    let value = TEST_THEME
+        .get(scope)
+        .unwrap_or_else(|| panic!("scope '{scope}' not found in test_theme.toml"));
+    match value {
+        toml::Value::Integer(n) => format!("{start} {end} fg={n}"),
+        toml::Value::Table(t) => {
+            let bg = t["background"]
+                .as_integer()
+                .expect("background must be an integer");
+            format!("{start} {end} bg={bg}")
+        }
+        _ => panic!("unexpected TOML value type for scope '{scope}'"),
+    }
+}
 
 /// Common setup code required by every test in this module
 async fn setup() -> GenericImage {
@@ -38,7 +74,7 @@ async fn setup() -> GenericImage {
         // This will give you debug output from bollard. Unfortunately, all
         // build messages are base64 encoded. You have to decode them manually
         // to find the relevant error message.
-        GenericBuildableImage::new("michelkraemer/zsh-patina-test", "latest")
+        GenericBuildableImage::new(format!("michelkraemer/zsh-patina-test-{profile}"), "latest")
             .with_dockerfile(manifest_dir.join("tests/Dockerfile"))
             .with_file(manifest_dir.join("Cargo.toml"), "Cargo.toml")
             .with_file(manifest_dir.join("Cargo.lock"), "Cargo.lock")
@@ -63,7 +99,7 @@ async fn run_highlight(
     image: &GenericImage,
     setup_commands: &[&str],
     buffer: &str,
-    expected: &[&str],
+    expected: &[String],
 ) {
     let setup = if setup_commands.is_empty() {
         String::new()
@@ -76,9 +112,23 @@ async fn run_highlight(
         printf '%s\n' "${{region_highlight[@]}}""#
     );
 
+    let config = "[highlighting]\ntheme = \"file:/root/.config/zsh-patina/test_theme.toml\"";
+    let config_file = NamedTempFile::new().expect("Unable to create temporary config file");
+    fs::write(&config_file, config)
+        .await
+        .expect("Unable to write to temporary config file");
+
     let container = image
         .clone()
         .with_wait_for(WaitFor::Exit(ExitWaitStrategy::default()))
+        .with_mount(Mount::bind_mount(
+            config_file.path().to_string_lossy(),
+            "/root/.config/zsh-patina/config.toml",
+        ))
+        .with_mount(Mount::bind_mount(
+            concat!(env!("OUT_DIR"), "/test_theme.toml"),
+            "/root/.config/zsh-patina/test_theme.toml",
+        ))
         .with_cmd(["unbuffer", "zsh", "-c", &zsh_script])
         .start()
         .await
@@ -106,7 +156,17 @@ async fn run_highlight(
 #[ignore]
 async fn ls_with_option() {
     let image = setup().await;
-    run_highlight(&image, &[], "ls -l", &["0 2 fg=cyan", "2 5 fg=magenta"]).await;
+    run_highlight(
+        &image,
+        &[],
+        "ls -l",
+        &[
+            h(0, 2, DYNAMIC_CALLABLE_COMMAND),
+            h(2, 4, PUNCTUATION_PARAMETER),
+            h(4, 5, PARAMETER),
+        ],
+    )
+    .await;
 }
 
 /// Test if aliases are resolved correctly
@@ -120,7 +180,11 @@ async fn resolve_alias() {
         &image,
         &["alias ll='ls -l'"],
         "ll -a",
-        &["0 2 fg=cyan", "2 5 fg=magenta"],
+        &[
+            h(0, 2, DYNAMIC_CALLABLE_ALIAS),
+            h(2, 4, PUNCTUATION_PARAMETER),
+            h(4, 5, PARAMETER),
+        ],
     )
     .await;
 
@@ -129,7 +193,11 @@ async fn resolve_alias() {
         &image,
         &["alias ll='(ls -l)'"],
         "ll -a",
-        &["0 2 fg=cyan", "2 5 fg=magenta"],
+        &[
+            h(0, 2, DYNAMIC_CALLABLE_ALIAS),
+            h(2, 4, PUNCTUATION_PARAMETER),
+            h(4, 5, PARAMETER),
+        ],
     )
     .await;
 
@@ -138,19 +206,29 @@ async fn resolve_alias() {
         &image,
         &["alias lla='ll -a'", "alias ll='ls -l'"],
         "lla && ll",
-        &["0 3 fg=cyan", "4 6 fg=blue", "7 9 fg=cyan"],
+        &[
+            h(0, 3, DYNAMIC_CALLABLE_ALIAS),
+            h(4, 6, OPERATOR_LOGICAL_AND),
+            h(7, 9, DYNAMIC_CALLABLE_ALIAS),
+        ],
     )
     .await;
 
     // alias referencing a command that does not exist
-    run_highlight(&image, &["alias fb=foobar"], "fb", &["0 2 fg=red"]).await;
+    run_highlight(
+        &image,
+        &["alias fb=foobar"],
+        "fb",
+        &[h(0, 2, DYNAMIC_CALLABLE_MISSING)],
+    )
+    .await;
 
     // alias referencing two commands
     run_highlight(
         &image,
         &["alias foobar='ls -l && echo OK'"],
         "foobar",
-        &["0 6 fg=cyan"],
+        &[h(0, 6, DYNAMIC_CALLABLE_ALIAS)],
     )
     .await;
 
@@ -159,7 +237,7 @@ async fn resolve_alias() {
         &image,
         &["alias foobar='ls -l && missing OK'"],
         "foobar",
-        &["0 6 fg=red"],
+        &[h(0, 6, DYNAMIC_CALLABLE_MISSING)],
     )
     .await;
 
@@ -171,7 +249,7 @@ async fn resolve_alias() {
             "alias foobar='fb --another-option'",
         ],
         "fb",
-        &["0 2 fg=red"],
+        &[h(0, 2, DYNAMIC_CALLABLE_MISSING)],
     )
     .await;
 
@@ -180,7 +258,7 @@ async fn resolve_alias() {
         &image,
         &["alias grep='grep --color'"],
         "grep",
-        &["0 4 fg=cyan"],
+        &[h(0, 4, DYNAMIC_CALLABLE_ALIAS)],
     )
     .await;
 
@@ -190,7 +268,11 @@ async fn resolve_alias() {
         &image,
         &["alias grep='g --color'", "alias g='grep'"],
         "grep && g",
-        &["0 4 fg=cyan", "5 7 fg=blue", "8 9 fg=red"],
+        &[
+            h(0, 4, DYNAMIC_CALLABLE_ALIAS),
+            h(5, 7, OPERATOR_LOGICAL_AND),
+            h(8, 9, DYNAMIC_CALLABLE_MISSING),
+        ],
     )
     .await;
 
@@ -200,7 +282,11 @@ async fn resolve_alias() {
         &image,
         &["alias grep='grep --color'", "alias g='grep'"],
         "grep && g",
-        &["0 4 fg=cyan", "5 7 fg=blue", "8 9 fg=cyan"],
+        &[
+            h(0, 4, DYNAMIC_CALLABLE_ALIAS),
+            h(5, 7, OPERATOR_LOGICAL_AND),
+            h(8, 9, DYNAMIC_CALLABLE_ALIAS),
+        ],
     )
     .await;
 }
