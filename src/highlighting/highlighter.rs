@@ -1979,7 +1979,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 7, PARAMETER)?,
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
                 cfg.dynamic_span(8, 14, "foobar"),
             ]
         );
@@ -1989,7 +1990,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 7, PARAMETER)?,
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
                 cfg.dynamic_span(8, 14, "foobar"),
             ]
         );
@@ -1999,7 +2001,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 8, PARAMETER)?,
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 8, PARAMETER)?,
                 cfg.dynamic_span(9, 15, "foobar"),
             ]
         );
@@ -2020,7 +2023,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 8, PARAMETER)?,
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
                 cfg.static_span(8, 11, ARGUMENTS)?,
                 cfg.dynamic_span(12, 18, "foobar"),
                 cfg.static_span(18, 19, ARGUMENTS)?,
@@ -2034,7 +2038,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 8, PARAMETER)?,
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
                 cfg.static_span(8, 9, STRING_QUOTED_BEGIN)?,
                 cfg.static_span(9, 12, STRING_QUOTED_DOUBLE)?,
                 cfg.static_span(12, 13, STRING_QUOTED_END)?,
@@ -2050,7 +2055,10 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 11, PARAMETER)?,
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
                 cfg.static_span(11, 14, ARGUMENTS)?,
                 cfg.dynamic_span(15, 21, "foobar"),
                 cfg.static_span(21, 22, ARGUMENTS)?,
@@ -2064,9 +2072,13 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 11, PARAMETER)?,
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
                 cfg.static_span(11, 14, ARGUMENTS)?,
-                cfg.static_span(14, 17, PARAMETER)?,
+                cfg.static_span(14, 16, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(16, 17, PARAMETER)?,
                 cfg.dynamic_span(18, 24, "foobar"),
                 cfg.static_span(24, 25, ARGUMENTS)?,
                 cfg.static_span(25, 26, PUNCTUATION_VARIABLE)?,
@@ -2080,7 +2092,8 @@ mod tests {
             vec![
                 cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
                 cfg.static_span(4, 7, INVALID_UNKNOWN_PRECOMMAND_PARAMETER)?,
-                cfg.static_span(7, 10, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
                 cfg.dynamic_span(11, 17, "foobar"),
                 cfg.static_span(17, 18, ARGUMENTS)?,
                 cfg.static_span(18, 19, PUNCTUATION_VARIABLE)?,
@@ -2093,7 +2106,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 7, PARAMETER)?,
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
                 cfg.static_span(7, 10, INVALID_UNKNOWN_PRECOMMAND_PARAMETER)?,
                 cfg.dynamic_span(11, 17, "foobar"),
                 cfg.static_span(17, 18, ARGUMENTS)?,
@@ -2107,9 +2121,11 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 7, PARAMETER)?,
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
                 cfg.static_span(7, 10, INVALID_UNKNOWN_PRECOMMAND_PARAMETER)?,
-                cfg.static_span(10, 13, PARAMETER)?,
+                cfg.static_span(10, 12, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(12, 13, PARAMETER)?,
                 cfg.dynamic_span(14, 20, "foobar"),
                 cfg.static_span(20, 21, ARGUMENTS)?,
                 cfg.static_span(21, 22, PUNCTUATION_VARIABLE)?,
@@ -2122,9 +2138,13 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 7, PARAMETER)?,
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
                 cfg.static_span(7, 10, INVALID_UNKNOWN_PRECOMMAND_PARAMETER)?,
-                cfg.static_span(10, 17, PARAMETER)?,
+                cfg.static_span(10, 12, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(12, 13, PARAMETER)?,
+                cfg.static_span(13, 15, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(15, 16, PARAMETER)?,
                 cfg.static_span(17, 20, ARGUMENTS)?,
                 cfg.dynamic_span(21, 27, "foobar"),
                 cfg.static_span(27, 28, ARGUMENTS)?,
@@ -2138,7 +2158,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 9, PARAMETER)?,
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 8, PARAMETER)?,
                 cfg.static_span(9, 12, ARGUMENTS)?,
                 cfg.dynamic_span(13, 19, "foobar"),
                 cfg.static_span(19, 20, ARGUMENTS)?,
@@ -2163,7 +2184,8 @@ mod tests {
             vec![
                 cfg.static_span(0, 1, PUNCTUATION_COMPOUND_BEGIN)?,
                 cfg.static_span(1, 5, PRECOMMAND_EXEC)?,
-                cfg.static_span(5, 9, PARAMETER)?,
+                cfg.static_span(5, 7, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(7, 8, PARAMETER)?,
                 cfg.static_span(9, 15, ARGUMENTS)?,
                 cfg.static_span(15, 18, OPERATOR_END_OF_OPTIONS)?,
                 cfg.dynamic_span(19, 22, "zsh"),
@@ -2184,7 +2206,8 @@ mod tests {
             vec![
                 cfg.static_span(0, 1, PUNCTUATION_COMPOUND_BEGIN)?,
                 cfg.static_span(1, 5, PRECOMMAND_EXEC)?,
-                cfg.static_span(5, 9, PARAMETER)?,
+                cfg.static_span(5, 7, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(7, 8, PARAMETER)?,
                 cfg.static_span(9, 11, ARGUMENTS)?,
                 cfg.dynamic_span(12, 15, "zsh"),
                 cfg.static_span(15, 17, PUNCTUATION_PARAMETER)?,
@@ -2204,7 +2227,8 @@ mod tests {
             vec![
                 cfg.static_span(0, 1, PUNCTUATION_COMPOUND_BEGIN)?,
                 cfg.static_span(1, 5, PRECOMMAND_EXEC)?,
-                cfg.static_span(5, 9, PARAMETER)?,
+                cfg.static_span(5, 7, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(7, 8, PARAMETER)?,
                 cfg.static_span(9, 11, ARGUMENTS)?,
                 cfg.static_span(11, 14, OPERATOR_END_OF_OPTIONS)?,
                 cfg.dynamic_span(15, 18, "zsh"),
@@ -2529,7 +2553,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 4, "nice"),
-                cfg.static_span(4, 8, PARAMETER)?,
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
                 cfg.static_span(8, 9, ARGUMENTS)?,
                 cfg.dynamic_span(10, 14, "date")
             ]
@@ -2540,7 +2565,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 4, "nice"),
-                cfg.static_span(4, 8, PARAMETER)?,
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
                 cfg.static_span(8, 9, ARGUMENTS)?,
                 cfg.dynamic_span(10, 14, "date")
             ]
@@ -2551,7 +2577,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 4, "nice"),
-                cfg.static_span(4, 7, PARAMETER)?,
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
                 cfg.static_span(7, 8, ARGUMENTS)?,
                 cfg.dynamic_span(9, 13, "date")
             ]
@@ -2562,10 +2589,12 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 4, "nice"),
-                cfg.static_span(4, 8, PARAMETER)?,
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
                 cfg.static_span(8, 10, ARGUMENTS)?,
                 cfg.dynamic_span(11, 15, "nice"),
-                cfg.static_span(15, 19, PARAMETER)?,
+                cfg.static_span(15, 17, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(17, 18, PARAMETER)?,
                 cfg.static_span(19, 22, ARGUMENTS)?,
                 cfg.dynamic_span(23, 27, "date")
             ]
@@ -2576,7 +2605,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 4, "nice"),
-                cfg.static_span(4, 8, PARAMETER)?,
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
                 cfg.static_span(8, 9, ARGUMENTS)?,
                 cfg.static_span(9, 12, OPERATOR_END_OF_OPTIONS)?,
                 cfg.dynamic_span(13, 17, "date")

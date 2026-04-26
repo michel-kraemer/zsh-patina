@@ -220,11 +220,15 @@ contexts:
     - match: \bexec{{keyword_boundary_end}}
       scope: keyword.builtin.exec.shell precommand.builtin.exec.shell
       set:
-        - match: '{{start_of_short_option}}[cl]*a\s*'
-          scope: variable.parameter.option.shell
+        - match: '(({{start_of_short_option}})[cl]*a)\s*'
+          captures:
+            1: variable.parameter.option.shell
+            2: punctuation.definition.parameter.shell
           push: exec-argv0
-        - match: '{{start_of_short_option}}[cl]+'
-          scope: variable.parameter.option.shell
+        - match: '({{start_of_short_option}})[cl]+(?={{is_end_of_option}})'
+          captures:
+            0: variable.parameter.option.shell
+            1: punctuation.definition.parameter.shell
         - include: precommand-end-of-options
     - match: \bnoglob{{keyword_boundary_end}}
       scope: keyword.builtin.noglob.shell precommand.builtin.noglob.shell
@@ -234,8 +238,10 @@ contexts:
     - match: \bnice{{keyword_boundary_end}}
       scope: meta.function-call.shell variable.function.shell
       set:
-        - match: '{{start_of_short_option}}n\s*'
-          scope: variable.parameter.option.shell
+        - match: '(({{start_of_short_option}})n)\s*'
+          captures:
+            1: variable.parameter.option.shell
+            2: punctuation.definition.parameter.shell
           push: single-argument
         - include: precommand-end-of-options
     - match: \bnohup{{keyword_boundary_end}}
