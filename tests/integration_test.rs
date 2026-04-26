@@ -89,7 +89,7 @@ async fn setup() -> GenericImage {
             .expect("failed to build Docker image")
     } else {
         // use existing pre-built image on CI server
-        GenericImage::new("michelkraemer/zsh-patina-test", "latest")
+        GenericImage::new("michelkraemer/zsh-patina-test-dev", "latest")
     }
 }
 
