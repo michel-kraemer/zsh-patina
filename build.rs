@@ -1,4 +1,4 @@
-use std::{collections::HashSet, env, fs, path::PathBuf};
+use std::{collections::HashSet, env, fs, io::Write, path::PathBuf};
 
 use anyhow::{Context, Result};
 use syntect::{
@@ -79,8 +79,9 @@ fn main() -> Result<()> {
         format!(
             "[{}]",
             scopes
-                .into_iter()
-                .map(|mut s| {
+                .iter()
+                .map(|s| {
+                    let mut s = s.clone();
                     s.insert(0, '"');
                     s.push('"');
                     s
@@ -89,6 +90,22 @@ fn main() -> Result<()> {
                 .join(",")
         ),
     )?;
+
+    // create theme where each scope has a different color - used for testing
+    assert!(scopes.len() < 256);
+    let mut test_theme_contents = Vec::new();
+    for (i, s) in scopes.iter().enumerate() {
+        if *s == "source.shell.bash" {
+            continue;
+        }
+        if s.starts_with("dynamic") {
+            writeln!(test_theme_contents, "\"{s}\" = {{ background = {i} }}").unwrap();
+        } else {
+            writeln!(test_theme_contents, "\"{s}\" = {i}").unwrap();
+        }
+    }
+    let test_theme_dest_path = PathBuf::from(&out_dir).join("test_theme.toml");
+    fs::write(test_theme_dest_path, test_theme_contents)?;
 
     // load shell syntax into a syntax set and dump it to a file
     let mut syntax_set_builder = SyntaxSetBuilder::new();

@@ -552,6 +552,7 @@ mod tests {
 
     fn test_config() -> HighlightingConfig {
         HighlightingConfig {
+            theme: ThemeSource::File(concat!(env!("OUT_DIR"), "/test_theme.toml").to_string()),
             timeout: Duration::from_secs(3600),
             ..Default::default()
         }
@@ -674,8 +675,12 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 3, "cp🐑"),
-                cfg.mixed_span(4, 15, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(16, 17, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(3, 4, ARGUMENTS)?,
+                cfg.mixed_span(4, 5, STRING_QUOTED_BEGIN, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(5, 14, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(14, 15, STRING_QUOTED_END, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(15, 16, ARGUMENTS)?,
+                cfg.mixed_span(16, 17, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
         Ok(())
@@ -692,7 +697,13 @@ mod tests {
         cfg.touch_file("test.txt")?;
 
         let highlighted = cfg.highlight("ls test.txt")?;
-        assert_eq!(highlighted, vec![cfg.static_span(0, 2, CALLABLE)?]);
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 2, CALLABLE)?,
+                cfg.static_span(2, 11, ARGUMENTS)?,
+            ]
+        );
 
         let mut config = test_config();
         config.dynamic = DynamicConfig {
@@ -702,7 +713,13 @@ mod tests {
         cfg.highlighter = HighlighterBuilder::new(&config).build()?;
 
         let highlighted = cfg.highlight("ls test.txt")?;
-        assert_eq!(highlighted, vec![cfg.dynamic_span(0, 2, "ls")]);
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 2, "ls"),
+                cfg.static_span(2, 11, ARGUMENTS)?,
+            ]
+        );
 
         config.dynamic = DynamicConfig {
             callables: false,
@@ -715,7 +732,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 2, CALLABLE)?,
-                cfg.static_span(3, 11, DYNAMIC_PATH_FILE_COMPLETE)?
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.mixed_span(3, 11, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?
             ]
         );
 
@@ -734,7 +752,9 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(3, 11, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.mixed_span(3, 11, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(11, 20, ARGUMENTS)?,
             ]
         );
 
@@ -743,7 +763,11 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.mixed_span(3, 13, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.mixed_span(3, 4, STRING_QUOTED_BEGIN, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(4, 12, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(12, 13, STRING_QUOTED_END, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(13, 22, ARGUMENTS)?,
             ]
         );
 
@@ -752,8 +776,14 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.mixed_span(5, 15, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(18, 28, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(2, 5, ARGUMENTS)?,
+                cfg.mixed_span(5, 6, STRING_QUOTED_BEGIN, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(6, 14, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(14, 15, STRING_QUOTED_END, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(15, 18, ARGUMENTS)?,
+                cfg.static_span(18, 19, STRING_QUOTED_BEGIN)?,
+                cfg.static_span(19, 27, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(27, 28, STRING_QUOTED_END)?,
             ]
         );
 
@@ -762,8 +792,14 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(3, 14, STRING_QUOTED_DOUBLE)?,
-                cfg.static_span(15, 25, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.static_span(3, 4, STRING_QUOTED_BEGIN)?,
+                cfg.static_span(4, 13, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(13, 14, STRING_QUOTED_END)?,
+                cfg.static_span(14, 15, ARGUMENTS)?,
+                cfg.static_span(15, 16, STRING_QUOTED_BEGIN)?,
+                cfg.static_span(16, 24, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(24, 25, STRING_QUOTED_END)?,
             ]
         );
 
@@ -772,9 +808,13 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(3, 5, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(5, 12, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(12, 13, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.mixed_span(3, 5, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(5, 6, STRING_QUOTED_BEGIN, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(6, 11, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(11, 12, STRING_QUOTED_END, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(12, 13, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(13, 22, ARGUMENTS)?,
             ]
         );
 
@@ -783,7 +823,11 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.mixed_span(3, 15, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.mixed_span(3, 4, STRING_QUOTED_BEGIN, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(4, 14, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(14, 15, STRING_QUOTED_END, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(15, 24, ARGUMENTS)?,
             ]
         );
 
@@ -792,9 +836,11 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(3, 7, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.mixed_span(3, 7, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
                 cfg.mixed_span(7, 9, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(9, 14, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(9, 14, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(14, 23, ARGUMENTS)?,
             ]
         );
 
@@ -803,7 +849,11 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.mixed_span(3, 13, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.mixed_span(3, 4, STRING_QUOTED_BEGIN, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(4, 12, STRING_QUOTED_SINGLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(12, 13, STRING_QUOTED_END, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(13, 22, ARGUMENTS)?,
             ]
         );
 
@@ -812,7 +862,11 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.mixed_span(3, 14, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.mixed_span(3, 5, STRING_QUOTED_BEGIN, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(5, 13, STRING_QUOTED_SINGLE_ANSI, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(13, 14, STRING_QUOTED_END, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(14, 23, ARGUMENTS)?,
             ]
         );
 
@@ -832,8 +886,10 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(3, 11, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(12, 16, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.mixed_span(3, 11, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(11, 12, ARGUMENTS)?,
+                cfg.mixed_span(12, 16, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
             ]
         );
 
@@ -859,7 +915,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(3, 5, DYNAMIC_PATH_FILE_PARTIAL)?,
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.mixed_span(3, 5, ARGUMENTS, DYNAMIC_PATH_FILE_PARTIAL)?,
             ]
         );
 
@@ -885,7 +942,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "rm"),
-                cfg.static_span(3, 5, DYNAMIC_PATH_DIRECTORY_PARTIAL)?,
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.mixed_span(3, 5, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_PARTIAL)?,
             ]
         );
 
@@ -900,19 +958,25 @@ mod tests {
         let highlighted = cfg.highlight("~")?;
         assert_eq!(
             highlighted,
-            vec![cfg.static_span(0, 1, DYNAMIC_CALLABLE_COMMAND)?]
+            vec![cfg.mixed_span(0, 1, TILDE_VARIABLE, DYNAMIC_CALLABLE_COMMAND)?]
         );
 
         let highlighted = cfg.highlight("~/")?;
         assert_eq!(
             highlighted,
-            vec![cfg.static_span(0, 2, DYNAMIC_CALLABLE_COMMAND)?]
+            vec![
+                cfg.mixed_span(0, 1, TILDE_VARIABLE, DYNAMIC_CALLABLE_COMMAND)?,
+                cfg.mixed_span(1, 2, CALLABLE, DYNAMIC_CALLABLE_COMMAND)?
+            ]
         );
 
         let highlighted = cfg.highlight("~ echo")?;
         assert_eq!(
             highlighted,
-            vec![cfg.static_span(0, 1, DYNAMIC_CALLABLE_COMMAND)?]
+            vec![
+                cfg.mixed_span(0, 1, TILDE_VARIABLE, DYNAMIC_CALLABLE_COMMAND)?,
+                cfg.static_span(1, 6, ARGUMENTS)?
+            ]
         );
 
         let highlighted = cfg.highlight("~doesnotexist")?;
@@ -938,6 +1002,7 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "ls"),
+                cfg.static_span(2, 3, ARGUMENTS)?,
                 cfg.mixed_span(3, 4, TILDE_VARIABLE, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
             ]
         );
@@ -947,8 +1012,9 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "ls"),
+                cfg.static_span(2, 3, ARGUMENTS)?,
                 cfg.mixed_span(3, 4, TILDE_VARIABLE, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
-                cfg.static_span(4, 5, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+                cfg.mixed_span(4, 5, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
             ]
         );
 
@@ -957,9 +1023,11 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "ls"),
+                cfg.static_span(2, 3, ARGUMENTS)?,
                 cfg.mixed_span(3, 4, TILDE_VARIABLE, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
-                cfg.static_span(4, 5, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
-                cfg.static_span(6, 14, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(4, 5, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+                cfg.static_span(5, 6, ARGUMENTS)?,
+                cfg.mixed_span(6, 14, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -968,7 +1036,10 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(3, 7, STRING_QUOTED_DOUBLE)?
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.static_span(3, 4, STRING_QUOTED_BEGIN)?,
+                cfg.static_span(4, 6, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(6, 7, STRING_QUOTED_END)?,
             ]
         );
 
@@ -977,7 +1048,10 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(3, 7, STRING_QUOTED_DOUBLE)?
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.static_span(3, 4, STRING_QUOTED_BEGIN)?,
+                cfg.static_span(4, 6, STRING_QUOTED_SINGLE)?,
+                cfg.static_span(6, 7, STRING_QUOTED_END)?,
             ]
         );
 
@@ -986,7 +1060,10 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(3, 8, STRING_QUOTED_DOUBLE)?
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.static_span(3, 5, STRING_QUOTED_BEGIN)?,
+                cfg.static_span(5, 7, STRING_QUOTED_SINGLE_ANSI)?,
+                cfg.static_span(7, 8, STRING_QUOTED_END)?,
             ]
         );
 
@@ -995,7 +1072,9 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "ls"),
+                cfg.static_span(2, 3, ARGUMENTS)?,
                 cfg.static_span(3, 4, TILDE_VARIABLE)?,
+                cfg.static_span(4, 29, ARGUMENTS)?,
             ]
         );
 
@@ -1004,7 +1083,9 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(8, 9, TILDE_VARIABLE)?
+                cfg.static_span(2, 8, ARGUMENTS)?,
+                cfg.static_span(8, 9, TILDE_VARIABLE)?,
+                cfg.static_span(9, 10, ARGUMENTS)?,
             ]
         );
 
@@ -1021,8 +1102,10 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 3, "foo"),
-                cfg.static_span(4, 12, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(12, 15, PARAMETER)?,
+                cfg.static_span(3, 4, ARGUMENTS)?,
+                cfg.mixed_span(4, 12, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(12, 14, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(14, 15, PARAMETER)?,
             ]
         );
 
@@ -1054,7 +1137,8 @@ mod tests {
                 cfg.dynamic_span(0, 10, ash.to_str().unwrap()),
                 cfg.static_span(11, 13, OPERATOR_LOGICAL_AND)?,
                 cfg.dynamic_span(14, 25, bsh.to_str().unwrap()),
-                cfg.static_span(25, 34, COMMENT)?,
+                cfg.static_span(25, 26, PUNCTUATION_COMMENT_BEGIN)?,
+                cfg.static_span(26, 34, COMMENT)?,
             ]
         );
 
@@ -1068,6 +1152,7 @@ mod tests {
                 cfg.dynamic_span(0, 10, ash.to_str().unwrap()),
                 cfg.static_span(11, 13, OPERATOR_LOGICAL_AND)?,
                 cfg.dynamic_span(14, 25, &expected_path),
+                cfg.static_span(25, 33, ARGUMENTS)?,
             ]
         );
 
@@ -1084,8 +1169,10 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 4, "echo"),
+                cfg.static_span(4, 11, ARGUMENTS)?,
                 cfg.static_span(11, 12, REDIRECTION)?,
-                cfg.static_span(13, 21, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(12, 13, ARGUMENTS)?,
+                cfg.mixed_span(13, 21, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -1094,8 +1181,9 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 4, "echo"),
+                cfg.static_span(4, 10, ARGUMENTS)?,
                 cfg.static_span(10, 11, REDIRECTION)?,
-                cfg.static_span(11, 19, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(11, 19, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -1104,9 +1192,14 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 4, "echo"),
-                cfg.static_span(5, 11, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(4, 5, ARGUMENTS)?,
+                cfg.static_span(5, 6, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(6, 7, PUNCTUATION_EXPANSION_PARAMETER_BEGIN)?,
+                cfg.static_span(7, 10, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(10, 11, PUNCTUATION_EXPANSION_PARAMETER_END)?,
+                cfg.static_span(11, 16, ARGUMENTS)?,
                 cfg.static_span(16, 17, REDIRECTION)?,
-                cfg.static_span(17, 25, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(17, 25, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -1115,9 +1208,11 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 4, "echo"),
-                cfg.static_span(10, 14, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(4, 10, ARGUMENTS)?,
+                cfg.static_span(10, 11, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(11, 14, ENVIRONMENT_VARIABLE)?,
                 cfg.static_span(14, 15, REDIRECTION)?,
-                cfg.static_span(15, 23, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(15, 23, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -1139,7 +1234,11 @@ mod tests {
         let highlighted = cfg.highlight("\"./script.sh\"")?;
         assert_eq!(
             highlighted,
-            vec![cfg.static_span(0, 13, DYNAMIC_CALLABLE_COMMAND)?]
+            vec![
+                cfg.mixed_span(0, 1, STRING_QUOTED_BEGIN, DYNAMIC_CALLABLE_COMMAND)?,
+                cfg.mixed_span(1, 12, STRING_QUOTED_DOUBLE, DYNAMIC_CALLABLE_COMMAND)?,
+                cfg.mixed_span(12, 13, STRING_QUOTED_END, DYNAMIC_CALLABLE_COMMAND)?,
+            ]
         );
 
         cfg.create_dir("foo/bar")?;
@@ -1147,7 +1246,13 @@ mod tests {
         let highlighted = cfg.highlight("foo/\"bar\"/")?;
         assert_eq!(
             highlighted,
-            vec![cfg.static_span(0, 10, DYNAMIC_CALLABLE_COMMAND)?]
+            vec![
+                cfg.mixed_span(0, 4, CALLABLE, DYNAMIC_CALLABLE_COMMAND)?,
+                cfg.mixed_span(4, 5, STRING_QUOTED_BEGIN, DYNAMIC_CALLABLE_COMMAND)?,
+                cfg.mixed_span(5, 8, STRING_QUOTED_DOUBLE, DYNAMIC_CALLABLE_COMMAND)?,
+                cfg.mixed_span(8, 9, STRING_QUOTED_END, DYNAMIC_CALLABLE_COMMAND)?,
+                cfg.mixed_span(9, 10, CALLABLE, DYNAMIC_CALLABLE_COMMAND)?,
+            ]
         );
 
         Ok(())
@@ -1166,7 +1271,10 @@ mod tests {
         let highlighted = cfg.highlight(r"\./script.sh")?;
         assert_eq!(
             highlighted,
-            vec![cfg.static_span(0, 12, DYNAMIC_CALLABLE_COMMAND)?]
+            vec![
+                cfg.mixed_span(0, 2, CHARACTER_ESCAPE, DYNAMIC_CALLABLE_COMMAND)?,
+                cfg.mixed_span(2, 12, CALLABLE, DYNAMIC_CALLABLE_COMMAND)?
+            ]
         );
 
         // parser cannot differentiate between normal unquoted character escapes
@@ -1179,8 +1287,9 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 5, "touch"),
+                cfg.static_span(5, 6, ARGUMENTS)?,
                 cfg.mixed_span(6, 8, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(8, 15, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(8, 15, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -1196,7 +1305,9 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(7, 9, CHARACTER_ESCAPE)?
+                cfg.static_span(2, 7, ARGUMENTS)?,
+                cfg.static_span(7, 9, CHARACTER_ESCAPE)?,
+                cfg.static_span(9, 26, ARGUMENTS)?,
             ]
         );
 
@@ -1207,9 +1318,11 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(3, 7, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.mixed_span(3, 7, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
                 cfg.mixed_span(7, 9, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(9, 17, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(9, 17, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(17, 26, ARGUMENTS)?,
             ]
         );
 
@@ -1227,7 +1340,9 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(7, 9, CHARACTER_ESCAPE)?
+                cfg.static_span(2, 7, ARGUMENTS)?,
+                cfg.static_span(7, 9, CHARACTER_ESCAPE)?,
+                cfg.static_span(9, 26, ARGUMENTS)?,
             ]
         );
 
@@ -1236,7 +1351,11 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(3, 19, STRING_QUOTED_DOUBLE)?
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.static_span(3, 4, STRING_QUOTED_BEGIN)?,
+                cfg.static_span(4, 18, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(18, 19, STRING_QUOTED_END)?,
+                cfg.static_span(19, 28, ARGUMENTS)?,
             ]
         );
 
@@ -1245,7 +1364,11 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(3, 19, STRING_QUOTED_DOUBLE)?
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.static_span(3, 4, STRING_QUOTED_BEGIN)?,
+                cfg.static_span(4, 18, STRING_QUOTED_SINGLE)?,
+                cfg.static_span(18, 19, STRING_QUOTED_END)?,
+                cfg.static_span(19, 28, ARGUMENTS)?,
             ]
         );
 
@@ -1254,9 +1377,18 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.mixed_span(3, 9, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.mixed_span(3, 5, STRING_QUOTED_BEGIN, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(5, 9, STRING_QUOTED_SINGLE_ANSI, DYNAMIC_PATH_FILE_COMPLETE)?,
                 cfg.mixed_span(9, 15, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(15, 20, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(
+                    15,
+                    19,
+                    STRING_QUOTED_SINGLE_ANSI,
+                    DYNAMIC_PATH_FILE_COMPLETE
+                )?,
+                cfg.mixed_span(19, 20, STRING_QUOTED_END, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(20, 29, ARGUMENTS)?,
             ]
         );
 
@@ -1265,9 +1397,11 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(3, 7, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.mixed_span(3, 7, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
                 cfg.mixed_span(7, 11, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(11, 16, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(11, 16, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(16, 25, ARGUMENTS)?,
             ]
         );
 
@@ -1276,7 +1410,11 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(3, 18, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.static_span(3, 4, STRING_QUOTED_BEGIN)?,
+                cfg.static_span(4, 17, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(17, 18, STRING_QUOTED_END)?,
+                cfg.static_span(18, 27, ARGUMENTS)?,
             ]
         );
 
@@ -1285,7 +1423,11 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(3, 19, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.static_span(3, 5, STRING_QUOTED_BEGIN)?,
+                cfg.static_span(5, 18, STRING_QUOTED_SINGLE_ANSI)?,
+                cfg.static_span(18, 19, STRING_QUOTED_END)?,
+                cfg.static_span(19, 28, ARGUMENTS)?,
             ]
         );
 
@@ -1294,9 +1436,18 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.mixed_span(3, 9, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.mixed_span(3, 5, STRING_QUOTED_BEGIN, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(5, 9, STRING_QUOTED_SINGLE_ANSI, DYNAMIC_PATH_FILE_COMPLETE)?,
                 cfg.mixed_span(9, 17, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(17, 23, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(
+                    17,
+                    22,
+                    STRING_QUOTED_SINGLE_ANSI,
+                    DYNAMIC_PATH_FILE_COMPLETE
+                )?,
+                cfg.mixed_span(22, 23, STRING_QUOTED_END, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(23, 32, ARGUMENTS)?,
             ]
         );
 
@@ -1305,11 +1456,13 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(3, 7, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(7, 9, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.mixed_span(3, 7, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(7, 9, STRING_QUOTED_BEGIN, DYNAMIC_PATH_FILE_COMPLETE)?,
                 cfg.mixed_span(9, 17, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(17, 18, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(18, 23, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(17, 18, STRING_QUOTED_END, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(18, 23, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(23, 32, ARGUMENTS)?,
             ]
         );
 
@@ -1327,13 +1480,25 @@ mod tests {
         let highlighted = cfg.highlight(r"$'sub/test\xF0\x9F\x98\x8E.sh'")?;
         assert_eq!(
             highlighted,
-            vec![cfg.static_span(0, 30, DYNAMIC_CALLABLE_COMMAND)?]
+            vec![
+                cfg.mixed_span(0, 2, STRING_QUOTED_BEGIN, DYNAMIC_CALLABLE_COMMAND)?,
+                cfg.mixed_span(2, 10, STRING_QUOTED_SINGLE_ANSI, DYNAMIC_CALLABLE_COMMAND)?,
+                cfg.mixed_span(10, 26, CHARACTER_ESCAPE, DYNAMIC_CALLABLE_COMMAND)?,
+                cfg.mixed_span(26, 29, STRING_QUOTED_SINGLE_ANSI, DYNAMIC_CALLABLE_COMMAND)?,
+                cfg.mixed_span(29, 30, STRING_QUOTED_END, DYNAMIC_CALLABLE_COMMAND)?,
+            ]
         );
 
         let highlighted = cfg.highlight(r"$'sub/test\xF0\237\x98\x8E.sh'")?;
         assert_eq!(
             highlighted,
-            vec![cfg.static_span(0, 30, DYNAMIC_CALLABLE_COMMAND)?]
+            vec![
+                cfg.mixed_span(0, 2, STRING_QUOTED_BEGIN, DYNAMIC_CALLABLE_COMMAND)?,
+                cfg.mixed_span(2, 10, STRING_QUOTED_SINGLE_ANSI, DYNAMIC_CALLABLE_COMMAND)?,
+                cfg.mixed_span(10, 26, CHARACTER_ESCAPE, DYNAMIC_CALLABLE_COMMAND)?,
+                cfg.mixed_span(26, 29, STRING_QUOTED_SINGLE_ANSI, DYNAMIC_CALLABLE_COMMAND)?,
+                cfg.mixed_span(29, 30, STRING_QUOTED_END, DYNAMIC_CALLABLE_COMMAND)?,
+            ]
         );
 
         Ok(())
@@ -1349,9 +1514,18 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.mixed_span(3, 9, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.mixed_span(3, 5, STRING_QUOTED_BEGIN, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(5, 9, STRING_QUOTED_SINGLE_ANSI, DYNAMIC_PATH_FILE_COMPLETE)?,
                 cfg.mixed_span(9, 25, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(25, 30, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(
+                    25,
+                    29,
+                    STRING_QUOTED_SINGLE_ANSI,
+                    DYNAMIC_PATH_FILE_COMPLETE
+                )?,
+                cfg.mixed_span(29, 30, STRING_QUOTED_END, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(30, 39, ARGUMENTS)?,
             ]
         );
 
@@ -1360,9 +1534,18 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "cp"),
-                cfg.mixed_span(3, 9, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.mixed_span(3, 5, STRING_QUOTED_BEGIN, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(5, 9, STRING_QUOTED_SINGLE_ANSI, DYNAMIC_PATH_FILE_COMPLETE)?,
                 cfg.mixed_span(9, 25, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(25, 30, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.mixed_span(
+                    25,
+                    29,
+                    STRING_QUOTED_SINGLE_ANSI,
+                    DYNAMIC_PATH_FILE_COMPLETE
+                )?,
+                cfg.mixed_span(29, 30, STRING_QUOTED_END, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(30, 39, ARGUMENTS)?,
             ]
         );
 
@@ -1381,11 +1564,17 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 3, "foo"),
-                cfg.static_span(10, 13, PARAMETER)?,
-                cfg.static_span(14, 51, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(3, 10, ARGUMENTS)?,
+                cfg.static_span(10, 12, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(12, 13, PARAMETER)?,
+                cfg.static_span(13, 14, ARGUMENTS)?,
+                cfg.static_span(14, 15, STRING_QUOTED_BEGIN)?,
+                cfg.static_span(15, 50, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(50, 51, STRING_QUOTED_END)?,
                 cfg.static_span(52, 54, OPERATOR_LOGICAL_AND)?,
                 cfg.dynamic_span(55, 60, "touch"),
-                cfg.static_span(61, 69, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(60, 61, ARGUMENTS)?,
+                cfg.mixed_span(61, 69, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -1403,7 +1592,9 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(11, 18, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(2, 11, ARGUMENTS)?,
+                cfg.static_span(11, 12, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(12, 18, ENVIRONMENT_VARIABLE)?,
             ]
         );
 
@@ -1412,8 +1603,13 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(3, 12, ENVIRONMENT_VARIABLE)?,
-                cfg.static_span(21, 29, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.static_span(3, 4, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(4, 5, PUNCTUATION_EXPANSION_PARAMETER_BEGIN)?,
+                cfg.static_span(5, 11, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(11, 12, PUNCTUATION_EXPANSION_PARAMETER_END)?,
+                cfg.static_span(12, 21, ARGUMENTS)?,
+                cfg.mixed_span(21, 29, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -1422,8 +1618,13 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(11, 20, ENVIRONMENT_VARIABLE)?,
-                cfg.static_span(29, 37, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(2, 11, ARGUMENTS)?,
+                cfg.static_span(11, 12, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(12, 13, PUNCTUATION_EXPANSION_PARAMETER_BEGIN)?,
+                cfg.static_span(13, 19, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(19, 20, PUNCTUATION_EXPANSION_PARAMETER_END)?,
+                cfg.static_span(20, 29, ARGUMENTS)?,
+                cfg.mixed_span(29, 37, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -1441,9 +1642,12 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(11, 13, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(2, 11, ARGUMENTS)?,
+                cfg.static_span(11, 12, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(12, 13, PUNCTUATION_PARENS_BEGIN)?,
                 cfg.dynamic_span(13, 17, "echo"),
-                cfg.static_span(24, 25, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(17, 24, ARGUMENTS)?,
+                cfg.static_span(24, 25, PUNCTUATION_PARENS_END)?,
             ]
         );
 
@@ -1454,10 +1658,13 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(11, 13, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(2, 11, ARGUMENTS)?,
+                cfg.static_span(11, 12, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(12, 13, PUNCTUATION_PARENS_BEGIN)?,
                 cfg.dynamic_span(13, 17, "echo"),
-                cfg.static_span(18, 24, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(24, 25, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(17, 18, ARGUMENTS)?,
+                cfg.mixed_span(18, 24, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(24, 25, PUNCTUATION_PARENS_END)?,
             ]
         );
 
@@ -1468,12 +1675,17 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(3, 11, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(20, 22, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.mixed_span(3, 11, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(11, 20, ARGUMENTS)?,
+                cfg.static_span(20, 21, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(21, 22, PUNCTUATION_PARENS_BEGIN)?,
                 cfg.dynamic_span(22, 26, "echo"),
-                cfg.static_span(27, 33, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(33, 34, ENVIRONMENT_VARIABLE)?,
-                cfg.static_span(35, 44, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(26, 27, ARGUMENTS)?,
+                cfg.mixed_span(27, 33, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(33, 34, PUNCTUATION_PARENS_END)?,
+                cfg.static_span(34, 35, ARGUMENTS)?,
+                cfg.mixed_span(35, 44, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 
@@ -1488,7 +1700,7 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 1, KEYWORD_BUILTIN_DASH)?,
+                cfg.static_span(0, 1, PRECOMMAND_DASH)?,
                 cfg.dynamic_span(2, 8, "foobar"),
             ]
         );
@@ -1504,7 +1716,7 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 7, KEYWORD_BUILTIN_BUILTIN)?,
+                cfg.static_span(0, 7, PRECOMMAND_BUILTIN)?,
                 cfg.dynamic_span(8, 12, "echo"),
             ]
         );
@@ -1520,7 +1732,7 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
                 cfg.dynamic_span(8, 12, "echo"),
             ]
         );
@@ -1529,7 +1741,7 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
                 cfg.static_span(7, 10, PARAMETER)?,
                 cfg.dynamic_span(11, 15, "echo"),
             ]
@@ -1539,8 +1751,9 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
                 cfg.static_span(7, 10, PARAMETER)?,
+                cfg.static_span(10, 13, INVALID_UNKNOWN_PRECOMMAND_PARAMETER)?,
                 cfg.dynamic_span(14, 18, "echo"),
             ]
         );
@@ -1549,9 +1762,10 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
                 cfg.static_span(7, 10, PARAMETER)?,
                 cfg.dynamic_span(11, 15, "echo"),
+                cfg.static_span(15, 20, ARGUMENTS)?,
             ]
         );
 
@@ -1559,10 +1773,13 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
                 cfg.static_span(7, 10, PARAMETER)?,
                 cfg.dynamic_span(11, 15, "echo"),
-                cfg.static_span(16, 22, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(15, 16, ARGUMENTS)?,
+                cfg.static_span(16, 17, STRING_QUOTED_BEGIN)?,
+                cfg.static_span(17, 21, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(21, 22, STRING_QUOTED_END)?,
             ]
         );
 
@@ -1570,10 +1787,12 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
                 cfg.static_span(7, 10, PARAMETER)?,
                 cfg.dynamic_span(11, 15, "echo"),
-                cfg.static_span(15, 18, PARAMETER)?,
+                cfg.static_span(15, 17, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(17, 18, PARAMETER)?,
+                cfg.static_span(18, 23, ARGUMENTS)?,
             ]
         );
 
@@ -1581,7 +1800,7 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
                 cfg.static_span(7, 10, PARAMETER)?,
                 cfg.dynamic_span(11, 15, "echo"),
             ]
@@ -1591,7 +1810,7 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
                 cfg.static_span(7, 10, PARAMETER)?,
                 cfg.dynamic_span(11, 15, "echo"),
                 cfg.dynamic_span(16, 20, "file"),
@@ -1602,7 +1821,7 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
                 cfg.static_span(7, 10, PARAMETER)?,
                 cfg.dynamic_span(11, 15, "echo"),
                 cfg.dynamic_span(16, 22, "file"),
@@ -1613,7 +1832,7 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
                 cfg.static_span(7, 10, PARAMETER)?,
                 cfg.dynamic_span(11, 15, "echo"),
             ]
@@ -1623,7 +1842,7 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
                 cfg.static_span(7, 10, PARAMETER)?,
                 cfg.dynamic_span(11, 15, "echo"),
                 cfg.dynamic_span(16, 20, "file"),
@@ -1634,7 +1853,7 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
                 cfg.static_span(7, 13, PARAMETER)?,
                 cfg.dynamic_span(14, 18, "echo"),
                 cfg.dynamic_span(19, 23, "file"),
@@ -1645,7 +1864,7 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
                 cfg.static_span(7, 13, PARAMETER)?,
                 cfg.dynamic_span(14, 18, "echo"),
                 cfg.dynamic_span(19, 23, "file"),
@@ -1656,7 +1875,7 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
                 cfg.static_span(7, 10, PARAMETER)?,
                 cfg.dynamic_span(11, 15, "echo"),
                 cfg.dynamic_span(16, 18, "-p"),
@@ -1668,7 +1887,7 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
                 cfg.static_span(7, 12, PARAMETER)?,
                 cfg.dynamic_span(13, 17, "echo"),
             ]
@@ -1678,7 +1897,7 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
+                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
                 cfg.static_span(7, 12, PARAMETER)?,
                 cfg.dynamic_span(13, 17, "echo"),
                 cfg.dynamic_span(18, 22, "file"),
@@ -1696,7 +1915,7 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 4, KEYWORD_BUILTIN_EXEC)?,
+                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
                 cfg.dynamic_span(5, 11, "foobar"),
             ]
         );
@@ -1705,7 +1924,7 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 4, KEYWORD_BUILTIN_EXEC)?,
+                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
                 cfg.static_span(4, 7, PARAMETER)?,
                 cfg.dynamic_span(8, 14, "foobar"),
             ]
@@ -1715,7 +1934,7 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 4, KEYWORD_BUILTIN_EXEC)?,
+                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
                 cfg.static_span(4, 7, PARAMETER)?,
                 cfg.dynamic_span(8, 14, "foobar"),
             ]
@@ -1725,7 +1944,7 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 4, KEYWORD_BUILTIN_EXEC)?,
+                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
                 cfg.static_span(4, 8, PARAMETER)?,
                 cfg.dynamic_span(9, 15, "foobar"),
             ]
@@ -1736,7 +1955,8 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 4, KEYWORD_BUILTIN_EXEC)?,
+                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
+                cfg.static_span(4, 7, INVALID_UNKNOWN_PRECOMMAND_PARAMETER)?,
                 cfg.dynamic_span(8, 14, "foobar"),
             ]
         );
@@ -1745,10 +1965,13 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 4, KEYWORD_BUILTIN_EXEC)?,
+                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
                 cfg.static_span(4, 8, PARAMETER)?,
+                cfg.static_span(8, 11, ARGUMENTS)?,
                 cfg.dynamic_span(12, 18, "foobar"),
-                cfg.static_span(19, 21, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(18, 19, ARGUMENTS)?,
+                cfg.static_span(19, 20, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(20, 21, ENVIRONMENT_VARIABLE)?,
             ]
         );
 
@@ -1756,11 +1979,15 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 4, KEYWORD_BUILTIN_EXEC)?,
+                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
                 cfg.static_span(4, 8, PARAMETER)?,
-                cfg.static_span(8, 13, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(8, 9, STRING_QUOTED_BEGIN)?,
+                cfg.static_span(9, 12, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(12, 13, STRING_QUOTED_END)?,
                 cfg.dynamic_span(14, 20, "foobar"),
-                cfg.static_span(21, 23, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(20, 21, ARGUMENTS)?,
+                cfg.static_span(21, 22, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(22, 23, ENVIRONMENT_VARIABLE)?,
             ]
         );
 
@@ -1768,10 +1995,13 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 4, KEYWORD_BUILTIN_EXEC)?,
+                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
                 cfg.static_span(4, 11, PARAMETER)?,
+                cfg.static_span(11, 14, ARGUMENTS)?,
                 cfg.dynamic_span(15, 21, "foobar"),
-                cfg.static_span(22, 24, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(21, 22, ARGUMENTS)?,
+                cfg.static_span(22, 23, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(23, 24, ENVIRONMENT_VARIABLE)?,
             ]
         );
 
@@ -1779,11 +2009,14 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 4, KEYWORD_BUILTIN_EXEC)?,
+                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
                 cfg.static_span(4, 11, PARAMETER)?,
+                cfg.static_span(11, 14, ARGUMENTS)?,
                 cfg.static_span(14, 17, PARAMETER)?,
                 cfg.dynamic_span(18, 24, "foobar"),
-                cfg.static_span(25, 27, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(24, 25, ARGUMENTS)?,
+                cfg.static_span(25, 26, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(26, 27, ENVIRONMENT_VARIABLE)?,
             ]
         );
 
@@ -1791,10 +2024,13 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 4, KEYWORD_BUILTIN_EXEC)?,
+                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
+                cfg.static_span(4, 7, INVALID_UNKNOWN_PRECOMMAND_PARAMETER)?,
                 cfg.static_span(7, 10, PARAMETER)?,
                 cfg.dynamic_span(11, 17, "foobar"),
-                cfg.static_span(18, 20, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(17, 18, ARGUMENTS)?,
+                cfg.static_span(18, 19, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(19, 20, ENVIRONMENT_VARIABLE)?,
             ]
         );
 
@@ -1802,10 +2038,13 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 4, KEYWORD_BUILTIN_EXEC)?,
+                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
                 cfg.static_span(4, 7, PARAMETER)?,
+                cfg.static_span(7, 10, INVALID_UNKNOWN_PRECOMMAND_PARAMETER)?,
                 cfg.dynamic_span(11, 17, "foobar"),
-                cfg.static_span(18, 20, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(17, 18, ARGUMENTS)?,
+                cfg.static_span(18, 19, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(19, 20, ENVIRONMENT_VARIABLE)?,
             ]
         );
 
@@ -1813,11 +2052,14 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 4, KEYWORD_BUILTIN_EXEC)?,
+                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
                 cfg.static_span(4, 7, PARAMETER)?,
+                cfg.static_span(7, 10, INVALID_UNKNOWN_PRECOMMAND_PARAMETER)?,
                 cfg.static_span(10, 13, PARAMETER)?,
                 cfg.dynamic_span(14, 20, "foobar"),
-                cfg.static_span(21, 23, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(20, 21, ARGUMENTS)?,
+                cfg.static_span(21, 22, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(22, 23, ENVIRONMENT_VARIABLE)?,
             ]
         );
 
@@ -1825,11 +2067,15 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 4, KEYWORD_BUILTIN_EXEC)?,
+                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
                 cfg.static_span(4, 7, PARAMETER)?,
+                cfg.static_span(7, 10, INVALID_UNKNOWN_PRECOMMAND_PARAMETER)?,
                 cfg.static_span(10, 17, PARAMETER)?,
+                cfg.static_span(17, 20, ARGUMENTS)?,
                 cfg.dynamic_span(21, 27, "foobar"),
-                cfg.static_span(28, 30, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(27, 28, ARGUMENTS)?,
+                cfg.static_span(28, 29, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(29, 30, ENVIRONMENT_VARIABLE)?,
             ]
         );
 
@@ -1837,10 +2083,13 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 4, KEYWORD_BUILTIN_EXEC)?,
+                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
                 cfg.static_span(4, 9, PARAMETER)?,
+                cfg.static_span(9, 12, ARGUMENTS)?,
                 cfg.dynamic_span(13, 19, "foobar"),
-                cfg.static_span(20, 22, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(19, 20, ARGUMENTS)?,
+                cfg.static_span(20, 21, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(21, 22, ENVIRONMENT_VARIABLE)?,
             ]
         );
 
@@ -1855,9 +2104,11 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 6, KEYWORD_BUILTIN_NOGLOB)?,
+                cfg.static_span(0, 6, PRECOMMAND_NOGLOB)?,
                 cfg.dynamic_span(7, 9, "ls"),
-                cfg.static_span(10, 11, OPERATOR_REGEXP_QUANTIFIER)?,
+                cfg.static_span(9, 10, ARGUMENTS)?,
+                cfg.mixed_span(10, 11, ARGUMENTS, OPERATOR_REGEXP_QUANTIFIER)?,
+                cfg.static_span(11, 16, ARGUMENTS)?,
             ]
         );
 
@@ -1873,7 +2124,9 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 6, CONTROL_REPEAT)?,
+                cfg.static_span(7, 8, INTEGER)?,
                 cfg.dynamic_span(9, 13, "echo"),
+                cfg.static_span(13, 19, ARGUMENTS)?,
             ]
         );
 
@@ -1883,9 +2136,13 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 6, CONTROL_REPEAT)?,
+                cfg.static_span(7, 8, INTEGER)?,
                 cfg.static_span(8, 9, OPERATOR_ARITHMETIC)?,
+                cfg.static_span(9, 10, INTEGER)?,
                 cfg.static_span(10, 11, OPERATOR_ARITHMETIC)?,
+                cfg.static_span(11, 12, INTEGER)?,
                 cfg.dynamic_span(13, 17, "echo"),
+                cfg.static_span(17, 23, ARGUMENTS)?,
             ]
         );
 
@@ -1895,8 +2152,11 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 6, CONTROL_REPEAT)?,
-                cfg.static_span(9, 12, CONTROL_DO)?,
+                cfg.static_span(7, 8, INTEGER)?,
+                cfg.static_span(9, 11, CONTROL_DO)?,
+                cfg.static_span(11, 12, OPERATOR_LOGICAL_CONTINUE)?,
                 cfg.dynamic_span(13, 17, "echo"),
+                cfg.static_span(17, 23, ARGUMENTS)?,
                 cfg.static_span(23, 24, OPERATOR_LOGICAL_CONTINUE)?,
                 cfg.static_span(25, 29, CONTROL_DONE)?,
             ]
@@ -1909,6 +2169,7 @@ mod tests {
             vec![
                 cfg.static_span(0, 6, CONTROL_REPEAT)?,
                 cfg.dynamic_span(7, 11, "echo"),
+                cfg.static_span(11, 17, ARGUMENTS)?,
             ]
         );
 
@@ -1917,8 +2178,10 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 6, CONTROL_REPEAT)?,
-                cfg.static_span(7, 10, CONTROL_DO)?,
+                cfg.static_span(7, 9, CONTROL_DO)?,
+                cfg.static_span(9, 10, OPERATOR_LOGICAL_CONTINUE)?,
                 cfg.dynamic_span(11, 15, "echo"),
+                cfg.static_span(15, 21, ARGUMENTS)?,
                 cfg.static_span(21, 22, OPERATOR_LOGICAL_CONTINUE)?,
                 cfg.static_span(23, 27, CONTROL_DONE)?,
             ]
@@ -1937,6 +2200,7 @@ mod tests {
             vec![
                 cfg.static_span(0, 4, CONTROL_TIME)?,
                 cfg.dynamic_span(5, 10, "sleep"),
+                cfg.static_span(10, 12, ARGUMENTS)?,
             ]
         );
 
@@ -1953,6 +2217,7 @@ mod tests {
             vec![
                 cfg.static_span(0, 9, CONTROL_NOCORRECT)?,
                 cfg.dynamic_span(10, 14, "slep"),
+                cfg.static_span(14, 16, ARGUMENTS)?,
             ]
         );
 
@@ -1968,11 +2233,15 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 6, CONTROL_SELECT)?,
+                cfg.static_span(6, 9, GROUP_SELECT)?,
                 cfg.static_span(9, 11, CONTROL_IN)?,
+                cfg.static_span(11, 17, GROUP_SELECT)?,
                 cfg.static_span(17, 18, OPERATOR_LOGICAL_CONTINUE)?,
                 cfg.static_span(19, 21, CONTROL_DO)?,
                 cfg.dynamic_span(22, 26, "echo"),
-                cfg.static_span(27, 29, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(26, 27, ARGUMENTS)?,
+                cfg.static_span(27, 28, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(28, 29, ENVIRONMENT_VARIABLE)?,
                 cfg.static_span(29, 30, OPERATOR_LOGICAL_CONTINUE)?,
                 cfg.static_span(31, 35, CONTROL_DONE)?,
             ]
@@ -1984,10 +2253,13 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 6, CONTROL_SELECT)?,
+                cfg.static_span(6, 8, GROUP_SELECT)?,
                 cfg.static_span(8, 9, OPERATOR_LOGICAL_CONTINUE)?,
                 cfg.static_span(10, 12, CONTROL_DO)?,
                 cfg.dynamic_span(13, 17, "echo"),
-                cfg.static_span(18, 20, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(17, 18, ARGUMENTS)?,
+                cfg.static_span(18, 19, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(19, 20, ENVIRONMENT_VARIABLE)?,
                 cfg.static_span(20, 21, OPERATOR_LOGICAL_CONTINUE)?,
                 cfg.static_span(22, 26, CONTROL_DONE)?,
             ]
@@ -1999,7 +2271,9 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 6, CONTROL_SELECT)?,
+                cfg.static_span(6, 9, GROUP_SELECT)?,
                 cfg.static_span(9, 11, CONTROL_IN)?,
+                cfg.static_span(11, 15, GROUP_SELECT)?,
                 cfg.static_span(15, 16, OPERATOR_LOGICAL_CONTINUE)?,
                 cfg.static_span(17, 19, CONTROL_DO)?,
                 cfg.static_span(20, 25, CONTROL_BREAK)?,
@@ -2014,10 +2288,14 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 6, CONTROL_SELECT)?,
+                cfg.static_span(6, 9, GROUP_SELECT)?,
                 cfg.static_span(9, 11, CONTROL_IN)?,
+                cfg.static_span(11, 15, GROUP_SELECT)?,
                 cfg.static_span(16, 18, CONTROL_DO)?,
                 cfg.dynamic_span(19, 23, "echo"),
-                cfg.static_span(24, 26, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(23, 24, ARGUMENTS)?,
+                cfg.static_span(24, 25, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(25, 26, ENVIRONMENT_VARIABLE)?,
                 cfg.static_span(27, 31, CONTROL_DONE)?,
             ]
         );
@@ -2029,15 +2307,21 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 6, CONTROL_SELECT)?,
+                cfg.static_span(6, 9, GROUP_SELECT)?,
                 cfg.static_span(9, 11, CONTROL_IN)?,
+                cfg.static_span(11, 15, GROUP_SELECT)?,
                 cfg.static_span(15, 16, OPERATOR_LOGICAL_CONTINUE)?,
                 cfg.static_span(17, 19, CONTROL_DO)?,
-                cfg.static_span(20, 24, CONTROL_CASE)?,
-                cfg.static_span(25, 27, ENVIRONMENT_VARIABLE)?,
-                cfg.static_span(28, 30, CONTROL_IN)?,
+                cfg.static_span(20, 24, CONTROL_CASE_BEGIN)?,
+                cfg.static_span(25, 26, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(26, 27, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(28, 30, CONTROL_CASE_IN)?,
                 cfg.static_span(32, 33, CONTROL_CASE_ITEM)?,
                 cfg.dynamic_span(34, 38, "echo"),
-                cfg.static_span(45, 50, CONTROL_ESAC)?,
+                cfg.static_span(38, 42, ARGUMENTS)?,
+                cfg.static_span(42, 44, PUNCTUATION_TERMINATOR_CASE)?,
+                cfg.static_span(45, 49, CONTROL_CASE_END)?,
+                cfg.static_span(49, 50, OPERATOR_LOGICAL_CONTINUE)?,
                 cfg.static_span(51, 55, CONTROL_DONE)?,
             ]
         );
@@ -2054,9 +2338,13 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 7, CONTROL_FOREACH)?,
+                cfg.static_span(7, 16, GROUP_FOREACH)?,
+                cfg.static_span(16, 17, POST_CMD)?,
                 cfg.static_span(17, 18, OPERATOR_LOGICAL_CONTINUE)?,
                 cfg.dynamic_span(19, 23, "echo"),
-                cfg.static_span(24, 26, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(23, 24, ARGUMENTS)?,
+                cfg.static_span(24, 25, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(25, 26, ENVIRONMENT_VARIABLE)?,
                 cfg.static_span(26, 27, OPERATOR_LOGICAL_CONTINUE)?,
                 cfg.static_span(28, 31, CONTROL_END)?,
             ]
@@ -2068,8 +2356,12 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 7, CONTROL_FOREACH)?,
+                cfg.static_span(7, 16, GROUP_FOREACH)?,
+                cfg.static_span(16, 17, POST_CMD)?,
                 cfg.dynamic_span(18, 22, "echo"),
-                cfg.static_span(23, 25, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(22, 23, ARGUMENTS)?,
+                cfg.static_span(23, 24, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(24, 25, ENVIRONMENT_VARIABLE)?,
                 cfg.static_span(26, 29, CONTROL_END)?,
             ]
         );
@@ -2080,9 +2372,13 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 7, CONTROL_FOREACH)?,
+                cfg.static_span(7, 16, GROUP_FOREACH)?,
+                cfg.static_span(16, 17, POST_CMD)?,
                 cfg.static_span(17, 18, OPERATOR_LOGICAL_CONTINUE)?,
                 cfg.dynamic_span(18, 22, "echo"),
-                cfg.static_span(23, 25, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(22, 23, ARGUMENTS)?,
+                cfg.static_span(23, 24, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(24, 25, ENVIRONMENT_VARIABLE)?,
                 cfg.static_span(25, 26, OPERATOR_LOGICAL_CONTINUE)?,
                 cfg.static_span(27, 32, CONTROL_BREAK)?,
                 cfg.static_span(33, 34, OPERATOR_LOGICAL_CONTINUE)?,
@@ -2105,6 +2401,7 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "ls"),
+                cfg.static_span(2, 3, ARGUMENTS)?,
                 cfg.static_span(3, 5, EXPANSION_HISTORY)?,
             ]
         );
@@ -2124,7 +2421,9 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 4, "echo"),
+                cfg.static_span(4, 5, ARGUMENTS)?,
                 cfg.static_span(5, 7, EXPANSION_HISTORY)?,
+                cfg.static_span(7, 8, ARGUMENTS)?,
                 cfg.static_span(8, 9, STRING_QUOTED_DOUBLE)?,
                 cfg.static_span(9, 11, EXPANSION_HISTORY)?,
                 cfg.static_span(11, 12, STRING_QUOTED_DOUBLE)?,
@@ -2132,7 +2431,13 @@ mod tests {
         );
 
         let highlighted = cfg.highlight("!-20 foobar")?;
-        assert_eq!(highlighted, vec![cfg.static_span(0, 4, EXPANSION_HISTORY)?]);
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 4, EXPANSION_HISTORY)?,
+                cfg.static_span(4, 11, ARGUMENTS)?,
+            ]
+        );
 
         let highlighted = cfg.highlight("!4echo")?;
         assert_eq!(
@@ -2148,6 +2453,7 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "vi"),
+                cfg.static_span(2, 3, ARGUMENTS)?,
                 cfg.static_span(3, 7, EXPANSION_HISTORY)?
             ]
         );
@@ -2157,7 +2463,9 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "vi"),
-                cfg.static_span(3, 8, EXPANSION_HISTORY)?
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.static_span(3, 8, EXPANSION_HISTORY)?,
+                cfg.static_span(8, 12, ARGUMENTS)?,
             ]
         );
 
@@ -2165,8 +2473,9 @@ mod tests {
         assert_eq!(
             highlighted,
             vec![
-                cfg.static_span(0, 7, KEYWORD_BUILTIN_COMMAND)?,
-                cfg.static_span(8, 12, EXPANSION_HISTORY)?
+                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
+                cfg.static_span(8, 12, EXPANSION_HISTORY)?,
+                cfg.static_span(12, 27, ARGUMENTS)?,
             ]
         );
 
@@ -2175,13 +2484,21 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(2, 5, PARAMETER)?,
+                cfg.static_span(2, 4, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(4, 5, PARAMETER)?,
+                cfg.static_span(5, 6, ARGUMENTS)?,
                 cfg.static_span(6, 10, EXPANSION_HISTORY)?
             ]
         );
 
         let highlighted = cfg.highlight("!% stop")?;
-        assert_eq!(highlighted, vec![cfg.static_span(0, 2, EXPANSION_HISTORY)?]);
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 2, EXPANSION_HISTORY)?,
+                cfg.static_span(2, 7, ARGUMENTS)?,
+            ]
+        );
 
         let highlighted = cfg.highlight("!zsh-patina")?;
         assert_eq!(
@@ -2197,6 +2514,7 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 4, "echo"),
+                cfg.static_span(4, 5, ARGUMENTS)?,
                 cfg.static_span(5, 6, STRING_QUOTED_DOUBLE)?,
                 cfg.static_span(6, 13, EXPANSION_HISTORY)?,
                 cfg.static_span(13, 15, STRING_QUOTED_DOUBLE)?,
@@ -2224,18 +2542,20 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(13, 17, CONTROL_CASE_BEGIN)?,
-                cfg.static_span(18, 19, STRING_QUOTED_DOUBLE)?,
-                cfg.static_span(19, 21, ENVIRONMENT_VARIABLE)?,
-                cfg.static_span(21, 22, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(18, 19, STRING_QUOTED_BEGIN)?,
+                cfg.static_span(19, 20, PUNCTUATION_VARIABLE)?,
+                cfg.static_span(20, 21, ENVIRONMENT_VARIABLE)?,
+                cfg.static_span(21, 22, STRING_QUOTED_END)?,
                 cfg.static_span(23, 25, CONTROL_CASE_IN)?,
                 cfg.static_span(42, 43, OPERATOR_REGEXP_QUANTIFIER)?,
                 cfg.static_span(43, 44, CONTROL_CASE_ITEM)?,
                 cfg.dynamic_span(45, 48, "cat"),
                 cfg.static_span(61, 65, CONTROL_CASE_END)?,
                 cfg.static_span(66, 68, OPERATOR_ASSIGNMENT_REDIRECTION)?,
-                cfg.static_span(68, 69, STRING_QUOTED_SINGLE)?,
+                cfg.static_span(68, 69, STRING_QUOTED_BEGIN)?,
                 cfg.static_span(69, 72, CONTROL_HEREDOC)?,
-                cfg.static_span(72, 131, STRING_UNQUOTED_HEREDOC)?,
+                cfg.static_span(72, 73, STRING_QUOTED_END)?,
+                cfg.static_span(73, 131, STRING_UNQUOTED_HEREDOC)?,
             ]
         );
 
@@ -2251,6 +2571,7 @@ mod tests {
             highlighted,
             vec![
                 cfg.dynamic_span(0, 2, "ls"),
+                cfg.static_span(2, 3, ARGUMENTS)?,
                 cfg.static_span(3, 5, EXPANSION_HISTORY)?,
             ]
         );
@@ -2261,7 +2582,13 @@ mod tests {
                 .with_history_expansions(false)
                 .with_pwd(cfg.pwd.as_str()),
         )?;
-        assert_eq!(highlighted, vec![cfg.dynamic_span(0, 2, "ls")]);
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 2, "ls"),
+                cfg.static_span(2, 5, ARGUMENTS)?,
+            ]
+        );
 
         Ok(())
     }
