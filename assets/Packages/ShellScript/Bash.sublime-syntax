@@ -235,6 +235,24 @@ contexts:
     # external precommands - note that they have to have the scope
     # `variable.function.shell` because they may or may not be installed on the
     # system and we want to highlight them in the same way as other callables.
+    - match: \benv{{keyword_boundary_end}}
+      scope: meta.function-call.shell variable.function.shell
+      set:
+        - match: '(({{start_of_short_option}})[0iv]*[CPu])\s*'
+          captures:
+            1: variable.parameter.option.shell
+            2: punctuation.definition.parameter.shell
+          push: single-argument
+        - match: '(({{start_of_short_option}})[0iv]*S)\s*(?!-)'
+          captures:
+            1: variable.parameter.option.shell
+            2: punctuation.definition.parameter.shell
+          push: single-argument
+        - match: '({{start_of_short_option}})[0iv]+(?={{is_end_of_option}})'
+          captures:
+            0: variable.parameter.option.shell
+            1: punctuation.definition.parameter.shell
+        - include: precommand-end-of-options
     - match: \bnice{{keyword_boundary_end}}
       scope: meta.function-call.shell variable.function.shell
       set:

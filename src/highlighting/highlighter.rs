@@ -2539,6 +2539,311 @@ mod tests {
     }
 
     #[test]
+    fn env() -> Result<()> {
+        let cfg = test_cfg()?;
+        cfg.create_dir("mydir")?;
+
+        let highlighted = cfg.highlight("env -i ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.dynamic_span(7, 9, "ls"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("env -ii ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 7, PARAMETER)?,
+                cfg.dynamic_span(8, 10, "ls"),
+            ]
+        );
+
+        // env -C mydir ls (existing directory)
+        let highlighted = cfg.highlight("env -C mydir ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.mixed_span(7, 12, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+                cfg.dynamic_span(13, 15, "ls"),
+            ]
+        );
+
+        // env -C foobar ls (non-existing path)
+        let highlighted = cfg.highlight("env -C foobar ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(7, 13, ARGUMENTS)?,
+                cfg.dynamic_span(14, 16, "ls"),
+            ]
+        );
+
+        // env -Cmydir ls (existing directory, no space)
+        let highlighted = cfg.highlight("env -Cmydir ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.mixed_span(6, 11, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+                cfg.dynamic_span(12, 14, "ls"),
+            ]
+        );
+
+        // env -Cfoobar ls (non-existing path, no space)
+        let highlighted = cfg.highlight("env -Cfoobar ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(6, 12, ARGUMENTS)?,
+                cfg.dynamic_span(13, 15, "ls"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("env -i -u _ env")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(6, 8, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(8, 9, PARAMETER)?,
+                cfg.static_span(10, 11, ARGUMENTS)?,
+                cfg.dynamic_span(12, 15, "env"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("env -iu _ env")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 7, PARAMETER)?,
+                cfg.static_span(8, 9, ARGUMENTS)?,
+                cfg.dynamic_span(10, 13, "env"),
+            ]
+        );
+
+        // env -P mydir ls (existing directory)
+        let highlighted = cfg.highlight("env -P mydir ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.mixed_span(7, 12, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+                cfg.dynamic_span(13, 15, "ls"),
+            ]
+        );
+
+        // env -P foobar ls (non-existing path)
+        let highlighted = cfg.highlight("env -P foobar ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(7, 13, ARGUMENTS)?,
+                cfg.dynamic_span(14, 16, "ls"),
+            ]
+        );
+
+        // env -S -C mydir ls (existing directory)
+        let highlighted = cfg.highlight("env -S -C mydir ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(6, 8, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(8, 9, PARAMETER)?,
+                cfg.mixed_span(10, 15, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+                cfg.dynamic_span(16, 18, "ls"),
+            ]
+        );
+
+        // env -S -C foobar ls (non-existing path)
+        let highlighted = cfg.highlight("env -S -C foobar ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(6, 8, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(8, 9, PARAMETER)?,
+                cfg.static_span(10, 16, ARGUMENTS)?,
+                cfg.dynamic_span(17, 19, "ls"),
+            ]
+        );
+
+        // env -S -Cmydir ls (existing directory, no space)
+        let highlighted = cfg.highlight("env -S -Cmydir ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(6, 8, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(8, 9, PARAMETER)?,
+                cfg.mixed_span(9, 14, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+                cfg.dynamic_span(15, 17, "ls"),
+            ]
+        );
+
+        // env -S -P mydir ls (existing directory)
+        let highlighted = cfg.highlight("env -S -P mydir ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(6, 8, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(8, 9, PARAMETER)?,
+                cfg.mixed_span(10, 15, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+                cfg.dynamic_span(16, 18, "ls"),
+            ]
+        );
+
+        // env -S -P foobar ls (non-existing path)
+        let highlighted = cfg.highlight("env -S -P foobar ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(6, 8, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(8, 9, PARAMETER)?,
+                cfg.static_span(10, 16, ARGUMENTS)?,
+                cfg.dynamic_span(17, 19, "ls"),
+            ]
+        );
+
+        // env -S -Pmydir ls (existing directory, no space)
+        let highlighted = cfg.highlight("env -S -Pmydir ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(6, 8, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(8, 9, PARAMETER)?,
+                cfg.mixed_span(9, 14, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+                cfg.dynamic_span(15, 17, "ls"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("env -S '-C target' ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(7, 8, STRING_QUOTED_BEGIN)?,
+                cfg.static_span(8, 17, STRING_QUOTED_SINGLE)?,
+                cfg.static_span(17, 18, STRING_QUOTED_END)?,
+                cfg.dynamic_span(19, 21, "ls"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("env -S '-P mydir' ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(7, 8, STRING_QUOTED_BEGIN)?,
+                cfg.static_span(8, 16, STRING_QUOTED_SINGLE)?,
+                cfg.static_span(16, 17, STRING_QUOTED_END)?,
+                cfg.dynamic_span(18, 20, "ls"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("env -u _ env")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(7, 8, ARGUMENTS)?,
+                cfg.dynamic_span(9, 12, "env"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("env -u_ env")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(6, 7, ARGUMENTS)?,
+                cfg.dynamic_span(8, 11, "env"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("env -i bar=foo env")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(7, 10, VARIABLE_ASSIGNMENT)?,
+                cfg.static_span(10, 11, OPERATOR_ASSIGNMENT)?,
+                cfg.static_span(11, 14, STRING_UNQUOTED)?,
+                cfg.dynamic_span(15, 18, "env"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("env -i -- bar=foo env")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(6, 9, OPERATOR_END_OF_OPTIONS)?,
+                cfg.static_span(10, 13, VARIABLE_ASSIGNMENT)?,
+                cfg.static_span(13, 14, OPERATOR_ASSIGNMENT)?,
+                cfg.static_span(14, 17, STRING_UNQUOTED)?,
+                cfg.dynamic_span(18, 21, "env"),
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn nice() -> Result<()> {
         let cfg = test_cfg()?;
 
