@@ -210,13 +210,12 @@ contexts:
     - match: \bcommand{{keyword_boundary_end}}
       scope: keyword.builtin.command.shell precommand.builtin.command.shell
       set:
-        - match: '((?=(?:{{start_of_short_option}}[pvV]+)*{{start_of_short_option}}[pvV]*[vV])(?:{{start_of_short_option}}[pvV]+)+)({{end_of_options}})?'
+        - match: '({{start_of_short_option}})p+(?={{is_end_of_option}})'
           captures:
-            1: variable.parameter.option.shell
-            2: keyword.operator.end-of-options.shell
-          push: command-argv
-        - match: '(?:{{start_of_short_option}}p+)+'
-          scope: variable.parameter.option.shell
+            0: variable.parameter.option.shell
+            1: punctuation.definition.parameter.shell
+        - match: '(?={{start_of_short_option}}[pvV]*[vV][pvV]*(?={{is_end_of_option}}))'
+          set: [command-argv, precommand-command-v]
         - include: precommand-end-of-options
     - match: \bexec{{keyword_boundary_end}}
       scope: keyword.builtin.exec.shell precommand.builtin.exec.shell
@@ -340,6 +339,13 @@ contexts:
       set:
         - meta_scope: meta.group.foreach.shell
         - include: cmd-args-boilerplate
+
+  precommand-command-v:
+    - match: '({{start_of_short_option}})[pvV]+(?={{is_end_of_option}})'
+      captures:
+        0: variable.parameter.option.shell
+        1: punctuation.definition.parameter.shell
+    - include: precommand-end-of-options
 
   # `command` precommand: list of commands after `-v` or `-V`
   command-argv:
