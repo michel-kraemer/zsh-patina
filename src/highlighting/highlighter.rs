@@ -2539,6 +2539,80 @@ mod tests {
     }
 
     #[test]
+    fn doas() -> Result<()> {
+        let cfg = test_cfg()?;
+
+        let highlighted = cfg.highlight("doas -n -u root -C doas.conf ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "doas"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
+                cfg.static_span(11, 15, ARGUMENTS)?,
+                cfg.static_span(15, 17, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(17, 18, PARAMETER)?,
+                cfg.static_span(19, 28, ARGUMENTS)?,
+                cfg.dynamic_span(29, 31, "ls"),
+            ]
+        );
+
+        cfg.touch_file("doas.conf")?;
+
+        let highlighted = cfg.highlight("doas -n -uroot -Cdoas.conf -- ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "doas"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
+                cfg.static_span(10, 14, ARGUMENTS)?,
+                cfg.static_span(14, 16, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(16, 17, PARAMETER)?,
+                cfg.mixed_span(17, 26, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(26, 29, OPERATOR_END_OF_OPTIONS)?,
+                cfg.dynamic_span(30, 32, "ls"),
+            ]
+        );
+
+        // `doas -s` runs a shell and does not take a command. The subsequent
+        // token is not highlighted as a callable.
+        let highlighted = cfg.highlight("doas -s -u root ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "doas"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
+                cfg.static_span(10, 18, ARGUMENTS)?,
+            ]
+        );
+
+        // `doas -L` clears persisted authentications. It does not execute a
+        // command.
+        let highlighted = cfg.highlight("doas -n -L ls -l")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "doas"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
+                cfg.static_span(10, 16, ARGUMENTS)?,
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn env() -> Result<()> {
         let cfg = test_cfg()?;
         cfg.create_dir("mydir")?;

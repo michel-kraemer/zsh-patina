@@ -235,6 +235,26 @@ contexts:
     # external precommands - note that they have to have the scope
     # `variable.function.shell` because they may or may not be installed on the
     # system and we want to highlight them in the same way as other callables.
+    - match: \bdoas{{keyword_boundary_end}}
+      scope: meta.function-call.shell variable.function.shell
+      set:
+        - match: '(({{start_of_short_option}})[Lns]*[aCu])\s*'
+          captures:
+            1: variable.parameter.option.shell
+            2: punctuation.definition.parameter.shell
+          push: single-argument
+        - match: '({{start_of_short_option}})[n]+(?={{is_end_of_option}})'
+          captures:
+            0: variable.parameter.option.shell
+            1: punctuation.definition.parameter.shell
+        # -L and -s don't execute commands (in fact, -s fails if a command is
+        # given), so don't highlight them as such. Just parse normal arguments.
+        - match: '({{start_of_short_option}})[Ls]+(?={{is_end_of_option}})'
+          captures:
+            0: variable.parameter.option.shell
+            1: punctuation.definition.parameter.shell
+          set: [precommand-doas-arguments, precommand-doas-nocommand]
+        - include: precommand-end-of-options
     - match: \benv{{keyword_boundary_end}}
       scope: meta.function-call.shell variable.function.shell
       set:
@@ -364,12 +384,32 @@ contexts:
         - meta_scope: meta.group.foreach.shell
         - include: cmd-args-boilerplate
 
+  # If we're in this state, command has a -v or -V argument and all tokens
+  # following the options are commands
   precommand-command-v:
     - match: '({{start_of_short_option}})[pvV]+(?={{is_end_of_option}})'
       captures:
         0: variable.parameter.option.shell
         1: punctuation.definition.parameter.shell
     - include: precommand-end-of-options
+
+  # If we're in this state, doas has a -s or -L argument and does not accept
+  # commands. Parse normal arguments instead.
+  precommand-doas-nocommand:
+    - match: '(({{start_of_short_option}})[Lns]*[aCu])\s*'
+      captures:
+        1: variable.parameter.option.shell
+        2: punctuation.definition.parameter.shell
+      push: single-argument
+    - match: '({{start_of_short_option}})[Lns]+(?={{is_end_of_option}})'
+      captures:
+        0: variable.parameter.option.shell
+        1: punctuation.definition.parameter.shell
+    - include: precommand-end-of-options
+
+  precommand-doas-arguments:
+    - meta_content_scope: meta.function-call.arguments.shell
+    - include: cmd-args-common
 
   # `command` precommand: list of commands after `-v` or `-V`
   command-argv:
