@@ -42,6 +42,7 @@ first_line_match: |
 variables:
   call_token: \./
   cmd_boundary: (?=\s|;|$|>|<)
+  end_of_options: (?:\s+|^)--(?=\s|$)
   extension: \.sh
   identifier: '[[:alpha:]_][[:alnum:]_]*'
   identifier_non_posix: '[^{{metachar}}\d][^{{metachar}}=]*'
@@ -65,6 +66,7 @@ variables:
   reset_or: \s*(\|\|)
   reset_pipe: \s*(\|)
   reset_semicolon: \s*(;)(?![;&])
+  start_of_short_option: (?:\s+|^)-(?=[\w$])
   start_of_option: (?:\s+|^)--?(?=[\w$])
   varassign: '[+\-?]?='
 #-------------------------------------------------------------------------------
@@ -208,29 +210,82 @@ contexts:
     - match: \bcommand{{keyword_boundary_end}}
       scope: keyword.builtin.command.shell precommand.builtin.command.shell
       set:
-        - match: '(?=(?:{{start_of_option}}[pvV]+)*{{start_of_option}}[pvV]*[vV])(?:{{start_of_option}}[pvV]+)+'
-          scope: variable.parameter.option.shell
-          push: command-argv
-        - match: '(?:{{start_of_option}}p+)+'
-          scope: variable.parameter.option.shell
-        - match: '{{start_of_option}}\w+'
-          scope: invalid.illegal.unknown-precommand-parameter.shell
-        - match: (?=\S)
-          pop: true
+        - match: '({{start_of_short_option}})p+(?={{is_end_of_option}})'
+          captures:
+            0: variable.parameter.option.shell
+            1: punctuation.definition.parameter.shell
+        - match: '(?={{start_of_short_option}}[pvV]*[vV][pvV]*(?={{is_end_of_option}}))'
+          set: [command-argv, precommand-command-v]
+        - include: precommand-end-of-options
     - match: \bexec{{keyword_boundary_end}}
       scope: keyword.builtin.exec.shell precommand.builtin.exec.shell
       set:
-        - match: '{{start_of_option}}[cl]*a\s*'
-          scope: variable.parameter.option.shell
+        - match: '(({{start_of_short_option}})[cl]*a)\s*'
+          captures:
+            1: variable.parameter.option.shell
+            2: punctuation.definition.parameter.shell
           push: exec-argv0
-        - match: '{{start_of_option}}[cl]+'
-          scope: variable.parameter.option.shell
-        - match: '{{start_of_option}}\w+'
-          scope: invalid.illegal.unknown-precommand-parameter.shell
-        - match: (?=\S)
-          pop: true
+        - match: '({{start_of_short_option}})[cl]+(?={{is_end_of_option}})'
+          captures:
+            0: variable.parameter.option.shell
+            1: punctuation.definition.parameter.shell
+        - include: precommand-end-of-options
     - match: \bnoglob{{keyword_boundary_end}}
       scope: keyword.builtin.noglob.shell precommand.builtin.noglob.shell
+    # external precommands - note that they have to have the scope
+    # `variable.function.shell` because they may or may not be installed on the
+    # system and we want to highlight them in the same way as other callables.
+    - match: \bdoas{{keyword_boundary_end}}
+      scope: meta.function-call.shell variable.function.shell
+      set:
+        - match: '(({{start_of_short_option}})[Lns]*[aCu])\s*'
+          captures:
+            1: variable.parameter.option.shell
+            2: punctuation.definition.parameter.shell
+          push: single-argument
+        - match: '({{start_of_short_option}})[n]+(?={{is_end_of_option}})'
+          captures:
+            0: variable.parameter.option.shell
+            1: punctuation.definition.parameter.shell
+        # -L and -s don't execute commands (in fact, -s fails if a command is
+        # given), so don't highlight them as such. Just parse normal arguments.
+        - match: '({{start_of_short_option}})[Ls]+(?={{is_end_of_option}})'
+          captures:
+            0: variable.parameter.option.shell
+            1: punctuation.definition.parameter.shell
+          set: [precommand-doas-arguments, precommand-doas-nocommand]
+        - include: precommand-end-of-options
+    - match: \benv{{keyword_boundary_end}}
+      scope: meta.function-call.shell variable.function.shell
+      set:
+        - match: '(({{start_of_short_option}})[0iv]*[CPu])\s*'
+          captures:
+            1: variable.parameter.option.shell
+            2: punctuation.definition.parameter.shell
+          push: single-argument
+        - match: '(({{start_of_short_option}})[0iv]*S)\s*(?!-)'
+          captures:
+            1: variable.parameter.option.shell
+            2: punctuation.definition.parameter.shell
+          push: single-argument
+        - match: '({{start_of_short_option}})[0iv]+(?={{is_end_of_option}})'
+          captures:
+            0: variable.parameter.option.shell
+            1: punctuation.definition.parameter.shell
+        - include: precommand-end-of-options
+    - match: \bnice{{keyword_boundary_end}}
+      scope: meta.function-call.shell variable.function.shell
+      set:
+        - match: '(({{start_of_short_option}})n)\s*'
+          captures:
+            1: variable.parameter.option.shell
+            2: punctuation.definition.parameter.shell
+          push: single-argument
+        - include: precommand-end-of-options
+    - match: \bnohup{{keyword_boundary_end}}
+      scope: meta.function-call.shell variable.function.shell
+      set:
+        - include: precommand-end-of-options
 
   case-preamble:
     - match: \bin(?=[^\w_-])
@@ -329,6 +384,33 @@ contexts:
         - meta_scope: meta.group.foreach.shell
         - include: cmd-args-boilerplate
 
+  # If we're in this state, command has a -v or -V argument and all tokens
+  # following the options are commands
+  precommand-command-v:
+    - match: '({{start_of_short_option}})[pvV]+(?={{is_end_of_option}})'
+      captures:
+        0: variable.parameter.option.shell
+        1: punctuation.definition.parameter.shell
+    - include: precommand-end-of-options
+
+  # If we're in this state, doas has a -s or -L argument and does not accept
+  # commands. Parse normal arguments instead.
+  precommand-doas-nocommand:
+    - match: '(({{start_of_short_option}})[Lns]*[aCu])\s*'
+      captures:
+        1: variable.parameter.option.shell
+        2: punctuation.definition.parameter.shell
+      push: single-argument
+    - match: '({{start_of_short_option}})[Lns]+(?={{is_end_of_option}})'
+      captures:
+        0: variable.parameter.option.shell
+        1: punctuation.definition.parameter.shell
+    - include: precommand-end-of-options
+
+  precommand-doas-arguments:
+    - meta_content_scope: meta.function-call.arguments.shell
+    - include: cmd-args-common
+
   # `command` precommand: list of commands after `-v` or `-V`
   command-argv:
     - match: \s+
@@ -349,6 +431,22 @@ contexts:
     - meta_content_scope: meta.function-call.arguments.shell
     - include: cmd-name-common
     - match: (?=\s)
+      pop: true
+
+  # single argument
+  single-argument:
+    - meta_content_scope: meta.function-call.arguments.shell
+    - include: cmd-args-common
+    - match: (?=\s)
+      pop: true
+
+  precommand-end-of-options:
+    - match: '{{start_of_short_option}}\w+'
+      scope: invalid.illegal.unknown-precommand-parameter.shell
+    - match: '{{end_of_options}}'
+      scope: keyword.operator.end-of-options.shell
+      pop: true
+    - match: (?=\S)
       pop: true
 
   expansion-and-string:
@@ -855,7 +953,7 @@ contexts:
     - match: (?={{is_end_of_interpolation}})
       pop: true
     - include: cmd-args-common
-    - match: (?:\s+|^)--(?=\s|$)
+    - match: '{{end_of_options}}'
       scope: keyword.operator.end-of-options.shell
       set:
         - meta_content_scope: meta.function-call.arguments.shell
@@ -865,7 +963,7 @@ contexts:
     - match: (?={{is_end_of_interpolation}}|`) # <-------------- extra backtick
       pop: true
     - include: cmd-args-common
-    - match: (?:\s+|^)--(?=\s|$)
+    - match: '{{end_of_options}}'
       scope: keyword.operator.end-of-options.shell
       set:
         - meta_content_scope: meta.function-call.arguments.shell
