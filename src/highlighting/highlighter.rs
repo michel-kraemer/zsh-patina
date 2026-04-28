@@ -2524,6 +2524,35 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn percent_formats_are_not_job_expansions() -> Result<()> {
+        let cfg = test_cfg()?;
+
+        let highlighted = cfg.highlight("date +%s")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "date"),
+                cfg.static_span(4, 8, ARGUMENTS)?
+            ]
+        );
+
+        let highlighted = cfg.highlight("git log --pretty=%aD")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "git"),
+                cfg.static_span(3, 7, ARGUMENTS)?,
+                cfg.static_span(7, 10, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(10, 16, PARAMETER)?,
+                cfg.static_span(16, 17, OPERATOR_ASSIGNMENT_OPTION)?,
+                cfg.static_span(17, 20, ARGUMENTS)?
+            ]
+        );
+
+        Ok(())
+    }
+
     /// see https://github.com/michel-kraemer/zsh-patina/issues/45
     #[test]
     fn case_with_heredoc() -> Result<()> {
