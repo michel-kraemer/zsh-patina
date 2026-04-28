@@ -84,6 +84,8 @@ const OPERATOR_ARITHMETIC: &str = "keyword.operator.arithmetic.shell";
 #[cfg(test)]
 const OPERATOR_ASSIGNMENT_REDIRECTION: &str = "keyword.operator.assignment.redirection.shell";
 #[cfg(test)]
+const OPERATOR_ASSIGNMENT_OPTION: &str = "keyword.operator.assignment.option.shell";
+#[cfg(test)]
 const OPERATOR_LOGICAL_AND: &str = "keyword.operator.logical.and.shell";
 #[cfg(test)]
 const OPERATOR_LOGICAL_CONTINUE: &str = "keyword.operator.logical.continue.shell";
@@ -106,6 +108,8 @@ const PRECOMMAND_NOGLOB: &str = "precommand.builtin.noglob.shell";
 #[cfg(test)]
 const PUNCTUATION_COMMENT_BEGIN: &str = "punctuation.definition.comment.begin.shell";
 #[cfg(test)]
+const PUNCTUATION_JOB_VARIABLE: &str = "punctuation.definition.variable.job.shell";
+#[cfg(test)]
 const PUNCTUATION_EXPANSION_PARAMETER_BEGIN: &str =
     "punctuation.section.expansion.parameter.begin.shell";
 #[cfg(test)]
@@ -121,6 +125,8 @@ const PUNCTUATION_PARENS_END: &str = "punctuation.section.parens.end.shell";
 const PUNCTUATION_TERMINATOR_CASE: &str = "punctuation.terminator.case.shell";
 #[cfg(test)]
 const PUNCTUATION_VARIABLE: &str = "punctuation.definition.variable.shell";
+#[cfg(test)]
+const INTEGER_JOB: &str = "constant.numeric.integer.decimal.job.shell";
 
 /// A span of text with a foreground color. The range is specified in terms of
 /// character indices, not byte indices.
