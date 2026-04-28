@@ -2525,6 +2525,34 @@ mod tests {
     }
 
     #[test]
+    fn percent_jobs_are_still_job_expansions() -> Result<()> {
+        let cfg = test_cfg()?;
+
+        let highlighted = cfg.highlight("fg %")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 2, "fg"),
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.static_span(3, 4, PUNCTUATION_JOB_VARIABLE)?
+            ]
+        );
+
+        let highlighted = cfg.highlight("fg %1")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 2, "fg"),
+                cfg.static_span(2, 3, ARGUMENTS)?,
+                cfg.static_span(3, 4, PUNCTUATION_JOB_VARIABLE)?,
+                cfg.static_span(4, 5, INTEGER_JOB)?
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn percent_formats_are_not_job_expansions() -> Result<()> {
         let cfg = test_cfg()?;
 
