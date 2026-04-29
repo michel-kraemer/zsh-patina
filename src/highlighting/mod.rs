@@ -77,10 +77,14 @@ const GROUP_FOREACH: &str = "meta.group.foreach.shell";
 #[cfg(test)]
 const GROUP_SELECT: &str = "meta.group.select.shell";
 #[cfg(test)]
+const INTEGER_JOB: &str = "constant.numeric.integer.decimal.job.shell";
+#[cfg(test)]
 const INVALID_UNKNOWN_PRECOMMAND_PARAMETER: &str =
     "invalid.illegal.unknown-precommand-parameter.shell";
 #[cfg(test)]
 const OPERATOR_ARITHMETIC: &str = "keyword.operator.arithmetic.shell";
+#[cfg(test)]
+const OPERATOR_ASSIGNMENT_OPTION: &str = "keyword.operator.assignment.option.shell";
 #[cfg(test)]
 const OPERATOR_ASSIGNMENT_REDIRECTION: &str = "keyword.operator.assignment.redirection.shell";
 #[cfg(test)]
@@ -111,6 +115,8 @@ const PUNCTUATION_EXPANSION_PARAMETER_BEGIN: &str =
 #[cfg(test)]
 const PUNCTUATION_EXPANSION_PARAMETER_END: &str =
     "punctuation.section.expansion.parameter.end.shell";
+#[cfg(test)]
+const PUNCTUATION_JOB_VARIABLE: &str = "punctuation.definition.variable.job.shell";
 #[cfg(test)]
 const PUNCTUATION_PARAMETER: &str = "punctuation.definition.parameter.shell";
 #[cfg(test)]
