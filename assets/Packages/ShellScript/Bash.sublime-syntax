@@ -67,6 +67,7 @@ variables:
   reset_pipe: \s*(\|)
   reset_semicolon: \s*(;)(?![;&])
   start_of_short_option: (?:\s+|^)-(?=[\w$])
+  start_of_long_option: (?:\s+|^)--(?=[\w$])
   start_of_option: (?:\s+|^)--?(?=[\w$])
   varassign: '[+\-?]?='
 #-------------------------------------------------------------------------------
@@ -259,12 +260,22 @@ contexts:
             1: variable.parameter.option.shell
             2: punctuation.definition.parameter.shell
           push: single-argument
+        - match: '(({{start_of_long_option}})(unset|chdir|split-string))(?=\s|$)\s*'
+          captures:
+            1: variable.parameter.option.shell
+            2: punctuation.definition.parameter.shell
+          push: single-argument
         - include: precommand-option
         - include: precommand-end-of-options
     - match: \bnice{{keyword_boundary_end}}
       scope: meta.function-call.shell variable.function.shell
       set:
         - match: '(({{start_of_short_option}})n)\s*'
+          captures:
+            1: variable.parameter.option.shell
+            2: punctuation.definition.parameter.shell
+          push: single-argument
+        - match: '(({{start_of_long_option}})adjustment)(?=\s|$)\s*'
           captures:
             1: variable.parameter.option.shell
             2: punctuation.definition.parameter.shell

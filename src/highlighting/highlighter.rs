@@ -2874,6 +2874,44 @@ mod tests {
             ]
         );
 
+        let highlighted = cfg.highlight("env --unset _ env")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 11, PARAMETER)?,
+                cfg.static_span(12, 13, ARGUMENTS)?,
+                cfg.dynamic_span(14, 17, "env"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("env --chdir mydir env")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 11, PARAMETER)?,
+                cfg.mixed_span(12, 17, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+                cfg.dynamic_span(18, 21, "env"),
+            ]
+        );
+
+        let highlighted = cfg.highlight(r#"env --split-string "-C target" env"#)?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 18, PARAMETER)?,
+                cfg.static_span(19, 20, STRING_QUOTED_BEGIN)?,
+                cfg.static_span(20, 29, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(29, 30, STRING_QUOTED_END)?,
+                cfg.dynamic_span(31, 34, "env"),
+            ]
+        );
+
         Ok(())
     }
 
@@ -2963,6 +3001,31 @@ mod tests {
                 cfg.static_span(8, 9, ARGUMENTS)?,
                 cfg.static_span(9, 12, OPERATOR_END_OF_OPTIONS)?,
                 cfg.dynamic_span(13, 17, "date")
+            ]
+        );
+
+        let highlighted = cfg.highlight("nice --adjustment=5 date")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "nice"),
+                cfg.static_span(4, 7, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(7, 17, PARAMETER)?,
+                cfg.static_span(17, 18, OPERATOR_ASSIGNMENT_OPTION)?,
+                cfg.static_span(18, 19, ARGUMENTS)?,
+                cfg.dynamic_span(20, 24, "date")
+            ]
+        );
+
+        let highlighted = cfg.highlight("nice --adjustment 5 date")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "nice"),
+                cfg.static_span(4, 7, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(7, 17, PARAMETER)?,
+                cfg.static_span(18, 19, ARGUMENTS)?,
+                cfg.dynamic_span(20, 24, "date")
             ]
         );
 
