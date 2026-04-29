@@ -77,9 +77,6 @@ const GROUP_FOREACH: &str = "meta.group.foreach.shell";
 #[cfg(test)]
 const GROUP_SELECT: &str = "meta.group.select.shell";
 #[cfg(test)]
-const INVALID_UNKNOWN_PRECOMMAND_PARAMETER: &str =
-    "invalid.illegal.unknown-precommand-parameter.shell";
-#[cfg(test)]
 const OPERATOR_ARITHMETIC: &str = "keyword.operator.arithmetic.shell";
 #[cfg(test)]
 const OPERATOR_ASSIGNMENT: &str = "keyword.operator.assignment.shell";

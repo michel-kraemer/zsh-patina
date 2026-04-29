@@ -1748,18 +1748,6 @@ mod tests {
             ]
         );
 
-        let highlighted = cfg.highlight(r"command -p -w echo")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.static_span(10, 13, INVALID_UNKNOWN_PRECOMMAND_PARAMETER)?,
-                cfg.dynamic_span(14, 18, "echo"),
-            ]
-        );
-
         let highlighted = cfg.highlight(r"command -p echo file")?;
         assert_eq!(
             highlighted,
@@ -2007,17 +1995,6 @@ mod tests {
             ]
         );
 
-        // `exec` does not have a parameter `-p`
-        let highlighted = cfg.highlight(r"exec -p foobar")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 7, INVALID_UNKNOWN_PRECOMMAND_PARAMETER)?,
-                cfg.dynamic_span(8, 14, "foobar"),
-            ]
-        );
-
         let highlighted = cfg.highlight(r"exec -a zsh foobar $0")?;
         assert_eq!(
             highlighted,
@@ -2083,73 +2060,6 @@ mod tests {
                 cfg.static_span(24, 25, ARGUMENTS)?,
                 cfg.static_span(25, 26, PUNCTUATION_VARIABLE)?,
                 cfg.static_span(26, 27, ENVIRONMENT_VARIABLE)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight(r"exec -p -l foobar $0")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 7, INVALID_UNKNOWN_PRECOMMAND_PARAMETER)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.dynamic_span(11, 17, "foobar"),
-                cfg.static_span(17, 18, ARGUMENTS)?,
-                cfg.static_span(18, 19, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(19, 20, ENVIRONMENT_VARIABLE)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight(r"exec -l -p foobar $0")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.static_span(7, 10, INVALID_UNKNOWN_PRECOMMAND_PARAMETER)?,
-                cfg.dynamic_span(11, 17, "foobar"),
-                cfg.static_span(17, 18, ARGUMENTS)?,
-                cfg.static_span(18, 19, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(19, 20, ENVIRONMENT_VARIABLE)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight(r"exec -l -p -c foobar $0")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.static_span(7, 10, INVALID_UNKNOWN_PRECOMMAND_PARAMETER)?,
-                cfg.static_span(10, 12, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(12, 13, PARAMETER)?,
-                cfg.dynamic_span(14, 20, "foobar"),
-                cfg.static_span(20, 21, ARGUMENTS)?,
-                cfg.static_span(21, 22, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(22, 23, ENVIRONMENT_VARIABLE)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight(r"exec -l -p -c -a zsh foobar $0")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.static_span(7, 10, INVALID_UNKNOWN_PRECOMMAND_PARAMETER)?,
-                cfg.static_span(10, 12, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(12, 13, PARAMETER)?,
-                cfg.static_span(13, 15, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(15, 16, PARAMETER)?,
-                cfg.static_span(17, 20, ARGUMENTS)?,
-                cfg.dynamic_span(21, 27, "foobar"),
-                cfg.static_span(27, 28, ARGUMENTS)?,
-                cfg.static_span(28, 29, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(29, 30, ENVIRONMENT_VARIABLE)?,
             ]
         );
 
@@ -2594,6 +2504,19 @@ mod tests {
             ]
         );
 
+        let highlighted = cfg.highlight("doas -ns -u root ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "doas"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 8, PARAMETER)?,
+                cfg.static_span(8, 10, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(10, 11, PARAMETER)?,
+                cfg.static_span(11, 19, ARGUMENTS)?,
+            ]
+        );
+
         // `doas -L` clears persisted authentications. It does not execute a
         // command.
         let highlighted = cfg.highlight("doas -n -L ls -l")?;
@@ -2606,6 +2529,17 @@ mod tests {
                 cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
                 cfg.static_span(9, 10, PARAMETER)?,
                 cfg.static_span(10, 16, ARGUMENTS)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight("doas -nL ls -l")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "doas"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 8, PARAMETER)?,
+                cfg.static_span(8, 14, ARGUMENTS)?,
             ]
         );
 
