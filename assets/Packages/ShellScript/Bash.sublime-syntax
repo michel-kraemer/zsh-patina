@@ -212,10 +212,7 @@ contexts:
       set:
         - match: '(?={{start_of_short_option}}[a-zA-Z]*[vV][a-zA-Z]*(?={{is_end_of_option}}))'
           set: [precommand-command-argv, precommand-command-v]
-        - match: '({{start_of_short_option}})[a-zA-Z]+(?={{is_end_of_option}})'
-          captures:
-            0: variable.parameter.option.shell
-            1: punctuation.definition.parameter.shell
+        - include: precommand-option
         - include: precommand-end-of-options
     - match: \bexec{{keyword_boundary_end}}
       scope: keyword.builtin.exec.shell precommand.builtin.exec.shell
@@ -225,10 +222,7 @@ contexts:
             1: variable.parameter.option.shell
             2: punctuation.definition.parameter.shell
           push: precommand-exec-argv0
-        - match: '({{start_of_short_option}})[a-zA-Z]+(?={{is_end_of_option}})'
-          captures:
-            0: variable.parameter.option.shell
-            1: punctuation.definition.parameter.shell
+        - include: precommand-option
         - include: precommand-end-of-options
     - match: \bnoglob{{keyword_boundary_end}}
       scope: keyword.builtin.noglob.shell precommand.builtin.noglob.shell
@@ -250,10 +244,7 @@ contexts:
             0: variable.parameter.option.shell
             1: punctuation.definition.parameter.shell
           set: [precommand-doas-arguments, precommand-doas-nocommand]
-        - match: '({{start_of_short_option}})[a-zA-Z]+(?={{is_end_of_option}})'
-          captures:
-            0: variable.parameter.option.shell
-            1: punctuation.definition.parameter.shell
+        - include: precommand-option
         - include: precommand-end-of-options
     - match: \benv{{keyword_boundary_end}}
       scope: meta.function-call.shell variable.function.shell
@@ -268,10 +259,7 @@ contexts:
             1: variable.parameter.option.shell
             2: punctuation.definition.parameter.shell
           push: single-argument
-        - match: '({{start_of_short_option}})[a-zA-Z]+(?={{is_end_of_option}})'
-          captures:
-            0: variable.parameter.option.shell
-            1: punctuation.definition.parameter.shell
+        - include: precommand-option
         - include: precommand-end-of-options
     - match: \bnice{{keyword_boundary_end}}
       scope: meta.function-call.shell variable.function.shell
@@ -281,10 +269,12 @@ contexts:
             1: variable.parameter.option.shell
             2: punctuation.definition.parameter.shell
           push: single-argument
+        - include: precommand-option
         - include: precommand-end-of-options
     - match: \bnohup{{keyword_boundary_end}}
       scope: meta.function-call.shell variable.function.shell
       set:
+        - include: precommand-option
         - include: precommand-end-of-options
 
   case-preamble:
@@ -432,6 +422,21 @@ contexts:
     - include: cmd-name-common
     - match: (?=\s)
       pop: true
+
+  # similar to the definition of an option in 'cmd-args'
+  precommand-option:
+    - match: '{{start_of_option}}'
+      scope: punctuation.definition.parameter.shell
+      push:
+        - meta_scope: meta.function-call.arguments.shell variable.parameter.option.shell
+        - match: (?==)
+          set:
+            - match: =
+              scope: keyword.operator.assignment.option.shell
+              set: single-argument
+        - match: (?={{is_end_of_option}})
+          pop: true
+        - include: expansion-and-string
 
   precommand-end-of-options:
     - match: '{{end_of_options}}'

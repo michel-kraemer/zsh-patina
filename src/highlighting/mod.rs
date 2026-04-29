@@ -81,6 +81,8 @@ const OPERATOR_ARITHMETIC: &str = "keyword.operator.arithmetic.shell";
 #[cfg(test)]
 const OPERATOR_ASSIGNMENT: &str = "keyword.operator.assignment.shell";
 #[cfg(test)]
+const OPERATOR_ASSIGNMENT_OPTION: &str = "keyword.operator.assignment.option.shell";
+#[cfg(test)]
 const OPERATOR_ASSIGNMENT_REDIRECTION: &str = "keyword.operator.assignment.redirection.shell";
 #[cfg(test)]
 const OPERATOR_END_OF_OPTIONS: &str = "keyword.operator.end-of-options.shell";

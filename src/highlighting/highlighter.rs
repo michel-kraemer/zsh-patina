@@ -2562,6 +2562,17 @@ mod tests {
             ]
         );
 
+        let highlighted = cfg.highlight("env --ignore-environment ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 24, PARAMETER)?,
+                cfg.dynamic_span(25, 27, "ls"),
+            ]
+        );
+
         let highlighted = cfg.highlight("env -ii ls")?;
         assert_eq!(
             highlighted,
@@ -2636,6 +2647,21 @@ mod tests {
                 cfg.static_span(8, 9, PARAMETER)?,
                 cfg.static_span(10, 11, ARGUMENTS)?,
                 cfg.dynamic_span(12, 15, "env"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("env -i --unset=_ env")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(6, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 14, PARAMETER)?,
+                cfg.static_span(14, 15, OPERATOR_ASSIGNMENT_OPTION)?,
+                cfg.static_span(15, 16, ARGUMENTS)?,
+                cfg.dynamic_span(17, 20, "env"),
             ]
         );
 
@@ -2861,6 +2887,20 @@ mod tests {
             vec![cfg.dynamic_span(0, 4, "nice"), cfg.dynamic_span(5, 7, "ls")]
         );
 
+        let highlighted = cfg.highlight("nice --version && nice --help")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "nice"),
+                cfg.static_span(4, 7, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(7, 14, PARAMETER)?,
+                cfg.static_span(15, 17, OPERATOR_LOGICAL_AND)?,
+                cfg.dynamic_span(18, 22, "nice"),
+                cfg.static_span(22, 25, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(25, 29, PARAMETER)?,
+            ]
+        );
+
         let highlighted = cfg.highlight("nice -n 5 date")?;
         assert_eq!(
             highlighted,
@@ -2939,6 +2979,20 @@ mod tests {
             vec![
                 cfg.dynamic_span(0, 5, "nohup"),
                 cfg.dynamic_span(6, 8, "ls")
+            ]
+        );
+
+        let highlighted = cfg.highlight("nohup --version && nohup --help")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 5, "nohup"),
+                cfg.static_span(5, 8, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(8, 15, PARAMETER)?,
+                cfg.static_span(16, 18, OPERATOR_LOGICAL_AND)?,
+                cfg.dynamic_span(19, 24, "nohup"),
+                cfg.static_span(24, 27, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(27, 31, PARAMETER)?,
             ]
         );
 
