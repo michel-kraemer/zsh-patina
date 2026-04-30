@@ -2489,60 +2489,6 @@ mod tests {
             ]
         );
 
-        // `doas -s` runs a shell and does not take a command. The subsequent
-        // token is not highlighted as a callable.
-        let highlighted = cfg.highlight("doas -s -u root ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "doas"),
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.static_span(10, 18, ARGUMENTS)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight("doas -ns -u root ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "doas"),
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 8, PARAMETER)?,
-                cfg.static_span(8, 10, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(10, 11, PARAMETER)?,
-                cfg.static_span(11, 19, ARGUMENTS)?,
-            ]
-        );
-
-        // `doas -L` clears persisted authentications. It does not execute a
-        // command.
-        let highlighted = cfg.highlight("doas -n -L ls -l")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "doas"),
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.static_span(10, 16, ARGUMENTS)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight("doas -nL ls -l")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "doas"),
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 8, PARAMETER)?,
-                cfg.static_span(8, 14, ARGUMENTS)?,
-            ]
-        );
-
         Ok(())
     }
 

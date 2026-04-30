@@ -238,13 +238,6 @@ contexts:
             1: variable.parameter.option.shell
             2: punctuation.definition.parameter.shell
           push: single-argument
-        # -L and -s don't execute commands (in fact, -s fails if a command is
-        # given), so don't highlight them as such. Just parse normal arguments.
-        - match: '(?={{start_of_short_option}}[a-zA-Z]*[Ls][a-zA-Z]*(?={{is_end_of_option}}))'
-          captures:
-            0: variable.parameter.option.shell
-            1: punctuation.definition.parameter.shell
-          set: [precommand-doas-arguments, precommand-doas-nocommand]
         - include: precommand-option
         - include: precommand-end-of-options
     - match: \benv{{keyword_boundary_end}}
@@ -408,24 +401,6 @@ contexts:
     - include: cmd-name-common
     - match: (?=\s)
       pop: true
-
-  # If we're in this state, doas has a -s or -L argument and does not accept
-  # commands. Parse normal arguments instead.
-  precommand-doas-nocommand:
-    - match: '(({{start_of_short_option}})[a-zA-Z&&[^aCu]]*[aCu])\s*'
-      captures:
-        1: variable.parameter.option.shell
-        2: punctuation.definition.parameter.shell
-      push: single-argument
-    - match: '({{start_of_short_option}})[a-zA-Z]+(?={{is_end_of_option}})'
-      captures:
-        0: variable.parameter.option.shell
-        1: punctuation.definition.parameter.shell
-    - include: precommand-end-of-options
-
-  precommand-doas-arguments:
-    - meta_content_scope: meta.function-call.arguments.shell
-    - include: cmd-args-common
 
   # `exec` precommand: value of the `-a` parameter
   precommand-exec-argv0:
