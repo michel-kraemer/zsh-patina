@@ -203,6 +203,24 @@ contexts:
     - match: \bend{{keyword_boundary_end}}
       scope: keyword.control.end.shell
       set: [cmd-post, cmd-args]
+    #---------------------------------------------------------------------------
+    # Precommands:
+    #
+    # 1. For forward compatibility, we colorize arbitrary short and long
+    #    arguments even if the precommand does not accept them. The only
+    #    exception are precommands that don't take an argument at all (such as
+    #    `builtin` or `noglob`).
+    # 2. We add exceptions for short and long arguments known to take a value
+    #    (for example `env [-u name]` or `env [--unset=name]`).
+    # 3. Tokens after the precommand's options are always highlighted as a
+    #    normal command even if the precommand would not accept them. For
+    #    example, `nice --version -n 5 ls` does not make sense because
+    #    `--version` makes `nice` display version information and stops it from
+    #    executing `ls`, but we still highlight `ls` as a command.
+    # 4. The only exception is if a certain precommand option changes the
+    #    meaning of the arguments. For example, `command -v` takes a list of
+    #    command names, or `sudo -e` takes one or more file names.
+    #
     # precommand modifiers (see https://linux.die.net/man/1/zshmisc)
     - match: (?<!\w)-{{keyword_boundary_end}}
       scope: keyword.builtin.dash.shell precommand.builtin.dash.shell
@@ -227,7 +245,7 @@ contexts:
         - include: precommand-end-of-options
     - match: \bnoglob{{keyword_boundary_end}}
       scope: keyword.builtin.noglob.shell precommand.builtin.noglob.shell
-    # external precommands - note that they have to have the scope
+    # external precommands: note that they have to have the scope
     # `variable.function.shell` because they may or may not be installed on the
     # system and we want to highlight them in the same way as other callables.
     - match: \bdoas{{keyword_boundary_end}}
@@ -253,6 +271,9 @@ contexts:
             1: variable.parameter.option.shell
             2: punctuation.definition.parameter.shell
           push: single-argument
+        # note: --block-signal, --default-signal, --ignore-signal always require
+        # an equals sign (e.g. `--block-signal=13`), which is already covered by
+        # `precommand-option`
         - match: '(({{start_of_long_option}})(unset|chdir|split-string))(?=\s|$)\s*'
           captures:
             1: variable.parameter.option.shell
@@ -263,7 +284,7 @@ contexts:
     - match: \bnice{{keyword_boundary_end}}
       scope: meta.function-call.shell variable.function.shell
       set:
-        - match: '(({{start_of_short_option}})n)\s*'
+        - match: '(({{start_of_short_option}})[a-zA-Z&&[^n]]*[n])\s*'
           captures:
             1: variable.parameter.option.shell
             2: punctuation.definition.parameter.shell
