@@ -51,7 +51,7 @@ jobs:
           file: tests/Dockerfile
           push: false
           load: true # make image available locally
-          tags: michelkraemer/zsh-patina-test:latest
+          tags: michelkraemer/zsh-patina-test-dev:latest
           build-args: |
             "PROFILE=dev"
           cache-from: type=gha

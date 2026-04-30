@@ -1434,14 +1434,14 @@ contexts:
     # The symbols ‘%%’ and ‘%+’ refer to the shell’s notion of the current job,
     # which is the last job stopped while it was in the foreground or started in
     # the background. The previous job may be referenced using ‘%-’.
-    - match: (%)([%+-])
+    - match: (?:(?<=^)|(?<={{metachar}}))(%)([%+-])
       captures:
         0: meta.group.expansion.job.shell
         1: punctuation.definition.variable.job.shell
         2: variable.language.job.shell
     # The character ‘%’ introduces a job specification (jobspec). Job number n
     # may be referred to as ‘%n’.
-    - match: (%)(\d+)
+    - match: (?:(?<=^)|(?<={{metachar}}))(%)(\d+)
       captures:
         0: meta.group.expansion.job.shell
         1: punctuation.definition.variable.job.shell
@@ -1451,7 +1451,7 @@ contexts:
     # refers to a stopped ce job. Using ‘%?ce’, on the other hand, refers to any
     # job containing the string ‘ce’ in its command line. If the prefix or
     # substring matches more than one job, Bash reports an error.
-    - match: (%)(\??)(\w+)
+    - match: (?:(?<=^)|(?<={{metachar}}))(%)(\??)(\w+)
       captures:
         0: meta.group.expansion.job.shell
         1: punctuation.definition.variable.job.shell
@@ -1459,7 +1459,7 @@ contexts:
         3: variable.other.readwrite.shell
     # A single ‘%’ (with no accompanying job specification) also refers to the
     # current job.
-    - match: '%'
+    - match: (?:(?<=^)|(?<={{metachar}}))%
       scope:
         meta.group.expansion.job.shell
         punctuation.definition.variable.job.shell
@@ -1616,4 +1616,3 @@ contexts:
     - include: expansion-parameter
     - include: expansion-arithmetic
     - include: expansion-command
-
