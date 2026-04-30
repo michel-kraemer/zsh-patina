@@ -274,7 +274,7 @@ contexts:
         # note: --block-signal, --default-signal, --ignore-signal always require
         # an equals sign (e.g. `--block-signal=13`), which is already covered by
         # `precommand-option`
-        - match: '(({{start_of_long_option}})(unset|chdir|split-string))(?=\s|$)\s*'
+        - match: '(({{start_of_long_option}})(argv0|chdir|split-string|unset))(?=\s|$)\s*'
           captures:
             1: variable.parameter.option.shell
             2: punctuation.definition.parameter.shell
