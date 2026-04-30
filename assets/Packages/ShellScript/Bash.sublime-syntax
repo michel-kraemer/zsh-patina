@@ -301,6 +301,21 @@ contexts:
       set:
         - include: precommand-option
         - include: precommand-end-of-options
+    - match: \bsudo{{keyword_boundary_end}}
+      scope: meta.function-call.shell variable.function.shell
+      set:
+        - match: '(({{start_of_short_option}})[a-zA-Z&&[^CDgpRrTtUu]]*[CDgpRrTtUu])\s*'
+          captures:
+            1: variable.parameter.option.shell
+            2: punctuation.definition.parameter.shell
+          push: single-argument
+        - match: '(({{start_of_long_option}})(chdir|chroot|close-from|command-timeout|group|host|other-user|preserve-env|prompt|user))(?=\s|$)\s*'
+          captures:
+            1: variable.parameter.option.shell
+            2: punctuation.definition.parameter.shell
+          push: single-argument
+        - include: precommand-option
+        - include: precommand-end-of-options
 
   case-preamble:
     - match: \bin(?=[^\w_-])

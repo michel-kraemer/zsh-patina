@@ -3019,6 +3019,99 @@ mod tests {
     }
 
     #[test]
+    fn sudo() -> Result<()> {
+        let cfg = test_cfg()?;
+
+        let highlighted = cfg.highlight("sudo ls")?;
+        assert_eq!(
+            highlighted,
+            vec![cfg.dynamic_span(0, 4, "sudo"), cfg.dynamic_span(5, 7, "ls"),]
+        );
+
+        let highlighted = cfg.highlight("sudo -n ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "sudo"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.dynamic_span(8, 10, "ls"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("sudo -n -u root -- ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "sudo"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
+                cfg.static_span(11, 15, ARGUMENTS)?,
+                cfg.static_span(15, 18, OPERATOR_END_OF_OPTIONS)?,
+                cfg.dynamic_span(19, 21, "ls"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("sudo -ng wheel -- ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "sudo"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 8, PARAMETER)?,
+                cfg.static_span(9, 14, ARGUMENTS)?,
+                cfg.static_span(14, 17, OPERATOR_END_OF_OPTIONS)?,
+                cfg.dynamic_span(18, 20, "ls"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("sudo --version && sudo --help")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "sudo"),
+                cfg.static_span(4, 7, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(7, 14, PARAMETER)?,
+                cfg.static_span(15, 17, OPERATOR_LOGICAL_AND)?,
+                cfg.dynamic_span(18, 22, "sudo"),
+                cfg.static_span(22, 25, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(25, 29, PARAMETER)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight("sudo --user=root ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "sudo"),
+                cfg.static_span(4, 7, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(7, 11, PARAMETER)?,
+                cfg.static_span(11, 12, OPERATOR_ASSIGNMENT_OPTION)?,
+                cfg.static_span(12, 16, ARGUMENTS)?,
+                cfg.dynamic_span(17, 19, "ls"),
+            ]
+        );
+
+        cfg.create_dir("mydir")?;
+
+        let highlighted = cfg.highlight("sudo --chdir mydir ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "sudo"),
+                cfg.static_span(4, 7, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(7, 12, PARAMETER)?,
+                cfg.mixed_span(13, 18, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+                cfg.dynamic_span(19, 21, "ls"),
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn history_expansions() -> Result<()> {
         let cfg = test_cfg()?;
 
