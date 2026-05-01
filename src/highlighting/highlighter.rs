@@ -3108,6 +3108,44 @@ mod tests {
             ]
         );
 
+        let highlighted = cfg.highlight("sudo -h localhost -l")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "sudo"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(8, 17, ARGUMENTS)?,
+                cfg.static_span(17, 19, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(19, 20, PARAMETER)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight("sudo -h -i ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "sudo"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
+                cfg.dynamic_span(11, 13, "ls"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("sudo -h && ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "sudo"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(8, 10, OPERATOR_LOGICAL_AND)?,
+                cfg.dynamic_span(11, 13, "ls"),
+            ]
+        );
+
         Ok(())
     }
 

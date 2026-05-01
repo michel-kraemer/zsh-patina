@@ -304,7 +304,12 @@ contexts:
     - match: \bsudo{{keyword_boundary_end}}
       scope: meta.function-call.shell variable.function.shell
       set:
-        - match: '(({{start_of_short_option}})[a-zA-Z&&[^CDgpRrTtUu]]*[CDgpRrTtUu])\s*'
+        - match: '(({{start_of_short_option}})[a-zA-Z&&[^CDghpRrTtUu]]*[CDgpRrTtUu])\s*'
+          captures:
+            1: variable.parameter.option.shell
+            2: punctuation.definition.parameter.shell
+          push: single-argument
+        - match: '(({{start_of_short_option}})[a-zA-Z&&[^CDghpRrTtUu]]*h)\s*(?!-)'
           captures:
             1: variable.parameter.option.shell
             2: punctuation.definition.parameter.shell
