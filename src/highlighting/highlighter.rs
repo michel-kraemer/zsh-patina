@@ -3025,7 +3025,7 @@ mod tests {
         let highlighted = cfg.highlight("sudo ls")?;
         assert_eq!(
             highlighted,
-            vec![cfg.dynamic_span(0, 4, "sudo"), cfg.dynamic_span(5, 7, "ls"),]
+            vec![cfg.dynamic_span(0, 4, "sudo"), cfg.dynamic_span(5, 7, "ls")]
         );
 
         let highlighted = cfg.highlight("sudo -n ls")?;
@@ -3143,6 +3143,79 @@ mod tests {
                 cfg.static_span(6, 7, PARAMETER)?,
                 cfg.static_span(8, 10, OPERATOR_LOGICAL_AND)?,
                 cfg.dynamic_span(11, 13, "ls"),
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn sudoedit() -> Result<()> {
+        let cfg = test_cfg()?;
+
+        cfg.touch_file("file1")?;
+        cfg.touch_file("file2")?;
+
+        let highlighted = cfg.highlight("sudo -e file1 file2")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "sudo"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(7, 8, ARGUMENTS)?,
+                cfg.mixed_span(8, 13, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(13, 14, ARGUMENTS)?,
+                cfg.mixed_span(14, 19, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight("sudo -i -e -- file1 file2")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "sudo"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
+                cfg.static_span(10, 13, OPERATOR_END_OF_OPTIONS)?,
+                cfg.static_span(13, 14, ARGUMENTS)?,
+                cfg.mixed_span(14, 19, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(19, 20, ARGUMENTS)?,
+                cfg.mixed_span(20, 25, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight("sudo -ie -- file1 file2")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "sudo"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 8, PARAMETER)?,
+                cfg.static_span(8, 11, OPERATOR_END_OF_OPTIONS)?,
+                cfg.static_span(11, 12, ARGUMENTS)?,
+                cfg.mixed_span(12, 17, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(17, 18, ARGUMENTS)?,
+                cfg.mixed_span(18, 23, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight("sudoedit -u user -g wheel file1 file2")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 8, "sudoedit"),
+                cfg.static_span(8, 10, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(10, 11, PARAMETER)?,
+                cfg.static_span(11, 16, ARGUMENTS)?,
+                cfg.static_span(16, 18, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(18, 19, PARAMETER)?,
+                cfg.static_span(19, 26, ARGUMENTS)?,
+                cfg.mixed_span(26, 31, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(31, 32, ARGUMENTS)?,
+                cfg.mixed_span(32, 37, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 

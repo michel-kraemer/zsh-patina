@@ -304,23 +304,19 @@ contexts:
     - match: \bsudo{{keyword_boundary_end}}
       scope: meta.function-call.shell variable.function.shell
       set:
-        - match: '(({{start_of_short_option}})[a-zA-Z&&[^CDghpRrTtUu]]*[CDgpRrTtUu])\s*'
+        # if `-e` is given, we switch to "edit" mode where we parse plain
+        # arguments instead of a command
+        - match: '(?={{start_of_short_option}}[a-zA-Z]*e[a-zA-Z]*(?={{is_end_of_option}}))'
           captures:
-            1: variable.parameter.option.shell
-            2: punctuation.definition.parameter.shell
-          push: single-argument
-        - match: '(({{start_of_short_option}})[a-zA-Z&&[^CDghpRrTtUu]]*h)\s*(?!-)'
-          captures:
-            1: variable.parameter.option.shell
-            2: punctuation.definition.parameter.shell
-          push: single-argument
-        - match: '(({{start_of_long_option}})(chdir|chroot|close-from|command-timeout|group|host|other-user|preserve-env|prompt|user))(?=\s|$)\s*'
-          captures:
-            1: variable.parameter.option.shell
-            2: punctuation.definition.parameter.shell
-          push: single-argument
+            0: variable.parameter.option.shell
+            1: punctuation.definition.parameter.shell
+          set: [multiple-arguments, precommand-sudo-edit]
+        - include: precommand-sudo-options-no-edit
         - include: precommand-option
         - include: precommand-end-of-options
+    - match: \bsudoedit{{keyword_boundary_end}}
+      scope: meta.function-call.shell variable.function.shell
+      set: [multiple-arguments, precommand-sudo-edit]
 
   case-preamble:
     - match: \bin(?=[^\w_-])
@@ -450,6 +446,30 @@ contexts:
     - match: (?=\s)
       pop: true
 
+  # `sudo` precommand "edit" mode: either `-e` or `sudoedit` has been entered
+  precommand-sudo-edit:
+    - include: precommand-sudo-options-no-edit
+    - include: precommand-option
+    - include: precommand-end-of-options
+
+  # all options of `sudo` and `sudoedit` except for `-e`
+  precommand-sudo-options-no-edit:
+    - match: '(({{start_of_short_option}})[a-zA-Z&&[^CDghpRrTtUu]]*[CDgpRrTtUu])\s*'
+      captures:
+        1: variable.parameter.option.shell
+        2: punctuation.definition.parameter.shell
+      push: single-argument
+    - match: '(({{start_of_short_option}})[a-zA-Z&&[^CDghpRrTtUu]]*h)\s*(?!-)'
+      captures:
+        1: variable.parameter.option.shell
+        2: punctuation.definition.parameter.shell
+      push: single-argument
+    - match: '(({{start_of_long_option}})(chdir|chroot|close-from|command-timeout|group|host|other-user|preserve-env|prompt|user))(?=\s|$)\s*'
+      captures:
+        1: variable.parameter.option.shell
+        2: punctuation.definition.parameter.shell
+      push: single-argument
+
   # similar to the definition of an option in 'cmd-args'
   precommand-option:
     - match: '{{start_of_option}}'
@@ -472,12 +492,15 @@ contexts:
     - match: (?=\S)
       pop: true
 
-  # single argument
   single-argument:
     - meta_content_scope: meta.function-call.arguments.shell
     - include: cmd-args-common
     - match: (?=\s)
       pop: true
+
+  multiple-arguments:
+    - meta_content_scope: meta.function-call.arguments.shell
+    - include: cmd-args-common
 
   expansion-and-string:
     - include: string
