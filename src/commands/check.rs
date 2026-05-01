@@ -135,8 +135,10 @@ fn check_zsh_version() -> (String, MessageType) {
         Ok(o) => o,
         Err(e) => {
             return (
-                format!("Failed to run `zsh --version'\n\n{e:?}"),
-                MessageType::Error,
+                format!(
+                    "Unable to evaluate installed Zsh version. Failed to run `zsh --version'\n\n{e:?}"
+                ),
+                MessageType::Warning,
             );
         }
     };
