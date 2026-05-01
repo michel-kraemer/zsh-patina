@@ -1742,19 +1742,9 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 10, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
                 cfg.dynamic_span(11, 15, "echo"),
-            ]
-        );
-
-        let highlighted = cfg.highlight(r"command -p -w echo")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 10, PARAMETER)?,
-                cfg.static_span(10, 13, INVALID_UNKNOWN_PRECOMMAND_PARAMETER)?,
-                cfg.dynamic_span(14, 18, "echo"),
             ]
         );
 
@@ -1763,7 +1753,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 10, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
                 cfg.dynamic_span(11, 15, "echo"),
                 cfg.static_span(15, 20, ARGUMENTS)?,
             ]
@@ -1774,7 +1765,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 10, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
                 cfg.dynamic_span(11, 15, "echo"),
                 cfg.static_span(15, 16, ARGUMENTS)?,
                 cfg.static_span(16, 17, STRING_QUOTED_BEGIN)?,
@@ -1788,7 +1780,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 10, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
                 cfg.dynamic_span(11, 15, "echo"),
                 cfg.static_span(15, 17, PUNCTUATION_PARAMETER)?,
                 cfg.static_span(17, 18, PARAMETER)?,
@@ -1801,7 +1794,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 10, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
                 cfg.dynamic_span(11, 15, "echo"),
             ]
         );
@@ -1811,7 +1805,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 10, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
                 cfg.dynamic_span(11, 15, "echo"),
                 cfg.dynamic_span(16, 20, "file"),
             ]
@@ -1822,7 +1817,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 10, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
                 cfg.dynamic_span(11, 15, "echo"),
                 cfg.dynamic_span(16, 22, "file"),
             ]
@@ -1833,7 +1829,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 10, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
                 cfg.dynamic_span(11, 15, "echo"),
             ]
         );
@@ -1843,7 +1840,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 10, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
                 cfg.dynamic_span(11, 15, "echo"),
                 cfg.dynamic_span(16, 20, "file"),
             ]
@@ -1854,7 +1852,10 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 13, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
+                cfg.static_span(10, 12, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(12, 13, PARAMETER)?,
                 cfg.dynamic_span(14, 18, "echo"),
                 cfg.dynamic_span(19, 23, "file"),
             ]
@@ -1865,7 +1866,10 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 13, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
+                cfg.static_span(10, 12, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(12, 13, PARAMETER)?,
                 cfg.dynamic_span(14, 18, "echo"),
                 cfg.dynamic_span(19, 23, "file"),
             ]
@@ -1876,7 +1880,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 10, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
                 cfg.dynamic_span(11, 15, "echo"),
                 cfg.dynamic_span(16, 18, "-p"),
                 cfg.dynamic_span(19, 23, "file"),
@@ -1888,7 +1893,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 12, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 12, PARAMETER)?,
                 cfg.dynamic_span(13, 17, "echo"),
             ]
         );
@@ -1898,9 +1904,45 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 12, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 12, PARAMETER)?,
                 cfg.dynamic_span(13, 17, "echo"),
                 cfg.dynamic_span(18, 22, "file"),
+            ]
+        );
+
+        let highlighted = cfg.highlight(r"command -- echo")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
+                cfg.static_span(7, 10, OPERATOR_END_OF_OPTIONS)?,
+                cfg.dynamic_span(11, 15, "echo"),
+            ]
+        );
+
+        let highlighted = cfg.highlight(r"command -p -- echo")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
+                cfg.static_span(10, 13, OPERATOR_END_OF_OPTIONS)?,
+                cfg.dynamic_span(14, 18, "echo"),
+            ]
+        );
+
+        let highlighted = cfg.highlight(r"command -v -- echo file")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
+                cfg.static_span(10, 13, OPERATOR_END_OF_OPTIONS)?,
+                cfg.dynamic_span(14, 18, "echo"),
+                cfg.dynamic_span(19, 23, "file"),
             ]
         );
 
@@ -1925,7 +1967,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 7, PARAMETER)?,
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
                 cfg.dynamic_span(8, 14, "foobar"),
             ]
         );
@@ -1935,7 +1978,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 7, PARAMETER)?,
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
                 cfg.dynamic_span(8, 14, "foobar"),
             ]
         );
@@ -1945,19 +1989,9 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 8, PARAMETER)?,
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 8, PARAMETER)?,
                 cfg.dynamic_span(9, 15, "foobar"),
-            ]
-        );
-
-        // `exec` does not have a parameter `-p`
-        let highlighted = cfg.highlight(r"exec -p foobar")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 7, INVALID_UNKNOWN_PRECOMMAND_PARAMETER)?,
-                cfg.dynamic_span(8, 14, "foobar"),
             ]
         );
 
@@ -1966,7 +2000,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 8, PARAMETER)?,
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
                 cfg.static_span(8, 11, ARGUMENTS)?,
                 cfg.dynamic_span(12, 18, "foobar"),
                 cfg.static_span(18, 19, ARGUMENTS)?,
@@ -1980,7 +2015,8 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 8, PARAMETER)?,
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
                 cfg.static_span(8, 9, STRING_QUOTED_BEGIN)?,
                 cfg.static_span(9, 12, STRING_QUOTED_DOUBLE)?,
                 cfg.static_span(12, 13, STRING_QUOTED_END)?,
@@ -1996,7 +2032,10 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 11, PARAMETER)?,
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
                 cfg.static_span(11, 14, ARGUMENTS)?,
                 cfg.dynamic_span(15, 21, "foobar"),
                 cfg.static_span(21, 22, ARGUMENTS)?,
@@ -2010,72 +2049,17 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 11, PARAMETER)?,
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
                 cfg.static_span(11, 14, ARGUMENTS)?,
-                cfg.static_span(14, 17, PARAMETER)?,
+                cfg.static_span(14, 16, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(16, 17, PARAMETER)?,
                 cfg.dynamic_span(18, 24, "foobar"),
                 cfg.static_span(24, 25, ARGUMENTS)?,
                 cfg.static_span(25, 26, PUNCTUATION_VARIABLE)?,
                 cfg.static_span(26, 27, ENVIRONMENT_VARIABLE)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight(r"exec -p -l foobar $0")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 7, INVALID_UNKNOWN_PRECOMMAND_PARAMETER)?,
-                cfg.static_span(7, 10, PARAMETER)?,
-                cfg.dynamic_span(11, 17, "foobar"),
-                cfg.static_span(17, 18, ARGUMENTS)?,
-                cfg.static_span(18, 19, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(19, 20, ENVIRONMENT_VARIABLE)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight(r"exec -l -p foobar $0")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 7, PARAMETER)?,
-                cfg.static_span(7, 10, INVALID_UNKNOWN_PRECOMMAND_PARAMETER)?,
-                cfg.dynamic_span(11, 17, "foobar"),
-                cfg.static_span(17, 18, ARGUMENTS)?,
-                cfg.static_span(18, 19, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(19, 20, ENVIRONMENT_VARIABLE)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight(r"exec -l -p -c foobar $0")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 7, PARAMETER)?,
-                cfg.static_span(7, 10, INVALID_UNKNOWN_PRECOMMAND_PARAMETER)?,
-                cfg.static_span(10, 13, PARAMETER)?,
-                cfg.dynamic_span(14, 20, "foobar"),
-                cfg.static_span(20, 21, ARGUMENTS)?,
-                cfg.static_span(21, 22, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(22, 23, ENVIRONMENT_VARIABLE)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight(r"exec -l -p -c -a zsh foobar $0")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 7, PARAMETER)?,
-                cfg.static_span(7, 10, INVALID_UNKNOWN_PRECOMMAND_PARAMETER)?,
-                cfg.static_span(10, 17, PARAMETER)?,
-                cfg.static_span(17, 20, ARGUMENTS)?,
-                cfg.dynamic_span(21, 27, "foobar"),
-                cfg.static_span(27, 28, ARGUMENTS)?,
-                cfg.static_span(28, 29, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(29, 30, ENVIRONMENT_VARIABLE)?,
             ]
         );
 
@@ -2084,12 +2068,87 @@ mod tests {
             highlighted,
             vec![
                 cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 9, PARAMETER)?,
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 8, PARAMETER)?,
                 cfg.static_span(9, 12, ARGUMENTS)?,
                 cfg.dynamic_span(13, 19, "foobar"),
                 cfg.static_span(19, 20, ARGUMENTS)?,
                 cfg.static_span(20, 21, PUNCTUATION_VARIABLE)?,
                 cfg.static_span(21, 22, ENVIRONMENT_VARIABLE)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight(r"exec -- foobar")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
+                cfg.static_span(4, 7, OPERATOR_END_OF_OPTIONS)?,
+                cfg.dynamic_span(8, 14, "foobar"),
+            ]
+        );
+
+        let highlighted = cfg.highlight(r#"(exec -a foobar -- zsh -c 'echo "$0"')"#)?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 1, PUNCTUATION_COMPOUND_BEGIN)?,
+                cfg.static_span(1, 5, PRECOMMAND_EXEC)?,
+                cfg.static_span(5, 7, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(7, 8, PARAMETER)?,
+                cfg.static_span(9, 15, ARGUMENTS)?,
+                cfg.static_span(15, 18, OPERATOR_END_OF_OPTIONS)?,
+                cfg.dynamic_span(19, 22, "zsh"),
+                cfg.static_span(22, 24, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(24, 25, PARAMETER)?,
+                cfg.static_span(25, 26, ARGUMENTS)?,
+                cfg.static_span(26, 27, STRING_QUOTED_BEGIN)?,
+                cfg.static_span(27, 36, STRING_QUOTED_SINGLE)?,
+                cfg.static_span(36, 37, STRING_QUOTED_END)?,
+                cfg.static_span(37, 38, PUNCTUATION_COMPOUND_END)?,
+            ]
+        );
+
+        // here, '--' is argv[0]
+        let highlighted = cfg.highlight(r#"(exec -a -- zsh -c 'echo "$0"')"#)?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 1, PUNCTUATION_COMPOUND_BEGIN)?,
+                cfg.static_span(1, 5, PRECOMMAND_EXEC)?,
+                cfg.static_span(5, 7, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(7, 8, PARAMETER)?,
+                cfg.static_span(9, 11, ARGUMENTS)?,
+                cfg.dynamic_span(12, 15, "zsh"),
+                cfg.static_span(15, 17, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(17, 18, PARAMETER)?,
+                cfg.static_span(18, 19, ARGUMENTS)?,
+                cfg.static_span(19, 20, STRING_QUOTED_BEGIN)?,
+                cfg.static_span(20, 29, STRING_QUOTED_SINGLE)?,
+                cfg.static_span(29, 30, STRING_QUOTED_END)?,
+                cfg.static_span(30, 31, PUNCTUATION_COMPOUND_END)?,
+            ]
+        );
+
+        // here, '--' is argv[0]
+        let highlighted = cfg.highlight(r#"(exec -a -- -- zsh -c 'echo "$0"')"#)?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.static_span(0, 1, PUNCTUATION_COMPOUND_BEGIN)?,
+                cfg.static_span(1, 5, PRECOMMAND_EXEC)?,
+                cfg.static_span(5, 7, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(7, 8, PARAMETER)?,
+                cfg.static_span(9, 11, ARGUMENTS)?,
+                cfg.static_span(11, 14, OPERATOR_END_OF_OPTIONS)?,
+                cfg.dynamic_span(15, 18, "zsh"),
+                cfg.static_span(18, 20, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(20, 21, PARAMETER)?,
+                cfg.static_span(21, 22, ARGUMENTS)?,
+                cfg.static_span(22, 23, STRING_QUOTED_BEGIN)?,
+                cfg.static_span(23, 32, STRING_QUOTED_SINGLE)?,
+                cfg.static_span(32, 33, STRING_QUOTED_END)?,
+                cfg.static_span(33, 34, PUNCTUATION_COMPOUND_END)?,
             ]
         );
 
@@ -2383,6 +2442,780 @@ mod tests {
                 cfg.static_span(27, 32, CONTROL_BREAK)?,
                 cfg.static_span(33, 34, OPERATOR_LOGICAL_CONTINUE)?,
                 cfg.static_span(35, 38, CONTROL_END)?,
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn doas() -> Result<()> {
+        let cfg = test_cfg()?;
+
+        let highlighted = cfg.highlight("doas -n -u root -C doas.conf ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "doas"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
+                cfg.static_span(11, 15, ARGUMENTS)?,
+                cfg.static_span(15, 17, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(17, 18, PARAMETER)?,
+                cfg.static_span(19, 28, ARGUMENTS)?,
+                cfg.dynamic_span(29, 31, "ls"),
+            ]
+        );
+
+        cfg.touch_file("doas.conf")?;
+
+        let highlighted = cfg.highlight("doas -n -uroot -Cdoas.conf -- ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "doas"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
+                cfg.static_span(10, 14, ARGUMENTS)?,
+                cfg.static_span(14, 16, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(16, 17, PARAMETER)?,
+                cfg.mixed_span(17, 26, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(26, 29, OPERATOR_END_OF_OPTIONS)?,
+                cfg.dynamic_span(30, 32, "ls"),
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn env() -> Result<()> {
+        let cfg = test_cfg()?;
+        cfg.create_dir("mydir")?;
+
+        let highlighted = cfg.highlight("env -i ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.dynamic_span(7, 9, "ls"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("env --ignore-environment ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 24, PARAMETER)?,
+                cfg.dynamic_span(25, 27, "ls"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("env -ii ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 7, PARAMETER)?,
+                cfg.dynamic_span(8, 10, "ls"),
+            ]
+        );
+
+        // env -C mydir ls (existing directory)
+        let highlighted = cfg.highlight("env -C mydir ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.mixed_span(7, 12, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+                cfg.dynamic_span(13, 15, "ls"),
+            ]
+        );
+
+        // env -C foobar ls (non-existing path)
+        let highlighted = cfg.highlight("env -C foobar ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(7, 13, ARGUMENTS)?,
+                cfg.dynamic_span(14, 16, "ls"),
+            ]
+        );
+
+        // env -Cmydir ls (existing directory, no space)
+        let highlighted = cfg.highlight("env -Cmydir ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.mixed_span(6, 11, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+                cfg.dynamic_span(12, 14, "ls"),
+            ]
+        );
+
+        // env -Cfoobar ls (non-existing path, no space)
+        let highlighted = cfg.highlight("env -Cfoobar ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(6, 12, ARGUMENTS)?,
+                cfg.dynamic_span(13, 15, "ls"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("env -i -u _ env")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(6, 8, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(8, 9, PARAMETER)?,
+                cfg.static_span(10, 11, ARGUMENTS)?,
+                cfg.dynamic_span(12, 15, "env"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("env -i --unset=_ env")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(6, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 14, PARAMETER)?,
+                cfg.static_span(14, 15, OPERATOR_ASSIGNMENT_OPTION)?,
+                cfg.static_span(15, 16, ARGUMENTS)?,
+                cfg.dynamic_span(17, 20, "env"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("env -iu _ env")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 7, PARAMETER)?,
+                cfg.static_span(8, 9, ARGUMENTS)?,
+                cfg.dynamic_span(10, 13, "env"),
+            ]
+        );
+
+        // env -P mydir ls (existing directory)
+        let highlighted = cfg.highlight("env -P mydir ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.mixed_span(7, 12, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+                cfg.dynamic_span(13, 15, "ls"),
+            ]
+        );
+
+        // env -P foobar ls (non-existing path)
+        let highlighted = cfg.highlight("env -P foobar ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(7, 13, ARGUMENTS)?,
+                cfg.dynamic_span(14, 16, "ls"),
+            ]
+        );
+
+        // env -S -C mydir ls (existing directory)
+        let highlighted = cfg.highlight("env -S -C mydir ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(6, 8, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(8, 9, PARAMETER)?,
+                cfg.mixed_span(10, 15, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+                cfg.dynamic_span(16, 18, "ls"),
+            ]
+        );
+
+        // env -S -C foobar ls (non-existing path)
+        let highlighted = cfg.highlight("env -S -C foobar ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(6, 8, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(8, 9, PARAMETER)?,
+                cfg.static_span(10, 16, ARGUMENTS)?,
+                cfg.dynamic_span(17, 19, "ls"),
+            ]
+        );
+
+        // env -S -Cmydir ls (existing directory, no space)
+        let highlighted = cfg.highlight("env -S -Cmydir ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(6, 8, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(8, 9, PARAMETER)?,
+                cfg.mixed_span(9, 14, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+                cfg.dynamic_span(15, 17, "ls"),
+            ]
+        );
+
+        // env -S -P mydir ls (existing directory)
+        let highlighted = cfg.highlight("env -S -P mydir ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(6, 8, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(8, 9, PARAMETER)?,
+                cfg.mixed_span(10, 15, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+                cfg.dynamic_span(16, 18, "ls"),
+            ]
+        );
+
+        // env -S -P foobar ls (non-existing path)
+        let highlighted = cfg.highlight("env -S -P foobar ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(6, 8, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(8, 9, PARAMETER)?,
+                cfg.static_span(10, 16, ARGUMENTS)?,
+                cfg.dynamic_span(17, 19, "ls"),
+            ]
+        );
+
+        // env -S -Pmydir ls (existing directory, no space)
+        let highlighted = cfg.highlight("env -S -Pmydir ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(6, 8, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(8, 9, PARAMETER)?,
+                cfg.mixed_span(9, 14, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+                cfg.dynamic_span(15, 17, "ls"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("env -S '-C target' ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(7, 8, STRING_QUOTED_BEGIN)?,
+                cfg.static_span(8, 17, STRING_QUOTED_SINGLE)?,
+                cfg.static_span(17, 18, STRING_QUOTED_END)?,
+                cfg.dynamic_span(19, 21, "ls"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("env -S '-P mydir' ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(7, 8, STRING_QUOTED_BEGIN)?,
+                cfg.static_span(8, 16, STRING_QUOTED_SINGLE)?,
+                cfg.static_span(16, 17, STRING_QUOTED_END)?,
+                cfg.dynamic_span(18, 20, "ls"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("env -u _ env")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(7, 8, ARGUMENTS)?,
+                cfg.dynamic_span(9, 12, "env"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("env -u_ env")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(6, 7, ARGUMENTS)?,
+                cfg.dynamic_span(8, 11, "env"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("env -i bar=foo env")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(7, 10, VARIABLE_ASSIGNMENT)?,
+                cfg.static_span(10, 11, OPERATOR_ASSIGNMENT)?,
+                cfg.static_span(11, 14, STRING_UNQUOTED)?,
+                cfg.dynamic_span(15, 18, "env"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("env -i -- bar=foo env")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(5, 6, PARAMETER)?,
+                cfg.static_span(6, 9, OPERATOR_END_OF_OPTIONS)?,
+                cfg.static_span(10, 13, VARIABLE_ASSIGNMENT)?,
+                cfg.static_span(13, 14, OPERATOR_ASSIGNMENT)?,
+                cfg.static_span(14, 17, STRING_UNQUOTED)?,
+                cfg.dynamic_span(18, 21, "env"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("env --unset _ env")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 11, PARAMETER)?,
+                cfg.static_span(12, 13, ARGUMENTS)?,
+                cfg.dynamic_span(14, 17, "env"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("env --chdir mydir env")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 11, PARAMETER)?,
+                cfg.mixed_span(12, 17, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+                cfg.dynamic_span(18, 21, "env"),
+            ]
+        );
+
+        let highlighted = cfg.highlight(r#"env --split-string "-C target" env"#)?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 3, "env"),
+                cfg.static_span(3, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 18, PARAMETER)?,
+                cfg.static_span(19, 20, STRING_QUOTED_BEGIN)?,
+                cfg.static_span(20, 29, STRING_QUOTED_DOUBLE)?,
+                cfg.static_span(29, 30, STRING_QUOTED_END)?,
+                cfg.dynamic_span(31, 34, "env"),
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn nice() -> Result<()> {
+        let cfg = test_cfg()?;
+
+        let highlighted = cfg.highlight("nice ls")?;
+        assert_eq!(
+            highlighted,
+            vec![cfg.dynamic_span(0, 4, "nice"), cfg.dynamic_span(5, 7, "ls")]
+        );
+
+        let highlighted = cfg.highlight("nice --version && nice --help")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "nice"),
+                cfg.static_span(4, 7, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(7, 14, PARAMETER)?,
+                cfg.static_span(15, 17, OPERATOR_LOGICAL_AND)?,
+                cfg.dynamic_span(18, 22, "nice"),
+                cfg.static_span(22, 25, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(25, 29, PARAMETER)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight("nice -n 5 date")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "nice"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(8, 9, ARGUMENTS)?,
+                cfg.dynamic_span(10, 14, "date")
+            ]
+        );
+
+        let highlighted = cfg.highlight("nice -n 5 date")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "nice"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(8, 9, ARGUMENTS)?,
+                cfg.dynamic_span(10, 14, "date")
+            ]
+        );
+
+        let highlighted = cfg.highlight("nice -n5 date")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "nice"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(7, 8, ARGUMENTS)?,
+                cfg.dynamic_span(9, 13, "date")
+            ]
+        );
+
+        let highlighted = cfg.highlight("nice -n 16 nice -n -35 date")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "nice"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(8, 10, ARGUMENTS)?,
+                cfg.dynamic_span(11, 15, "nice"),
+                cfg.static_span(15, 17, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(17, 18, PARAMETER)?,
+                cfg.static_span(19, 22, ARGUMENTS)?,
+                cfg.dynamic_span(23, 27, "date")
+            ]
+        );
+
+        let highlighted = cfg.highlight("nice -n 5 -- date")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "nice"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(8, 9, ARGUMENTS)?,
+                cfg.static_span(9, 12, OPERATOR_END_OF_OPTIONS)?,
+                cfg.dynamic_span(13, 17, "date")
+            ]
+        );
+
+        let highlighted = cfg.highlight("nice --adjustment=5 date")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "nice"),
+                cfg.static_span(4, 7, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(7, 17, PARAMETER)?,
+                cfg.static_span(17, 18, OPERATOR_ASSIGNMENT_OPTION)?,
+                cfg.static_span(18, 19, ARGUMENTS)?,
+                cfg.dynamic_span(20, 24, "date")
+            ]
+        );
+
+        let highlighted = cfg.highlight("nice --adjustment 5 date")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "nice"),
+                cfg.static_span(4, 7, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(7, 17, PARAMETER)?,
+                cfg.static_span(18, 19, ARGUMENTS)?,
+                cfg.dynamic_span(20, 24, "date")
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn nohup() -> Result<()> {
+        let cfg = test_cfg()?;
+
+        let highlighted = cfg.highlight("nohup ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 5, "nohup"),
+                cfg.dynamic_span(6, 8, "ls")
+            ]
+        );
+
+        let highlighted = cfg.highlight("nohup --version && nohup --help")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 5, "nohup"),
+                cfg.static_span(5, 8, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(8, 15, PARAMETER)?,
+                cfg.static_span(16, 18, OPERATOR_LOGICAL_AND)?,
+                cfg.dynamic_span(19, 24, "nohup"),
+                cfg.static_span(24, 27, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(27, 31, PARAMETER)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight("nohup -- ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 5, "nohup"),
+                cfg.static_span(5, 8, OPERATOR_END_OF_OPTIONS)?,
+                cfg.dynamic_span(9, 11, "ls")
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn sudo() -> Result<()> {
+        let cfg = test_cfg()?;
+
+        let highlighted = cfg.highlight("sudo ls")?;
+        assert_eq!(
+            highlighted,
+            vec![cfg.dynamic_span(0, 4, "sudo"), cfg.dynamic_span(5, 7, "ls")]
+        );
+
+        let highlighted = cfg.highlight("sudo -n ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "sudo"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.dynamic_span(8, 10, "ls"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("sudo -n -u root -- ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "sudo"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
+                cfg.static_span(11, 15, ARGUMENTS)?,
+                cfg.static_span(15, 18, OPERATOR_END_OF_OPTIONS)?,
+                cfg.dynamic_span(19, 21, "ls"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("sudo -ng wheel -- ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "sudo"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 8, PARAMETER)?,
+                cfg.static_span(9, 14, ARGUMENTS)?,
+                cfg.static_span(14, 17, OPERATOR_END_OF_OPTIONS)?,
+                cfg.dynamic_span(18, 20, "ls"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("sudo --version && sudo --help")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "sudo"),
+                cfg.static_span(4, 7, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(7, 14, PARAMETER)?,
+                cfg.static_span(15, 17, OPERATOR_LOGICAL_AND)?,
+                cfg.dynamic_span(18, 22, "sudo"),
+                cfg.static_span(22, 25, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(25, 29, PARAMETER)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight("sudo --user=root ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "sudo"),
+                cfg.static_span(4, 7, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(7, 11, PARAMETER)?,
+                cfg.static_span(11, 12, OPERATOR_ASSIGNMENT_OPTION)?,
+                cfg.static_span(12, 16, ARGUMENTS)?,
+                cfg.dynamic_span(17, 19, "ls"),
+            ]
+        );
+
+        cfg.create_dir("mydir")?;
+
+        let highlighted = cfg.highlight("sudo --chdir mydir ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "sudo"),
+                cfg.static_span(4, 7, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(7, 12, PARAMETER)?,
+                cfg.mixed_span(13, 18, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
+                cfg.dynamic_span(19, 21, "ls"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("sudo -h localhost -l")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "sudo"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(8, 17, ARGUMENTS)?,
+                cfg.static_span(17, 19, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(19, 20, PARAMETER)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight("sudo -h -i ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "sudo"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
+                cfg.dynamic_span(11, 13, "ls"),
+            ]
+        );
+
+        let highlighted = cfg.highlight("sudo -h && ls")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "sudo"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(8, 10, OPERATOR_LOGICAL_AND)?,
+                cfg.dynamic_span(11, 13, "ls"),
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn sudoedit() -> Result<()> {
+        let cfg = test_cfg()?;
+
+        cfg.touch_file("file1")?;
+        cfg.touch_file("file2")?;
+
+        let highlighted = cfg.highlight("sudo -e file1 file2")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "sudo"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(7, 8, ARGUMENTS)?,
+                cfg.mixed_span(8, 13, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(13, 14, ARGUMENTS)?,
+                cfg.mixed_span(14, 19, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight("sudo -i -e -- file1 file2")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "sudo"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 7, PARAMETER)?,
+                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(9, 10, PARAMETER)?,
+                cfg.static_span(10, 13, OPERATOR_END_OF_OPTIONS)?,
+                cfg.static_span(13, 14, ARGUMENTS)?,
+                cfg.mixed_span(14, 19, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(19, 20, ARGUMENTS)?,
+                cfg.mixed_span(20, 25, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight("sudo -ie -- file1 file2")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 4, "sudo"),
+                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(6, 8, PARAMETER)?,
+                cfg.static_span(8, 11, OPERATOR_END_OF_OPTIONS)?,
+                cfg.static_span(11, 12, ARGUMENTS)?,
+                cfg.mixed_span(12, 17, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(17, 18, ARGUMENTS)?,
+                cfg.mixed_span(18, 23, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+            ]
+        );
+
+        let highlighted = cfg.highlight("sudoedit -u user -g wheel file1 file2")?;
+        assert_eq!(
+            highlighted,
+            vec![
+                cfg.dynamic_span(0, 8, "sudoedit"),
+                cfg.static_span(8, 10, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(10, 11, PARAMETER)?,
+                cfg.static_span(11, 16, ARGUMENTS)?,
+                cfg.static_span(16, 18, PUNCTUATION_PARAMETER)?,
+                cfg.static_span(18, 19, PARAMETER)?,
+                cfg.static_span(19, 26, ARGUMENTS)?,
+                cfg.mixed_span(26, 31, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
+                cfg.static_span(31, 32, ARGUMENTS)?,
+                cfg.mixed_span(32, 37, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
             ]
         );
 

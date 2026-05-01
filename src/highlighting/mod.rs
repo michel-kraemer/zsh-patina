@@ -79,14 +79,15 @@ const GROUP_SELECT: &str = "meta.group.select.shell";
 #[cfg(test)]
 const INTEGER_JOB: &str = "constant.numeric.integer.decimal.job.shell";
 #[cfg(test)]
-const INVALID_UNKNOWN_PRECOMMAND_PARAMETER: &str =
-    "invalid.illegal.unknown-precommand-parameter.shell";
-#[cfg(test)]
 const OPERATOR_ARITHMETIC: &str = "keyword.operator.arithmetic.shell";
+#[cfg(test)]
+const OPERATOR_ASSIGNMENT: &str = "keyword.operator.assignment.shell";
 #[cfg(test)]
 const OPERATOR_ASSIGNMENT_OPTION: &str = "keyword.operator.assignment.option.shell";
 #[cfg(test)]
 const OPERATOR_ASSIGNMENT_REDIRECTION: &str = "keyword.operator.assignment.redirection.shell";
+#[cfg(test)]
+const OPERATOR_END_OF_OPTIONS: &str = "keyword.operator.end-of-options.shell";
 #[cfg(test)]
 const OPERATOR_LOGICAL_AND: &str = "keyword.operator.logical.and.shell";
 #[cfg(test)]
@@ -110,6 +111,10 @@ const PRECOMMAND_NOGLOB: &str = "precommand.builtin.noglob.shell";
 #[cfg(test)]
 const PUNCTUATION_COMMENT_BEGIN: &str = "punctuation.definition.comment.begin.shell";
 #[cfg(test)]
+const PUNCTUATION_COMPOUND_BEGIN: &str = "punctuation.definition.compound.begin.shell";
+#[cfg(test)]
+const PUNCTUATION_COMPOUND_END: &str = "punctuation.definition.compound.end.shell";
+#[cfg(test)]
 const PUNCTUATION_EXPANSION_PARAMETER_BEGIN: &str =
     "punctuation.section.expansion.parameter.begin.shell";
 #[cfg(test)]
@@ -127,6 +132,10 @@ const PUNCTUATION_PARENS_END: &str = "punctuation.section.parens.end.shell";
 const PUNCTUATION_TERMINATOR_CASE: &str = "punctuation.terminator.case.shell";
 #[cfg(test)]
 const PUNCTUATION_VARIABLE: &str = "punctuation.definition.variable.shell";
+#[cfg(test)]
+const STRING_UNQUOTED: &str = "string.unquoted.shell";
+#[cfg(test)]
+const VARIABLE_ASSIGNMENT: &str = "variable.other.readwrite.assignment.shell";
 
 /// A span of text with a foreground color. The range is specified in terms of
 /// character indices, not byte indices.
