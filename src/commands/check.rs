@@ -129,6 +129,69 @@ fn check_config_file(config_file_path: &Option<PathBuf>) -> (String, MessageType
     }
 }
 
+/// Check if the installed version of Zsh is at least 5.9
+fn check_zsh_version() -> (String, MessageType) {
+    let output = match Command::new("zsh").args(["--version"]).output() {
+        Ok(o) => o,
+        Err(e) => {
+            return (
+                format!("Failed to run `zsh --version'\n\n{e:?}"),
+                MessageType::Error,
+            );
+        }
+    };
+
+    let output = String::from_utf8_lossy(&output.stdout);
+    let Some(version) = output.split_whitespace().nth(1) else {
+        return (
+            format!(
+                "Unable to evaluate installed Zsh version. Failed to parse `{}'.",
+                output.trim()
+            ),
+            MessageType::Warning,
+        );
+    };
+
+    let mut parts = version.split('.');
+    let major = match parts
+        .next()
+        .expect("Version can never be empty")
+        .parse::<u32>()
+    {
+        Ok(major) => major,
+        Err(e) => {
+            return (
+                format!("Unable to parse installed Zsh version.\n\n{e:?}"),
+                MessageType::Warning,
+            );
+        }
+    };
+    let minor = match parts.next() {
+        Some(minor) => match minor.parse::<u32>() {
+            Ok(minor) => minor,
+            Err(e) => {
+                return (
+                    format!("Unable to parse installed Zsh version.\n\n{e:?}"),
+                    MessageType::Warning,
+                );
+            }
+        },
+        None => 0,
+    };
+
+    if major > 5 || (major == 5 && minor >= 9) {
+        (
+            format!("Installed Zsh version is {version}."),
+            MessageType::Success,
+        )
+    } else {
+        (
+            format!("Unsupported Zsh version {version}. zsh-patina requires at least version 5.9."),
+            MessageType::Error,
+        )
+    }
+}
+
 /// Check if the configured theme can be loaded
 fn check_theme(config: &Config) -> (String, MessageType) {
     match Theme::load(&config.highlighting.theme) {
@@ -279,6 +342,14 @@ pub fn check(
     print_bullet(&msg, t);
 
     let (msg, t) = check_theme(config);
+    match t {
+        MessageType::Error => has_errors = true,
+        MessageType::Warning => has_warnings = true,
+        _ => {}
+    }
+    print_bullet(&msg, t);
+
+    let (msg, t) = check_zsh_version();
     match t {
         MessageType::Error => has_errors = true,
         MessageType::Warning => has_warnings = true,
