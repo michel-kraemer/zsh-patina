@@ -2,6 +2,22 @@
 
 _Note: This project follows [Semantic Versioning]._
 
+## [1.6.0] - 2026-05-02
+
+**New features**
+
+- Highlight external precommands `doas`, `env`, `nice`, `nohup`, `sudo`, and `sudoedit`
+
+**Bug fixes**
+
+- Don't assume all percent signs represent a background job (contributed by @ccjmne 🎊)
+
+**Maintenance**
+
+- Check if the installed Zsh version is at least 5.9
+- Update dependencies
+- Improve unit tests
+
 ## [1.5.1] - 2026-04-25
 
 **Bug fixes**
@@ -138,6 +154,7 @@ _Note: This project follows [Semantic Versioning]._
 
 _First release._
 
+[1.6.0]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.6.0
 [1.5.1]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.5.1
 [1.5.0]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.5.0
 [1.4.0]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.4.0
