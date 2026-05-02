@@ -19,7 +19,7 @@ codegen-units = 1
 
 [dependencies]
 anyhow = "1.0.102"
-askama = "0.15.6"
+askama = "0.16.0"
 clap = { version = "4.5.60", features = ["derive", "wrap_help"] }
 clap_complete = "4.6.0"
 dirs = "6.0.0"
