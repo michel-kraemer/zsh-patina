@@ -1,0 +1,13 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"repeat do; echo Hello; done\")?"
+---
+repeat do; echo Hello; done
+
+0   6   `repeat`  keyword.control.repeat
+7   9   `do`      keyword.control.do
+9   10  `;`       keyword.operator.logical.continue
+11  15  `echo`    CALLABLE `echo`
+15  21  ` Hello`  meta.function-call.arguments
+21  22  `;`       keyword.operator.logical.continue
+23  27  `done`    keyword.control.done

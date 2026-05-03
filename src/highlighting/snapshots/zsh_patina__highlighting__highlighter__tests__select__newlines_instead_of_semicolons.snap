@@ -1,0 +1,19 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"select x in a b\\ndo\\necho $x\\ndone\")?"
+---
+select x in a b
+do
+echo $x
+done
+
+0   6   `select`  keyword.control.select
+6   9   ` x `     meta.group.select
+9   11  `in`      keyword.control.in
+11  15  ` a b`    meta.group.select
+16  18  `do`      keyword.control.do
+19  23  `echo`    CALLABLE `echo`
+23  24  ` `       meta.function-call.arguments
+24  25  `$`       punctuation.definition.variable
+25  26  `x`       variable.other.readwrite
+27  31  `done`    keyword.control.done

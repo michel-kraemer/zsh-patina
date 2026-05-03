@@ -1,0 +1,8 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"date +%s\")?"
+---
+date +%s
+
+0  4  `date`  CALLABLE `date`
+4  8  ` +%s`  meta.function-call.arguments

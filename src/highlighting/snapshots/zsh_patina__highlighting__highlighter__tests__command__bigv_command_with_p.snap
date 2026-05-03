@@ -1,0 +1,12 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"command -V echo -p file\")?"
+---
+command -V echo -p file
+
+0   7   `command`  precommand.builtin.command
+7   9   ` -`       punctuation.definition.parameter
+9   10  `V`        variable.parameter.option
+11  15  `echo`     CALLABLE `echo`
+16  18  `-p`       CALLABLE `-p`
+19  23  `file`     CALLABLE `file`

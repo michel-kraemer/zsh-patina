@@ -1,0 +1,9 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"ls test.txt\")?"
+---
+ls test.txt
+
+0  2   `ls`        variable.function
+2  3   ` `         meta.function-call.arguments
+3  11  `test.txt`  meta.function-call.arguments + dynamic.path.file.complete

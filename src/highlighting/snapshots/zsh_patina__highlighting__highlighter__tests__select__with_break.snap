@@ -1,0 +1,15 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"select x in a b; do break; done\")?"
+---
+select x in a b; do break; done
+
+0   6   `select`  keyword.control.select
+6   9   ` x `     meta.group.select
+9   11  `in`      keyword.control.in
+11  15  ` a b`    meta.group.select
+15  16  `;`       keyword.operator.logical.continue
+17  19  `do`      keyword.control.do
+20  25  `break`   keyword.control.flow.break
+25  26  `;`       keyword.operator.logical.continue
+27  31  `done`    keyword.control.done

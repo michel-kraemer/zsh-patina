@@ -1,0 +1,14 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(r\"ls ${FOOBAR}test.txt test.txt\")?"
+---
+ls ${FOOBAR}test.txt test.txt
+
+0   2   `ls`         CALLABLE `ls`
+2   3   ` `          meta.function-call.arguments
+3   4   `$`          punctuation.definition.variable
+4   5   `{`          punctuation.section.expansion.parameter.begin
+5   11  `FOOBAR`     variable.other.readwrite
+11  12  `}`          punctuation.section.expansion.parameter.end
+12  21  `test.txt `  meta.function-call.arguments
+21  29  `test.txt`   meta.function-call.arguments + dynamic.path.file.complete

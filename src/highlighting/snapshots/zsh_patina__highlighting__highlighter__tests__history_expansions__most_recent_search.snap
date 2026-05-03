@@ -1,0 +1,8 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"!% stop\")?"
+---
+!% stop
+
+0  2  `!%`     meta.group.expansion.history
+2  7  ` stop`  meta.function-call.arguments

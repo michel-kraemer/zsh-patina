@@ -1,0 +1,11 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"ls -l !!:$\")?"
+---
+ls -l !!:$
+
+0  2   `ls`    CALLABLE `ls`
+2  4   ` -`    punctuation.definition.parameter
+4  5   `l`     variable.parameter.option
+5  6   ` `     meta.function-call.arguments
+6  10  `!!:$`  meta.group.expansion.history

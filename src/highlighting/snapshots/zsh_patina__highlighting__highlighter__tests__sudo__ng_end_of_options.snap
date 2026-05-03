@@ -1,0 +1,12 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"sudo -ng wheel -- ls\")?"
+---
+sudo -ng wheel -- ls
+
+0   4   `sudo`   CALLABLE `sudo`
+4   6   ` -`     punctuation.definition.parameter
+6   8   `ng`     variable.parameter.option
+9   14  `wheel`  meta.function-call.arguments
+14  17  ` --`    keyword.operator.end-of-options
+18  20  `ls`     CALLABLE `ls`

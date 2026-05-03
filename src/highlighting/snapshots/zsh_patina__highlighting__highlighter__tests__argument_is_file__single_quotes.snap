@@ -1,0 +1,12 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(r#\"cp 'test.txt' dest.txt\"#)?"
+---
+cp 'test.txt' dest.txt
+
+0   2   `cp`         CALLABLE `cp`
+2   3   ` `          meta.function-call.arguments
+3   4   `'`          punctuation.definition.string.begin + dynamic.path.file.complete
+4   12  `test.txt`   string.quoted.single + dynamic.path.file.complete
+12  13  `'`          punctuation.definition.string.end + dynamic.path.file.complete
+13  22  ` dest.txt`  meta.function-call.arguments

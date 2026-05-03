@@ -1,0 +1,9 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"vi !!:0\")?"
+---
+vi !!:0
+
+0  2  `vi`    CALLABLE `vi`
+2  3  ` `     meta.function-call.arguments
+3  7  `!!:0`  meta.group.expansion.history

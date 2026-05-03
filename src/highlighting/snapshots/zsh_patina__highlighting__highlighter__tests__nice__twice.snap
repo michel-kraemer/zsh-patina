@@ -1,0 +1,15 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"nice -n 16 nice -n -35 date\")?"
+---
+nice -n 16 nice -n -35 date
+
+0   4   `nice`  CALLABLE `nice`
+4   6   ` -`    punctuation.definition.parameter
+6   7   `n`     variable.parameter.option
+8   10  `16`    meta.function-call.arguments
+11  15  `nice`  CALLABLE `nice`
+15  17  ` -`    punctuation.definition.parameter
+17  18  `n`     variable.parameter.option
+19  22  `-35`   meta.function-call.arguments
+23  27  `date`  CALLABLE `date`

@@ -1,0 +1,8 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"~ echo\")?"
+---
+~ echo
+
+0  1  `~`      variable.language.tilde + dynamic.callable.command
+1  6  ` echo`  meta.function-call.arguments

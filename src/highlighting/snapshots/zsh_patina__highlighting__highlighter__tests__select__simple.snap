@@ -1,0 +1,18 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"select x in a b c; do echo $x; done\")?"
+---
+select x in a b c; do echo $x; done
+
+0   6   `select`  keyword.control.select
+6   9   ` x `     meta.group.select
+9   11  `in`      keyword.control.in
+11  17  ` a b c`  meta.group.select
+17  18  `;`       keyword.operator.logical.continue
+19  21  `do`      keyword.control.do
+22  26  `echo`    CALLABLE `echo`
+26  27  ` `       meta.function-call.arguments
+27  28  `$`       punctuation.definition.variable
+28  29  `x`       variable.other.readwrite
+29  30  `;`       keyword.operator.logical.continue
+31  35  `done`    keyword.control.done

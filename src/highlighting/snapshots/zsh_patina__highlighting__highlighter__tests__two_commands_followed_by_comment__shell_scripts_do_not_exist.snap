@@ -1,0 +1,9 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"~/foo/a.sh && ~/foo/b.sh\")?\n.to_string().replace(cfg.homedir.path().to_str().unwrap(), \"<HOME>\")"
+---
+~/foo/a.sh && ~/foo/b.sh
+
+0   10  `~/foo/a.sh`  CALLABLE `<HOME>/foo/a.sh`
+11  13  `&&`          keyword.operator.logical.and
+14  24  `~/foo/b.sh`  CALLABLE `<HOME>/foo/b.sh`

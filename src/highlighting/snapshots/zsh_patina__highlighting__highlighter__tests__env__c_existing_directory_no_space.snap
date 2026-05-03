@@ -1,0 +1,11 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"env -Cmydir ls\")?"
+---
+env -Cmydir ls
+
+0   3   `env`    CALLABLE `env`
+3   5   ` -`     punctuation.definition.parameter
+5   6   `C`      variable.parameter.option
+6   11  `mydir`  meta.function-call.arguments + dynamic.path.directory.complete
+12  14  `ls`     CALLABLE `ls`

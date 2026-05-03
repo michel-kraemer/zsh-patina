@@ -1,0 +1,16 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"sudo -i -e -- file1 file2\")?"
+---
+sudo -i -e -- file1 file2
+
+0   4   `sudo`   CALLABLE `sudo`
+4   6   ` -`     punctuation.definition.parameter
+6   7   `i`      variable.parameter.option
+7   9   ` -`     punctuation.definition.parameter
+9   10  `e`      variable.parameter.option
+10  13  ` --`    keyword.operator.end-of-options
+13  14  ` `      meta.function-call.arguments
+14  19  `file1`  meta.function-call.arguments + dynamic.path.file.complete
+19  20  ` `      meta.function-call.arguments
+20  25  `file2`  meta.function-call.arguments + dynamic.path.file.complete

@@ -1,0 +1,12 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"git log --pretty=%aD\")?"
+---
+git log --pretty=%aD
+
+0   3   `git`     CALLABLE `git`
+3   7   ` log`    meta.function-call.arguments
+7   10  ` --`     punctuation.definition.parameter
+10  16  `pretty`  variable.parameter.option
+16  17  `=`       keyword.operator.assignment.option
+17  20  `%aD`     meta.function-call.arguments

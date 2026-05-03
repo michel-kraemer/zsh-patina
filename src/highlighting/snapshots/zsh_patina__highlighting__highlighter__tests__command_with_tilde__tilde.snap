@@ -1,0 +1,7 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"~\")?"
+---
+~
+
+0  1  `~`  variable.language.tilde + dynamic.callable.command

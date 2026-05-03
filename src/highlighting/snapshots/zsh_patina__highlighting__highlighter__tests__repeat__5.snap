@@ -1,0 +1,10 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"repeat 5 echo Hello\")?"
+---
+repeat 5 echo Hello
+
+0   6   `repeat`  keyword.control.repeat
+7   8   `5`       constant.numeric.integer.decimal
+9   13  `echo`    CALLABLE `echo`
+13  19  ` Hello`  meta.function-call.arguments

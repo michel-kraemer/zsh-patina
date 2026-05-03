@@ -1,0 +1,7 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"echo\")?"
+---
+echo
+
+0  4  `echo`  CALLABLE `echo`

@@ -1,0 +1,10 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"env -ii ls\")?"
+---
+env -ii ls
+
+0  3   `env`  CALLABLE `env`
+3  5   ` -`   punctuation.definition.parameter
+5  7   `ii`   variable.parameter.option
+8  10  `ls`   CALLABLE `ls`

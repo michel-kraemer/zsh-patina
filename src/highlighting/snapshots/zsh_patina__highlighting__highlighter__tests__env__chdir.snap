@@ -1,0 +1,11 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"env --chdir mydir env\")?"
+---
+env --chdir mydir env
+
+0   3   `env`    CALLABLE `env`
+3   6   ` --`    punctuation.definition.parameter
+6   11  `chdir`  variable.parameter.option
+12  17  `mydir`  meta.function-call.arguments + dynamic.path.directory.complete
+18  21  `env`    CALLABLE `env`

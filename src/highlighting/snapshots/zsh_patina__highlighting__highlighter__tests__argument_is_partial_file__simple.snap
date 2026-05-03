@@ -1,0 +1,9 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "AssertableSpans\n{\n    command: \"ls te\".to_string(), spans:\n    cfg.highlighter.highlight(\"ls te\", &request)?,\n}"
+---
+ls te
+
+0  2  `ls`  CALLABLE `ls`
+2  3  ` `   meta.function-call.arguments
+3  5  `te`  meta.function-call.arguments + dynamic.path.file.partial

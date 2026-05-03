@@ -1,0 +1,10 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"echo hello>test.txt\")?"
+---
+echo hello>test.txt
+
+0   4   `echo`      CALLABLE `echo`
+4   10  ` hello`    meta.function-call.arguments
+10  11  `>`         keyword.operator.assignment.redirection
+11  19  `test.txt`  meta.function-call.arguments + dynamic.path.file.complete

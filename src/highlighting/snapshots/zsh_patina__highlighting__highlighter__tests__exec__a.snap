@@ -1,0 +1,14 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"exec -a zsh foobar $0\")?"
+---
+exec -a zsh foobar $0
+
+0   4   `exec`    precommand.builtin.exec
+4   6   ` -`      punctuation.definition.parameter
+6   7   `a`       variable.parameter.option
+8   11  `zsh`     meta.function-call.arguments
+12  18  `foobar`  CALLABLE `foobar`
+18  19  ` `       meta.function-call.arguments
+19  20  `$`       punctuation.definition.variable
+20  21  `0`       variable.other.readwrite

@@ -1,0 +1,10 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"exec -c foobar\")?"
+---
+exec -c foobar
+
+0  4   `exec`    precommand.builtin.exec
+4  6   ` -`      punctuation.definition.parameter
+6  7   `c`       variable.parameter.option
+8  14  `foobar`  CALLABLE `foobar`

@@ -1,0 +1,11 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"ls $'~/'\")?"
+---
+ls $'~/'
+
+0  2  `ls`  CALLABLE `ls`
+2  3  ` `   meta.function-call.arguments
+3  5  `$'`  punctuation.definition.string.begin
+5  7  `~/`  string.quoted.single.ansi-c
+7  8  `'`   punctuation.definition.string.end

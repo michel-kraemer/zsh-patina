@@ -1,0 +1,9 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"ls ~\")?"
+---
+ls ~
+
+0  2  `ls`  CALLABLE `ls`
+2  3  ` `   meta.function-call.arguments
+3  4  `~`   variable.language.tilde + dynamic.path.directory.complete

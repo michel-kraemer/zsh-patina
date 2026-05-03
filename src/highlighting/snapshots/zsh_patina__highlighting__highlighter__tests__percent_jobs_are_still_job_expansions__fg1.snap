@@ -1,0 +1,10 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"fg %1\")?"
+---
+fg %1
+
+0  2  `fg`  CALLABLE `fg`
+2  3  ` `   meta.function-call.arguments
+3  4  `%`   punctuation.definition.variable.job
+4  5  `1`   constant.numeric.integer.decimal.job

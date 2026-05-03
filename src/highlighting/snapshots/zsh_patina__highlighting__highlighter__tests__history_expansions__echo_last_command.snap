@@ -1,0 +1,13 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(r#\"echo !! \"!!\"\"#)?"
+---
+echo !! "!!"
+
+0   4   `echo`  CALLABLE `echo`
+4   5   ` `     meta.function-call.arguments
+5   7   `!!`    meta.group.expansion.history
+7   8   ` `     meta.function-call.arguments
+8   9   `"`     string.quoted.double
+9   11  `!!`    meta.group.expansion.history
+11  12  `"`     string.quoted.double

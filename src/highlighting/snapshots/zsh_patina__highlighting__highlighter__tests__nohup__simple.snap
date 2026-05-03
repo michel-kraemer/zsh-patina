@@ -1,0 +1,8 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"nohup ls\")?"
+---
+nohup ls
+
+0  5  `nohup`  CALLABLE `nohup`
+6  8  `ls`     CALLABLE `ls`

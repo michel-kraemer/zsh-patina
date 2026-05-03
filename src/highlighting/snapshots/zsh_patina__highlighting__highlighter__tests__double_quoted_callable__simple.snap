@@ -1,0 +1,7 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(r#\"\"ls\"\"#)?"
+---
+"ls"
+
+0  4  `"ls"`  CALLABLE `ls`

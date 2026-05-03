@@ -538,7 +538,9 @@ impl Highlighter {
 #[cfg(test)]
 mod tests {
     use std::{
+        fmt::{Display, Formatter},
         fs::{self, Permissions},
+        io::Write,
         os::unix::fs::PermissionsExt,
         path::PathBuf,
     };
@@ -547,7 +549,9 @@ mod tests {
 
     use super::*;
     use anyhow::Result;
+    use insta::assert_snapshot;
     use pretty_assertions::assert_eq;
+    use tabwriter::TabWriter;
     use tempfile::TempDir;
 
     fn test_config() -> HighlightingConfig {
@@ -565,21 +569,95 @@ mod tests {
         pwd: String,
     }
 
+    struct AssertableSpans {
+        command: String,
+        spans: Vec<Span>,
+    }
+
+    impl Display for AssertableSpans {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            let scopes = include!(concat!(env!("OUT_DIR"), "/scopes.rs"));
+
+            writeln!(f, "{}\n", self.command)?;
+
+            let mut tw = TabWriter::new(vec![]).minwidth(1);
+            for span in &self.spans {
+                write!(
+                    tw,
+                    "{}\t{}\t`{}`\t",
+                    span.start,
+                    span.end,
+                    self.command
+                        .chars()
+                        .skip(span.start)
+                        .take(span.end - span.start)
+                        .collect::<String>()
+                )
+                .unwrap();
+                match &span.style {
+                    SpanStyle::Static(static_style) => {
+                        if let Some(fg) = &static_style.foreground_color {
+                            write!(
+                                tw,
+                                "{}",
+                                scopes[fg.parse::<usize>().unwrap()]
+                                    .strip_suffix(".shell")
+                                    .unwrap()
+                            )
+                            .unwrap();
+                        }
+                        if let Some(bg) = &static_style.background_color {
+                            if static_style.foreground_color.is_some() {
+                                write!(tw, " + ").unwrap();
+                            }
+                            write!(
+                                tw,
+                                "{}",
+                                scopes[bg.parse::<usize>().unwrap()]
+                                    .strip_suffix(".shell")
+                                    .unwrap()
+                            )
+                            .unwrap();
+                        }
+                    }
+                    SpanStyle::Dynamic(dynamic_style) => match dynamic_style {
+                        DynamicStyle::Callable { parsed_callable } => {
+                            write!(tw, "CALLABLE `{parsed_callable}`").unwrap();
+                        }
+                    },
+                }
+                writeln!(tw).unwrap();
+            }
+            tw.flush().unwrap();
+
+            let result = String::from_utf8(tw.into_inner().unwrap()).unwrap();
+            write!(f, "{result}")?;
+
+            Ok(())
+        }
+    }
+
     impl TestCfg {
-        fn highlight(&self, command: &str) -> Result<Vec<Span>> {
+        fn highlight(&self, command: &str) -> Result<AssertableSpans> {
             let request = HighlightingRequest::default().with_pwd(self.pwd.as_str());
-            self.highlighter.highlight(command, &request)
+            Ok(AssertableSpans {
+                command: command.to_string(),
+                spans: self.highlighter.highlight(command, &request)?,
+            })
         }
 
         fn highlight_with_request<P>(
             &self,
             command: &str,
             request: HighlightingRequest<P>,
-        ) -> Result<Vec<Span>>
+        ) -> Result<AssertableSpans>
         where
             P: Fn(&Range<usize>) -> bool + Copy,
         {
-            self.highlighter.highlight(command, &request)
+            Ok(AssertableSpans {
+                command: command.to_string(),
+                spans: self.highlighter.highlight(command, &request)?,
+            })
         }
 
         fn touch_file(&self, name: &str) -> Result<PathBuf> {
@@ -599,38 +677,6 @@ mod tests {
             fs::write(&file_path, "#!/bin/sh")?;
             fs::set_permissions(&file_path, Permissions::from_mode(0o755))?;
             Ok(file_path)
-        }
-
-        fn static_span(&self, start: usize, end: usize, scope: &str) -> Result<Span> {
-            let style = resolve_static_style(scope, &self.highlighter.theme)
-                .with_context(|| format!("Unable to resolve style for scope {scope}"))?;
-            Ok(Span {
-                start,
-                end,
-                style: SpanStyle::Static(style),
-            })
-        }
-
-        fn dynamic_span(&self, start: usize, end: usize, parsed_callable: &str) -> Span {
-            Span {
-                start,
-                end,
-                style: SpanStyle::Dynamic(DynamicStyle::Callable {
-                    parsed_callable: parsed_callable.to_string(),
-                }),
-            }
-        }
-
-        fn mixed_span(&self, start: usize, end: usize, a: &str, b: &str) -> Result<Span> {
-            let a_style = resolve_static_style(a, &self.highlighter.theme)
-                .with_context(|| format!("Unable to resolve style for scope {a}"))?;
-            let b_style = resolve_static_style(b, &self.highlighter.theme)
-                .with_context(|| format!("Unable to resolve style for scope {b}"))?;
-            Ok(Span {
-                start,
-                end,
-                style: mix_styles(&SpanStyle::Static(a_style), &SpanStyle::Static(b_style)),
-            })
         }
     }
 
@@ -659,8 +705,9 @@ mod tests {
     #[test]
     fn echo() -> Result<()> {
         let cfg = test_cfg()?;
-        let highlighted = cfg.highlight("echo")?;
-        assert_eq!(highlighted, vec![cfg.dynamic_span(0, 4, "echo")]);
+
+        assert_snapshot!(cfg.highlight("echo")?);
+
         Ok(())
     }
 
@@ -670,19 +717,8 @@ mod tests {
         cfg.touch_file("test🐑.txt")?;
         cfg.touch_file("🐑")?;
 
-        let highlighted = cfg.highlight(r#"cp🐑 "test🐑.txt" 🐑"#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "cp🐑"),
-                cfg.static_span(3, 4, ARGUMENTS)?,
-                cfg.mixed_span(4, 5, STRING_QUOTED_BEGIN, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(5, 14, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(14, 15, STRING_QUOTED_END, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(15, 16, ARGUMENTS)?,
-                cfg.mixed_span(16, 17, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-            ]
-        );
+        assert_snapshot!(cfg.highlight(r#"cp🐑 "test🐑.txt" 🐑"#)?);
+
         Ok(())
     }
 
@@ -696,13 +732,9 @@ mod tests {
         let mut cfg = test_cfg_with(config)?;
         cfg.touch_file("test.txt")?;
 
-        let highlighted = cfg.highlight("ls test.txt")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 2, CALLABLE)?,
-                cfg.static_span(2, 11, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "dynamic_highlighting_disabled__no_callables_no_paths",
+            cfg.highlight("ls test.txt")?
         );
 
         let mut config = test_config();
@@ -712,13 +744,9 @@ mod tests {
         };
         cfg.highlighter = HighlighterBuilder::new(&config).build()?;
 
-        let highlighted = cfg.highlight("ls test.txt")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(2, 11, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "dynamic_highlighting_disabled__no_paths",
+            cfg.highlight("ls test.txt")?
         );
 
         config.dynamic = DynamicConfig {
@@ -727,14 +755,9 @@ mod tests {
         };
         cfg.highlighter = HighlighterBuilder::new(&config).build()?;
 
-        let highlighted = cfg.highlight("ls test.txt")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 2, CALLABLE)?,
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.mixed_span(3, 11, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?
-            ]
+        assert_snapshot!(
+            "dynamic_highlighting_disabled__no_callables",
+            cfg.highlight("ls test.txt")?
         );
 
         Ok(())
@@ -747,127 +770,41 @@ mod tests {
         cfg.touch_file("test.txt")?;
         cfg.touch_file("test 1.txt")?;
 
-        let highlighted = cfg.highlight("cp test.txt dest.txt")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.mixed_span(3, 11, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(11, 20, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "argument_is_file__simple",
+            cfg.highlight("cp test.txt dest.txt")?
         );
-
-        let highlighted = cfg.highlight(r#"cp "test.txt" dest.txt"#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.mixed_span(3, 4, STRING_QUOTED_BEGIN, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(4, 12, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(12, 13, STRING_QUOTED_END, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(13, 22, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "argument_is_file__double_quotes",
+            cfg.highlight(r#"cp "test.txt" dest.txt"#)?
         );
-
-        let highlighted = cfg.highlight(r#"cp   "test.txt"   "dest.txt""#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(2, 5, ARGUMENTS)?,
-                cfg.mixed_span(5, 6, STRING_QUOTED_BEGIN, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(6, 14, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(14, 15, STRING_QUOTED_END, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(15, 18, ARGUMENTS)?,
-                cfg.static_span(18, 19, STRING_QUOTED_BEGIN)?,
-                cfg.static_span(19, 27, STRING_QUOTED_DOUBLE)?,
-                cfg.static_span(27, 28, STRING_QUOTED_END)?,
-            ]
+        assert_snapshot!(
+            "argument_is_file__spaces",
+            cfg.highlight(r#"cp   "test.txt"   "dest.txt""#)?
         );
-
-        let highlighted = cfg.highlight(r#"cp " test.txt" "dest.txt""#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.static_span(3, 4, STRING_QUOTED_BEGIN)?,
-                cfg.static_span(4, 13, STRING_QUOTED_DOUBLE)?,
-                cfg.static_span(13, 14, STRING_QUOTED_END)?,
-                cfg.static_span(14, 15, ARGUMENTS)?,
-                cfg.static_span(15, 16, STRING_QUOTED_BEGIN)?,
-                cfg.static_span(16, 24, STRING_QUOTED_DOUBLE)?,
-                cfg.static_span(24, 25, STRING_QUOTED_END)?,
-            ]
+        assert_snapshot!(
+            "argument_is_file__filename_with_spaces_is_not_a_path",
+            cfg.highlight(r#"cp " test.txt" "dest.txt""#)?
         );
-
-        let highlighted = cfg.highlight(r#"cp te"st.tx"t dest.txt"#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.mixed_span(3, 5, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(5, 6, STRING_QUOTED_BEGIN, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(6, 11, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(11, 12, STRING_QUOTED_END, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(12, 13, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(13, 22, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "argument_is_file__double_quotes_inside_filenames",
+            cfg.highlight(r#"cp te"st.tx"t dest.txt"#)?
         );
-
-        let highlighted = cfg.highlight(r#"cp "test 1.txt" dest.txt"#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.mixed_span(3, 4, STRING_QUOTED_BEGIN, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(4, 14, STRING_QUOTED_DOUBLE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(14, 15, STRING_QUOTED_END, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(15, 24, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "argument_is_file__double_quotes_test_1",
+            cfg.highlight(r#"cp "test 1.txt" dest.txt"#)?
         );
-
-        let highlighted = cfg.highlight(r#"cp test\ 1.txt dest.txt"#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.mixed_span(3, 7, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(7, 9, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(9, 14, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(14, 23, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "argument_is_file__escape_whitespace",
+            cfg.highlight(r#"cp test\ 1.txt dest.txt"#)?
         );
-
-        let highlighted = cfg.highlight(r#"cp 'test.txt' dest.txt"#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.mixed_span(3, 4, STRING_QUOTED_BEGIN, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(4, 12, STRING_QUOTED_SINGLE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(12, 13, STRING_QUOTED_END, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(13, 22, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "argument_is_file__single_quotes",
+            cfg.highlight(r#"cp 'test.txt' dest.txt"#)?
         );
-
-        let highlighted = cfg.highlight(r#"cp $'test.txt' dest.txt"#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.mixed_span(3, 5, STRING_QUOTED_BEGIN, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(5, 13, STRING_QUOTED_SINGLE_ANSI, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(13, 14, STRING_QUOTED_END, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(14, 23, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "argument_is_file__ansi_quotes",
+            cfg.highlight(r#"cp $'test.txt' dest.txt"#)?
         );
 
         Ok(())
@@ -880,17 +817,9 @@ mod tests {
         cfg.touch_file("test.txt")?;
         cfg.create_dir("dest")?;
 
-        let highlighted = cfg.highlight("cp test.txt dest")?;
-
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.mixed_span(3, 11, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(11, 12, ARGUMENTS)?,
-                cfg.mixed_span(12, 16, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
-            ]
+        assert_snapshot!(
+            "argument_is_directory__simple",
+            cfg.highlight("cp test.txt dest")?
         );
 
         Ok(())
@@ -909,15 +838,13 @@ mod tests {
         let request = HighlightingRequest::default()
             .with_cursor(5)
             .with_pwd(cfg.pwd.as_str());
-        let highlighted = cfg.highlighter.highlight("ls te", &request)?;
 
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.mixed_span(3, 5, ARGUMENTS, DYNAMIC_PATH_FILE_PARTIAL)?,
-            ]
+        assert_snapshot!(
+            "argument_is_partial_file__simple",
+            AssertableSpans {
+                command: "ls te".to_string(),
+                spans: cfg.highlighter.highlight("ls te", &request)?,
+            }
         );
 
         Ok(())
@@ -936,15 +863,13 @@ mod tests {
         let request = HighlightingRequest::default()
             .with_cursor(5)
             .with_pwd(cfg.pwd.as_str());
-        let highlighted = cfg.highlighter.highlight("rm de", &request)?;
 
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "rm"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.mixed_span(3, 5, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_PARTIAL)?,
-            ]
+        assert_snapshot!(
+            "argument_is_partial_directory__simple",
+            AssertableSpans {
+                command: "rm de".to_string(),
+                spans: cfg.highlighter.highlight("rm de", &request)?,
+            }
         );
 
         Ok(())
@@ -955,38 +880,24 @@ mod tests {
     fn command_with_tilde() -> Result<()> {
         let cfg = test_cfg()?;
 
-        let highlighted = cfg.highlight("~")?;
-        assert_eq!(
-            highlighted,
-            vec![cfg.mixed_span(0, 1, TILDE_VARIABLE, DYNAMIC_CALLABLE_COMMAND)?]
+        assert_snapshot!("command_with_tilde__tilde", cfg.highlight("~")?);
+        assert_snapshot!("command_with_tilde__tilde_slash", cfg.highlight("~/")?);
+        assert_snapshot!(
+            "command_with_tilde__tilde_command",
+            cfg.highlight("~ echo")?
         );
-
-        let highlighted = cfg.highlight("~/")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.mixed_span(0, 1, TILDE_VARIABLE, DYNAMIC_CALLABLE_COMMAND)?,
-                cfg.mixed_span(1, 2, CALLABLE, DYNAMIC_CALLABLE_COMMAND)?
-            ]
+        assert_snapshot!(
+            "command_with_tilde__doesnotexist",
+            cfg.highlight("~doesnotexist")?
         );
-
-        let highlighted = cfg.highlight("~ echo")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.mixed_span(0, 1, TILDE_VARIABLE, DYNAMIC_CALLABLE_COMMAND)?,
-                cfg.static_span(1, 6, ARGUMENTS)?
-            ]
+        assert_snapshot!(
+            "command_with_tilde__double_quoted",
+            cfg.highlight(r#""~""#)?
         );
-
-        let highlighted = cfg.highlight("~doesnotexist")?;
-        assert_eq!(highlighted, vec![cfg.dynamic_span(0, 13, "~doesnotexist")]);
-
-        let highlighted = cfg.highlight(r#""~""#)?;
-        assert_eq!(highlighted, vec![cfg.dynamic_span(0, 3, "~")]);
-
-        let highlighted = cfg.highlight(r#""~/""#)?;
-        assert_eq!(highlighted, vec![cfg.dynamic_span(0, 4, "~/")]);
+        assert_snapshot!(
+            "command_with_tilde__double_quoted_slash",
+            cfg.highlight(r#""~/""#)?
+        );
 
         Ok(())
     }
@@ -997,96 +908,25 @@ mod tests {
         let cfg = test_cfg()?;
         cfg.touch_file("test.txt")?;
 
-        let highlighted = cfg.highlight("ls ~")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.mixed_span(3, 4, TILDE_VARIABLE, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
-            ]
+        assert_snapshot!("path_with_tilde__simple", cfg.highlight("ls ~")?);
+        assert_snapshot!("path_with_tilde__simple_slash", cfg.highlight("ls ~/")?);
+        assert_snapshot!(
+            "path_with_tilde__with_file",
+            cfg.highlight("ls ~/ test.txt")?
         );
-
-        let highlighted = cfg.highlight("ls ~/")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.mixed_span(3, 4, TILDE_VARIABLE, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
-                cfg.mixed_span(4, 5, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
-            ]
+        assert_snapshot!(
+            "path_with_tilde__double_quoted",
+            cfg.highlight(r#"ls "~/""#)?
         );
-
-        let highlighted = cfg.highlight("ls ~/ test.txt")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.mixed_span(3, 4, TILDE_VARIABLE, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
-                cfg.mixed_span(4, 5, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
-                cfg.static_span(5, 6, ARGUMENTS)?,
-                cfg.mixed_span(6, 14, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-            ]
+        assert_snapshot!("path_with_tilde__single_quoted", cfg.highlight("ls '~/'")?);
+        assert_snapshot!("path_with_tilde__ansi_quoted", cfg.highlight("ls $'~/'")?);
+        assert_snapshot!(
+            "path_with_tilde__path_does_not_exist",
+            cfg.highlight("ls ~/this/path/does/not/exist")?
         );
-
-        let highlighted = cfg.highlight(r#"ls "~/""#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.static_span(3, 4, STRING_QUOTED_BEGIN)?,
-                cfg.static_span(4, 6, STRING_QUOTED_DOUBLE)?,
-                cfg.static_span(6, 7, STRING_QUOTED_END)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight("ls '~/'")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.static_span(3, 4, STRING_QUOTED_BEGIN)?,
-                cfg.static_span(4, 6, STRING_QUOTED_SINGLE)?,
-                cfg.static_span(6, 7, STRING_QUOTED_END)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight("ls $'~/'")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.static_span(3, 5, STRING_QUOTED_BEGIN)?,
-                cfg.static_span(5, 7, STRING_QUOTED_SINGLE_ANSI)?,
-                cfg.static_span(7, 8, STRING_QUOTED_END)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight("ls ~/this/path/does/not/exist")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.static_span(3, 4, TILDE_VARIABLE)?,
-                cfg.static_span(4, 29, ARGUMENTS)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight("ls test/~/")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(2, 8, ARGUMENTS)?,
-                cfg.static_span(8, 9, TILDE_VARIABLE)?,
-                cfg.static_span(9, 10, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "path_with_tilde__path_with_tilde_does_not_exist",
+            cfg.highlight("ls test/~/")?
         );
 
         Ok(())
@@ -1097,16 +937,9 @@ mod tests {
         let cfg = test_cfg()?;
         cfg.touch_file("test.txt")?;
 
-        let highlighted = cfg.highlight("foo test.txt -C")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "foo"),
-                cfg.static_span(3, 4, ARGUMENTS)?,
-                cfg.mixed_span(4, 12, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(12, 14, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(14, 15, PARAMETER)?,
-            ]
+        assert_snapshot!(
+            "path_followed_by_parameter__simple",
+            cfg.highlight("foo test.txt -C")?
         );
 
         Ok(())
@@ -1115,45 +948,29 @@ mod tests {
     #[test]
     fn two_commands_followed_by_comment() -> Result<()> {
         let cfg = test_cfg()?;
-        let ash = cfg.homedir.path().join("foo/a.sh");
-        let bsh = cfg.homedir.path().join("foo/b.sh");
 
         // two commands referring two shell scripts that don't exist
-        let highlighted = cfg.highlight("~/foo/a.sh && ~/foo/b.sh")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 10, ash.to_str().unwrap()),
-                cfg.static_span(11, 13, OPERATOR_LOGICAL_AND)?,
-                cfg.dynamic_span(14, 24, bsh.to_str().unwrap()),
-            ]
+        assert_snapshot!(
+            "two_commands_followed_by_comment__shell_scripts_do_not_exist",
+            cfg.highlight("~/foo/a.sh && ~/foo/b.sh")?
+                .to_string()
+                .replace(cfg.homedir.path().to_str().unwrap(), "<HOME>")
         );
 
         // two commands followed by a comment
-        let highlighted = cfg.highlight("~/foo/a.sh && ~/foo/b.sh # comment")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 10, ash.to_str().unwrap()),
-                cfg.static_span(11, 13, OPERATOR_LOGICAL_AND)?,
-                cfg.dynamic_span(14, 25, bsh.to_str().unwrap()),
-                cfg.static_span(25, 26, PUNCTUATION_COMMENT_BEGIN)?,
-                cfg.static_span(26, 34, COMMENT)?,
-            ]
+        assert_snapshot!(
+            "two_commands_followed_by_comment__with_comment",
+            cfg.highlight("~/foo/a.sh && ~/foo/b.sh # comment")?
+                .to_string()
+                .replace(cfg.homedir.path().to_str().unwrap(), "<HOME>")
         );
 
         // two commands but the second path is invalid
-        let highlighted = cfg.highlight("~/foo/a.sh && ~/foo/b.sh# comment")?;
-        let mut expected_path = bsh.to_str().unwrap().to_string();
-        expected_path.push('#');
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 10, ash.to_str().unwrap()),
-                cfg.static_span(11, 13, OPERATOR_LOGICAL_AND)?,
-                cfg.dynamic_span(14, 25, &expected_path),
-                cfg.static_span(25, 33, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "two_commands_followed_by_comment__second_invalid",
+            cfg.highlight("~/foo/a.sh && ~/foo/b.sh# comment")?
+                .to_string()
+                .replace(cfg.homedir.path().to_str().unwrap(), "<HOME>")
         );
 
         Ok(())
@@ -1164,56 +981,21 @@ mod tests {
         let cfg = test_cfg()?;
         cfg.touch_file("test.txt")?;
 
-        let highlighted = cfg.highlight("echo hello > test.txt")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "echo"),
-                cfg.static_span(4, 11, ARGUMENTS)?,
-                cfg.static_span(11, 12, REDIRECTION)?,
-                cfg.static_span(12, 13, ARGUMENTS)?,
-                cfg.mixed_span(13, 21, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-            ]
+        assert_snapshot!(
+            "redirection__simple",
+            cfg.highlight("echo hello > test.txt")?
         );
-
-        let highlighted = cfg.highlight("echo hello>test.txt")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "echo"),
-                cfg.static_span(4, 10, ARGUMENTS)?,
-                cfg.static_span(10, 11, REDIRECTION)?,
-                cfg.mixed_span(11, 19, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-            ]
+        assert_snapshot!(
+            "redirection__no_spaces",
+            cfg.highlight("echo hello>test.txt")?
         );
-
-        let highlighted = cfg.highlight("echo ${FOO}hello>test.txt")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "echo"),
-                cfg.static_span(4, 5, ARGUMENTS)?,
-                cfg.static_span(5, 6, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(6, 7, PUNCTUATION_EXPANSION_PARAMETER_BEGIN)?,
-                cfg.static_span(7, 10, ENVIRONMENT_VARIABLE)?,
-                cfg.static_span(10, 11, PUNCTUATION_EXPANSION_PARAMETER_END)?,
-                cfg.static_span(11, 16, ARGUMENTS)?,
-                cfg.static_span(16, 17, REDIRECTION)?,
-                cfg.mixed_span(17, 25, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-            ]
+        assert_snapshot!(
+            "redirection__with_env_var_before_string",
+            cfg.highlight("echo ${FOO}hello>test.txt")?
         );
-
-        let highlighted = cfg.highlight("echo hello$FOO>test.txt")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "echo"),
-                cfg.static_span(4, 10, ARGUMENTS)?,
-                cfg.static_span(10, 11, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(11, 14, ENVIRONMENT_VARIABLE)?,
-                cfg.static_span(14, 15, REDIRECTION)?,
-                cfg.mixed_span(15, 23, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-            ]
+        assert_snapshot!(
+            "redirection__with_env_var_after_string",
+            cfg.highlight("echo hello$FOO>test.txt")?
         );
 
         Ok(())
@@ -1223,36 +1005,21 @@ mod tests {
     fn double_quoted_callable() -> Result<()> {
         let cfg = test_cfg()?;
 
-        let highlighted = cfg.highlight("\"ls\"")?;
-        assert_eq!(highlighted, vec![cfg.dynamic_span(0, 4, "ls")]);
-
-        let highlighted = cfg.highlight("l\"s\"")?;
-        assert_eq!(highlighted, vec![cfg.dynamic_span(0, 4, "ls")]);
+        assert_snapshot!("double_quoted_callable__simple", cfg.highlight(r#""ls""#)?);
+        assert_snapshot!("double_quoted_callable__inside", cfg.highlight(r#"l"s""#)?);
 
         cfg.touch_script("script.sh")?;
 
-        let highlighted = cfg.highlight("\"./script.sh\"")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.mixed_span(0, 1, STRING_QUOTED_BEGIN, DYNAMIC_CALLABLE_COMMAND)?,
-                cfg.mixed_span(1, 12, STRING_QUOTED_DOUBLE, DYNAMIC_CALLABLE_COMMAND)?,
-                cfg.mixed_span(12, 13, STRING_QUOTED_END, DYNAMIC_CALLABLE_COMMAND)?,
-            ]
+        assert_snapshot!(
+            "double_quoted_callable__script",
+            cfg.highlight(r#""./script.sh""#)?
         );
 
         cfg.create_dir("foo/bar")?;
 
-        let highlighted = cfg.highlight("foo/\"bar\"/")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.mixed_span(0, 4, CALLABLE, DYNAMIC_CALLABLE_COMMAND)?,
-                cfg.mixed_span(4, 5, STRING_QUOTED_BEGIN, DYNAMIC_CALLABLE_COMMAND)?,
-                cfg.mixed_span(5, 8, STRING_QUOTED_DOUBLE, DYNAMIC_CALLABLE_COMMAND)?,
-                cfg.mixed_span(8, 9, STRING_QUOTED_END, DYNAMIC_CALLABLE_COMMAND)?,
-                cfg.mixed_span(9, 10, CALLABLE, DYNAMIC_CALLABLE_COMMAND)?,
-            ]
+        assert_snapshot!(
+            "double_quoted_callable__dir",
+            cfg.highlight(r#"foo/"bar"/"#)?
         );
 
         Ok(())
@@ -1265,32 +1032,25 @@ mod tests {
         cfg.touch_script("script.sh")?;
         cfg.touch_script("s")?;
 
-        let highlighted = cfg.highlight(r"\script.sh")?;
-        assert_eq!(highlighted, vec![cfg.dynamic_span(0, 10, "script.sh")]);
-
-        let highlighted = cfg.highlight(r"\./script.sh")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.mixed_span(0, 2, CHARACTER_ESCAPE, DYNAMIC_CALLABLE_COMMAND)?,
-                cfg.mixed_span(2, 12, CALLABLE, DYNAMIC_CALLABLE_COMMAND)?
-            ]
+        assert_snapshot!(
+            "escape_unquoted_at_beginning__escape_script",
+            cfg.highlight(r"\script.sh")?
+        );
+        assert_snapshot!(
+            "escape_unquoted_at_beginning__escape_dot",
+            cfg.highlight(r"\./script.sh")?
         );
 
         // parser cannot differentiate between normal unquoted character escapes
         // and those that are at the beginning of a callable
-        let highlighted = cfg.highlight(r"\s")?;
-        assert_eq!(highlighted, vec![cfg.static_span(0, 2, CHARACTER_ESCAPE)?]);
+        assert_snapshot!(
+            "escape_unquoted_at_beginning__escape_s",
+            cfg.highlight(r"\s")?
+        );
 
-        let highlighted = cfg.highlight(r"touch \test.txt")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 5, "touch"),
-                cfg.static_span(5, 6, ARGUMENTS)?,
-                cfg.mixed_span(6, 8, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(8, 15, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-            ]
+        assert_snapshot!(
+            "escape_unquoted_at_beginning__escape_file",
+            cfg.highlight(r"touch \test.txt")?
         );
 
         Ok(())
@@ -1300,30 +1060,16 @@ mod tests {
     fn path_with_escape_unquoted() -> Result<()> {
         let cfg = test_cfg()?;
 
-        let highlighted = cfg.highlight(r"cp test\u2580.txt dest.txt")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(2, 7, ARGUMENTS)?,
-                cfg.static_span(7, 9, CHARACTER_ESCAPE)?,
-                cfg.static_span(9, 26, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "path_with_escape_unquoted__does_not_exist",
+            cfg.highlight(r"cp test\u2580.txt dest.txt")?
         );
 
         cfg.touch_file("testu2580.txt")?;
 
-        let highlighted = cfg.highlight(r"cp test\u2580.txt dest.txt")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.mixed_span(3, 7, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(7, 9, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(9, 17, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(17, 26, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "path_with_escape_unquoted__exists",
+            cfg.highlight(r"cp test\u2580.txt dest.txt")?
         );
 
         Ok(())
@@ -1335,135 +1081,41 @@ mod tests {
         cfg.touch_file("test▀.txt")?;
         cfg.touch_file("test  1.txt")?;
 
-        let highlighted = cfg.highlight(r"cp test\u2580.txt dest.txt")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(2, 7, ARGUMENTS)?,
-                cfg.static_span(7, 9, CHARACTER_ESCAPE)?,
-                cfg.static_span(9, 26, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "path_with_escape_quoted__unicode_unquoted",
+            cfg.highlight(r"cp test\u2580.txt dest.txt")?
         );
-
-        let highlighted = cfg.highlight(r#"cp "test\u2580.txt" dest.txt"#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.static_span(3, 4, STRING_QUOTED_BEGIN)?,
-                cfg.static_span(4, 18, STRING_QUOTED_DOUBLE)?,
-                cfg.static_span(18, 19, STRING_QUOTED_END)?,
-                cfg.static_span(19, 28, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "path_with_escape_quoted__unicode_double_quoted",
+            cfg.highlight(r#"cp "test\u2580.txt" dest.txt"#)?
         );
-
-        let highlighted = cfg.highlight(r#"cp 'test\u2580.txt' dest.txt"#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.static_span(3, 4, STRING_QUOTED_BEGIN)?,
-                cfg.static_span(4, 18, STRING_QUOTED_SINGLE)?,
-                cfg.static_span(18, 19, STRING_QUOTED_END)?,
-                cfg.static_span(19, 28, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "path_with_escape_quoted__unicode_single_quoted",
+            cfg.highlight(r#"cp 'test\u2580.txt' dest.txt"#)?
         );
-
-        let highlighted = cfg.highlight(r#"cp $'test\u2580.txt' dest.txt"#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.mixed_span(3, 5, STRING_QUOTED_BEGIN, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(5, 9, STRING_QUOTED_SINGLE_ANSI, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(9, 15, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(
-                    15,
-                    19,
-                    STRING_QUOTED_SINGLE_ANSI,
-                    DYNAMIC_PATH_FILE_COMPLETE
-                )?,
-                cfg.mixed_span(19, 20, STRING_QUOTED_END, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(20, 29, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "path_with_escape_quoted__unicode_ansi_quoted",
+            cfg.highlight(r#"cp $'test\u2580.txt' dest.txt"#)?
         );
-
-        let highlighted = cfg.highlight(r#"cp test\ \ 1.txt dest.txt"#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.mixed_span(3, 7, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(7, 11, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(11, 16, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(16, 25, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "path_with_escape_quoted__whitespace_unquoted",
+            cfg.highlight(r#"cp test\ \ 1.txt dest.txt"#)?
         );
-
-        let highlighted = cfg.highlight(r#"cp "test\ \ 1.txt" dest.txt"#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.static_span(3, 4, STRING_QUOTED_BEGIN)?,
-                cfg.static_span(4, 17, STRING_QUOTED_DOUBLE)?,
-                cfg.static_span(17, 18, STRING_QUOTED_END)?,
-                cfg.static_span(18, 27, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "path_with_escape_quoted__whitespace_double_quoted",
+            cfg.highlight(r#"cp "test\ \ 1.txt" dest.txt"#)?
         );
-
-        let highlighted = cfg.highlight(r#"cp $'test\ \ 1.txt' dest.txt"#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.static_span(3, 5, STRING_QUOTED_BEGIN)?,
-                cfg.static_span(5, 18, STRING_QUOTED_SINGLE_ANSI)?,
-                cfg.static_span(18, 19, STRING_QUOTED_END)?,
-                cfg.static_span(19, 28, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "path_with_escape_quoted__whitespace_ansi_quoted",
+            cfg.highlight(r#"cp $'test\ \ 1.txt' dest.txt"#)?
         );
-
-        let highlighted = cfg.highlight(r#"cp $'test\x20\x201.txt' dest.txt"#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.mixed_span(3, 5, STRING_QUOTED_BEGIN, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(5, 9, STRING_QUOTED_SINGLE_ANSI, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(9, 17, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(
-                    17,
-                    22,
-                    STRING_QUOTED_SINGLE_ANSI,
-                    DYNAMIC_PATH_FILE_COMPLETE
-                )?,
-                cfg.mixed_span(22, 23, STRING_QUOTED_END, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(23, 32, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "path_with_escape_quoted__hex_ansi_quoted",
+            cfg.highlight(r#"cp $'test\x20\x201.txt' dest.txt"#)?
         );
-
-        let highlighted = cfg.highlight(r#"cp test$'\x20\x20'1.txt dest.txt"#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.mixed_span(3, 7, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(7, 9, STRING_QUOTED_BEGIN, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(9, 17, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(17, 18, STRING_QUOTED_END, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(18, 23, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(23, 32, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "path_with_escape_quoted__hex_ansi_quoted_inside",
+            cfg.highlight(r#"cp test$'\x20\x20'1.txt dest.txt"#)?
         );
 
         Ok(())
@@ -1477,28 +1129,13 @@ mod tests {
         fs::write(&test_path, "#!/bin/sh")?;
         fs::set_permissions(&test_path, Permissions::from_mode(0o755))?;
 
-        let highlighted = cfg.highlight(r"$'sub/test\xF0\x9F\x98\x8E.sh'")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.mixed_span(0, 2, STRING_QUOTED_BEGIN, DYNAMIC_CALLABLE_COMMAND)?,
-                cfg.mixed_span(2, 10, STRING_QUOTED_SINGLE_ANSI, DYNAMIC_CALLABLE_COMMAND)?,
-                cfg.mixed_span(10, 26, CHARACTER_ESCAPE, DYNAMIC_CALLABLE_COMMAND)?,
-                cfg.mixed_span(26, 29, STRING_QUOTED_SINGLE_ANSI, DYNAMIC_CALLABLE_COMMAND)?,
-                cfg.mixed_span(29, 30, STRING_QUOTED_END, DYNAMIC_CALLABLE_COMMAND)?,
-            ]
+        assert_snapshot!(
+            "command_with_multibyte_escape__all_hex",
+            cfg.highlight(r"$'sub/test\xF0\x9F\x98\x8E.sh'")?
         );
-
-        let highlighted = cfg.highlight(r"$'sub/test\xF0\237\x98\x8E.sh'")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.mixed_span(0, 2, STRING_QUOTED_BEGIN, DYNAMIC_CALLABLE_COMMAND)?,
-                cfg.mixed_span(2, 10, STRING_QUOTED_SINGLE_ANSI, DYNAMIC_CALLABLE_COMMAND)?,
-                cfg.mixed_span(10, 26, CHARACTER_ESCAPE, DYNAMIC_CALLABLE_COMMAND)?,
-                cfg.mixed_span(26, 29, STRING_QUOTED_SINGLE_ANSI, DYNAMIC_CALLABLE_COMMAND)?,
-                cfg.mixed_span(29, 30, STRING_QUOTED_END, DYNAMIC_CALLABLE_COMMAND)?,
-            ]
+        assert_snapshot!(
+            "command_with_multibyte_escape__with_oct",
+            cfg.highlight(r"$'sub/test\xF0\237\x98\x8E.sh'")?
         );
 
         Ok(())
@@ -1509,44 +1146,13 @@ mod tests {
         let cfg = test_cfg()?;
         cfg.touch_file("test😎.txt")?;
 
-        let highlighted = cfg.highlight(r"cp $'test\xF0\x9F\x98\x8E.txt' dest.txt")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.mixed_span(3, 5, STRING_QUOTED_BEGIN, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(5, 9, STRING_QUOTED_SINGLE_ANSI, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(9, 25, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(
-                    25,
-                    29,
-                    STRING_QUOTED_SINGLE_ANSI,
-                    DYNAMIC_PATH_FILE_COMPLETE
-                )?,
-                cfg.mixed_span(29, 30, STRING_QUOTED_END, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(30, 39, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "path_with_multibyte_escape__all_hex",
+            cfg.highlight(r"cp $'test\xF0\x9F\x98\x8E.txt' dest.txt")?
         );
-
-        let highlighted = cfg.highlight(r"cp $'test\xF0\237\x98\x8E.txt' dest.txt")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "cp"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.mixed_span(3, 5, STRING_QUOTED_BEGIN, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(5, 9, STRING_QUOTED_SINGLE_ANSI, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(9, 25, CHARACTER_ESCAPE, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.mixed_span(
-                    25,
-                    29,
-                    STRING_QUOTED_SINGLE_ANSI,
-                    DYNAMIC_PATH_FILE_COMPLETE
-                )?,
-                cfg.mixed_span(29, 30, STRING_QUOTED_END, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(30, 39, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "path_with_multibyte_escape__with_oct",
+            cfg.highlight(r"cp $'test\xF0\237\x98\x8E.txt' dest.txt")?
         );
 
         Ok(())
@@ -1557,25 +1163,11 @@ mod tests {
         let cfg = test_cfg()?;
         cfg.touch_file("test.txt")?;
 
-        let highlighted = cfg.highlight(
-            "foo commit -m \"This is\na multi-line commit\nmessage\" && touch test.txt",
-        )?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "foo"),
-                cfg.static_span(3, 10, ARGUMENTS)?,
-                cfg.static_span(10, 12, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(12, 13, PARAMETER)?,
-                cfg.static_span(13, 14, ARGUMENTS)?,
-                cfg.static_span(14, 15, STRING_QUOTED_BEGIN)?,
-                cfg.static_span(15, 50, STRING_QUOTED_DOUBLE)?,
-                cfg.static_span(50, 51, STRING_QUOTED_END)?,
-                cfg.static_span(52, 54, OPERATOR_LOGICAL_AND)?,
-                cfg.dynamic_span(55, 60, "touch"),
-                cfg.static_span(60, 61, ARGUMENTS)?,
-                cfg.mixed_span(61, 69, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-            ]
+        assert_snapshot!(
+            "multiline__commit",
+            cfg.highlight(
+                "foo commit -m \"This is\na multi-line commit\nmessage\" && touch test.txt"
+            )?
         );
 
         Ok(())
@@ -1587,45 +1179,17 @@ mod tests {
         cfg.touch_file("test.txt")?;
         cfg.touch_file("test.txt$FOOBAR")?;
 
-        let highlighted = cfg.highlight(r"ls test.txt$FOOBAR")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(2, 11, ARGUMENTS)?,
-                cfg.static_span(11, 12, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(12, 18, ENVIRONMENT_VARIABLE)?,
-            ]
+        assert_snapshot!(
+            "path_with_env_variable__after_file",
+            cfg.highlight(r"ls test.txt$FOOBAR")?
         );
-
-        let highlighted = cfg.highlight(r"ls ${FOOBAR}test.txt test.txt")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.static_span(3, 4, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(4, 5, PUNCTUATION_EXPANSION_PARAMETER_BEGIN)?,
-                cfg.static_span(5, 11, ENVIRONMENT_VARIABLE)?,
-                cfg.static_span(11, 12, PUNCTUATION_EXPANSION_PARAMETER_END)?,
-                cfg.static_span(12, 21, ARGUMENTS)?,
-                cfg.mixed_span(21, 29, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-            ]
+        assert_snapshot!(
+            "path_with_env_variable__before_file",
+            cfg.highlight(r"ls ${FOOBAR}test.txt test.txt")?
         );
-
-        let highlighted = cfg.highlight(r"ls test.txt${FOOBAR}test.txt test.txt")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(2, 11, ARGUMENTS)?,
-                cfg.static_span(11, 12, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(12, 13, PUNCTUATION_EXPANSION_PARAMETER_BEGIN)?,
-                cfg.static_span(13, 19, ENVIRONMENT_VARIABLE)?,
-                cfg.static_span(19, 20, PUNCTUATION_EXPANSION_PARAMETER_END)?,
-                cfg.static_span(20, 29, ARGUMENTS)?,
-                cfg.mixed_span(29, 37, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-            ]
+        assert_snapshot!(
+            "path_with_env_variable__inside_file_does_not_exist",
+            cfg.highlight(r"ls test.txt${FOOBAR}test.txt test.txt")?
         );
 
         Ok(())
@@ -1637,56 +1201,23 @@ mod tests {
         cfg.touch_file("test.txt")?;
         cfg.touch_file("test.txtFOOBAR")?;
 
-        let highlighted = cfg.highlight(r"ls test.txt$(echo FOOBAR)")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(2, 11, ARGUMENTS)?,
-                cfg.static_span(11, 12, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(12, 13, PUNCTUATION_PARENS_BEGIN)?,
-                cfg.dynamic_span(13, 17, "echo"),
-                cfg.static_span(17, 24, ARGUMENTS)?,
-                cfg.static_span(24, 25, PUNCTUATION_PARENS_END)?,
-            ]
+        assert_snapshot!(
+            "path_with_command_substitution__does_not_exist",
+            cfg.highlight(r"ls test.txt$(echo FOOBAR)")?
         );
 
         cfg.touch_file("FOOBAR")?;
 
-        let highlighted = cfg.highlight(r"ls test.txt$(echo FOOBAR)")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(2, 11, ARGUMENTS)?,
-                cfg.static_span(11, 12, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(12, 13, PUNCTUATION_PARENS_BEGIN)?,
-                cfg.dynamic_span(13, 17, "echo"),
-                cfg.static_span(17, 18, ARGUMENTS)?,
-                cfg.mixed_span(18, 24, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(24, 25, PUNCTUATION_PARENS_END)?,
-            ]
+        assert_snapshot!(
+            "path_with_command_substitution__exists",
+            cfg.highlight(r"ls test.txt$(echo FOOBAR)")?
         );
 
         cfg.touch_file("test2.txt")?;
 
-        let highlighted = cfg.highlight(r"ls test.txt test.txt$(echo FOOBAR) test2.txt")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.mixed_span(3, 11, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(11, 20, ARGUMENTS)?,
-                cfg.static_span(20, 21, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(21, 22, PUNCTUATION_PARENS_BEGIN)?,
-                cfg.dynamic_span(22, 26, "echo"),
-                cfg.static_span(26, 27, ARGUMENTS)?,
-                cfg.mixed_span(27, 33, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(33, 34, PUNCTUATION_PARENS_END)?,
-                cfg.static_span(34, 35, ARGUMENTS)?,
-                cfg.mixed_span(35, 44, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-            ]
+        assert_snapshot!(
+            "path_with_command_substitution__two_files",
+            cfg.highlight(r"ls test.txt test.txt$(echo FOOBAR) test2.txt")?
         );
 
         Ok(())
@@ -1696,14 +1227,7 @@ mod tests {
     fn keyword_dash() -> Result<()> {
         let cfg = test_cfg()?;
 
-        let highlighted = cfg.highlight(r"- foobar")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 1, PRECOMMAND_DASH)?,
-                cfg.dynamic_span(2, 8, "foobar"),
-            ]
-        );
+        assert_snapshot!("keyword_dash__foobar", cfg.highlight(r"- foobar")?);
 
         Ok(())
     }
@@ -1712,14 +1236,7 @@ mod tests {
     fn builtin() -> Result<()> {
         let cfg = test_cfg()?;
 
-        let highlighted = cfg.highlight(r"builtin echo")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, PRECOMMAND_BUILTIN)?,
-                cfg.dynamic_span(8, 12, "echo"),
-            ]
-        );
+        assert_snapshot!("builtin__echo", cfg.highlight(r"builtin echo")?);
 
         Ok(())
     }
@@ -1728,222 +1245,59 @@ mod tests {
     fn command() -> Result<()> {
         let cfg = test_cfg()?;
 
-        let highlighted = cfg.highlight(r"command echo")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.dynamic_span(8, 12, "echo"),
-            ]
+        assert_snapshot!("command__echo", cfg.highlight(r"command echo")?);
+        assert_snapshot!("command__p", cfg.highlight(r"command -p echo")?);
+        assert_snapshot!(
+            "command__p_with_file",
+            cfg.highlight("command -p echo file")?
         );
-
-        let highlighted = cfg.highlight(r"command -p echo")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.dynamic_span(11, 15, "echo"),
-            ]
+        assert_snapshot!(
+            "command__p_with_double_quoted_file",
+            cfg.highlight(r#"command -p echo "file""#)?
         );
-
-        let highlighted = cfg.highlight(r"command -p echo file")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.dynamic_span(11, 15, "echo"),
-                cfg.static_span(15, 20, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "command__p_command_with_bigv",
+            cfg.highlight("command -p echo -V file")?
         );
-
-        let highlighted = cfg.highlight(r#"command -p echo "file""#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.dynamic_span(11, 15, "echo"),
-                cfg.static_span(15, 16, ARGUMENTS)?,
-                cfg.static_span(16, 17, STRING_QUOTED_BEGIN)?,
-                cfg.static_span(17, 21, STRING_QUOTED_DOUBLE)?,
-                cfg.static_span(21, 22, STRING_QUOTED_END)?,
-            ]
+        assert_snapshot!("command__v", cfg.highlight("command -v echo")?);
+        assert_snapshot!(
+            "command__v_two_commands",
+            cfg.highlight("command -v echo file")?
         );
-
-        let highlighted = cfg.highlight(r"command -p echo -V file")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.dynamic_span(11, 15, "echo"),
-                cfg.static_span(15, 17, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(17, 18, PARAMETER)?,
-                cfg.static_span(18, 23, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "command__v_two_commands_double_quoted",
+            cfg.highlight(r#"command -v echo "file""#)?
         );
-
-        let highlighted = cfg.highlight(r"command -v echo")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.dynamic_span(11, 15, "echo"),
-            ]
+        assert_snapshot!("command__bigv", cfg.highlight("command -V echo")?);
+        assert_snapshot!(
+            "command__bigv_two_commands",
+            cfg.highlight("command -V echo file")?
         );
-
-        let highlighted = cfg.highlight(r"command -v echo file")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.dynamic_span(11, 15, "echo"),
-                cfg.dynamic_span(16, 20, "file"),
-            ]
+        assert_snapshot!(
+            "command__p_bigv_two_commands",
+            cfg.highlight("command -p -V echo file")?
         );
-
-        let highlighted = cfg.highlight(r#"command -v echo "file""#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.dynamic_span(11, 15, "echo"),
-                cfg.dynamic_span(16, 22, "file"),
-            ]
+        assert_snapshot!(
+            "command__bigv_p_two_commands",
+            cfg.highlight("command -V -p echo file")?
         );
-
-        let highlighted = cfg.highlight(r"command -V echo")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.dynamic_span(11, 15, "echo"),
-            ]
+        assert_snapshot!(
+            "command__bigv_command_with_p",
+            cfg.highlight("command -V echo -p file")?
         );
-
-        let highlighted = cfg.highlight(r"command -V echo file")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.dynamic_span(11, 15, "echo"),
-                cfg.dynamic_span(16, 20, "file"),
-            ]
+        assert_snapshot!("command__p_v_bigv", cfg.highlight("command -pvV echo")?);
+        assert_snapshot!(
+            "command__p_v_bigv_two_commands",
+            cfg.highlight("command -pvV echo file")?
         );
-
-        let highlighted = cfg.highlight(r"command -p -V echo file")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.static_span(10, 12, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(12, 13, PARAMETER)?,
-                cfg.dynamic_span(14, 18, "echo"),
-                cfg.dynamic_span(19, 23, "file"),
-            ]
+        assert_snapshot!("command__end_of_options", cfg.highlight("command -- echo")?);
+        assert_snapshot!(
+            "command__p_end_of_options",
+            cfg.highlight("command -p -- echo")?
         );
-
-        let highlighted = cfg.highlight(r"command -V -p echo file")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.static_span(10, 12, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(12, 13, PARAMETER)?,
-                cfg.dynamic_span(14, 18, "echo"),
-                cfg.dynamic_span(19, 23, "file"),
-            ]
-        );
-
-        let highlighted = cfg.highlight(r"command -V echo -p file")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.dynamic_span(11, 15, "echo"),
-                cfg.dynamic_span(16, 18, "-p"),
-                cfg.dynamic_span(19, 23, "file"),
-            ]
-        );
-
-        let highlighted = cfg.highlight(r"command -pvV echo")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 12, PARAMETER)?,
-                cfg.dynamic_span(13, 17, "echo"),
-            ]
-        );
-
-        let highlighted = cfg.highlight(r"command -pvV echo file")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 12, PARAMETER)?,
-                cfg.dynamic_span(13, 17, "echo"),
-                cfg.dynamic_span(18, 22, "file"),
-            ]
-        );
-
-        let highlighted = cfg.highlight(r"command -- echo")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 10, OPERATOR_END_OF_OPTIONS)?,
-                cfg.dynamic_span(11, 15, "echo"),
-            ]
-        );
-
-        let highlighted = cfg.highlight(r"command -p -- echo")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.static_span(10, 13, OPERATOR_END_OF_OPTIONS)?,
-                cfg.dynamic_span(14, 18, "echo"),
-            ]
-        );
-
-        let highlighted = cfg.highlight(r"command -v -- echo file")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.static_span(10, 13, OPERATOR_END_OF_OPTIONS)?,
-                cfg.dynamic_span(14, 18, "echo"),
-                cfg.dynamic_span(19, 23, "file"),
-            ]
+        assert_snapshot!(
+            "command__v_end_of_options_two_commands",
+            cfg.highlight("command -v -- echo file")?
         );
 
         Ok(())
@@ -1953,203 +1307,30 @@ mod tests {
     fn exec() -> Result<()> {
         let cfg = test_cfg()?;
 
-        let highlighted = cfg.highlight(r"exec foobar")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.dynamic_span(5, 11, "foobar"),
-            ]
+        assert_snapshot!("exec__foobar", cfg.highlight("exec foobar")?);
+        assert_snapshot!("exec__c", cfg.highlight("exec -c foobar")?);
+        assert_snapshot!("exec__l", cfg.highlight("exec -l foobar")?);
+        assert_snapshot!("exec__cl", cfg.highlight("exec -cl foobar")?);
+        assert_snapshot!("exec__a", cfg.highlight("exec -a zsh foobar $0")?);
+        assert_snapshot!(
+            "exec__a_double_quoted",
+            cfg.highlight(r#"exec -a "zsh" foobar $0"#)?
         );
-
-        let highlighted = cfg.highlight(r"exec -c foobar")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.dynamic_span(8, 14, "foobar"),
-            ]
+        assert_snapshot!("exec__c_a", cfg.highlight("exec -c -a zsh foobar $0")?);
+        assert_snapshot!("exec__c_a_l", cfg.highlight("exec -c -a zsh -l foobar $0")?);
+        assert_snapshot!("exec__ca", cfg.highlight("exec -ca zsh foobar $0")?);
+        assert_snapshot!("exec__end_of_options", cfg.highlight("exec -- foobar")?);
+        assert_snapshot!(
+            "exec__subshell",
+            cfg.highlight(r#"(exec -a foobar -- zsh -c 'echo "$0"')"#)?
         );
-
-        let highlighted = cfg.highlight(r"exec -l foobar")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.dynamic_span(8, 14, "foobar"),
-            ]
+        assert_snapshot!(
+            "exec__subshell_a_is_double_dash",
+            cfg.highlight(r#"(exec -a -- zsh -c 'echo "$0"')"#)?
         );
-
-        let highlighted = cfg.highlight(r"exec -cl foobar")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 8, PARAMETER)?,
-                cfg.dynamic_span(9, 15, "foobar"),
-            ]
-        );
-
-        let highlighted = cfg.highlight(r"exec -a zsh foobar $0")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.static_span(8, 11, ARGUMENTS)?,
-                cfg.dynamic_span(12, 18, "foobar"),
-                cfg.static_span(18, 19, ARGUMENTS)?,
-                cfg.static_span(19, 20, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(20, 21, ENVIRONMENT_VARIABLE)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight(r#"exec -a "zsh" foobar $0"#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.static_span(8, 9, STRING_QUOTED_BEGIN)?,
-                cfg.static_span(9, 12, STRING_QUOTED_DOUBLE)?,
-                cfg.static_span(12, 13, STRING_QUOTED_END)?,
-                cfg.dynamic_span(14, 20, "foobar"),
-                cfg.static_span(20, 21, ARGUMENTS)?,
-                cfg.static_span(21, 22, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(22, 23, ENVIRONMENT_VARIABLE)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight(r"exec -c -a zsh foobar $0")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.static_span(11, 14, ARGUMENTS)?,
-                cfg.dynamic_span(15, 21, "foobar"),
-                cfg.static_span(21, 22, ARGUMENTS)?,
-                cfg.static_span(22, 23, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(23, 24, ENVIRONMENT_VARIABLE)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight(r"exec -c -a zsh -l foobar $0")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.static_span(11, 14, ARGUMENTS)?,
-                cfg.static_span(14, 16, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(16, 17, PARAMETER)?,
-                cfg.dynamic_span(18, 24, "foobar"),
-                cfg.static_span(24, 25, ARGUMENTS)?,
-                cfg.static_span(25, 26, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(26, 27, ENVIRONMENT_VARIABLE)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight(r"exec -ca zsh foobar $0")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 8, PARAMETER)?,
-                cfg.static_span(9, 12, ARGUMENTS)?,
-                cfg.dynamic_span(13, 19, "foobar"),
-                cfg.static_span(19, 20, ARGUMENTS)?,
-                cfg.static_span(20, 21, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(21, 22, ENVIRONMENT_VARIABLE)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight(r"exec -- foobar")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 4, PRECOMMAND_EXEC)?,
-                cfg.static_span(4, 7, OPERATOR_END_OF_OPTIONS)?,
-                cfg.dynamic_span(8, 14, "foobar"),
-            ]
-        );
-
-        let highlighted = cfg.highlight(r#"(exec -a foobar -- zsh -c 'echo "$0"')"#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 1, PUNCTUATION_COMPOUND_BEGIN)?,
-                cfg.static_span(1, 5, PRECOMMAND_EXEC)?,
-                cfg.static_span(5, 7, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(7, 8, PARAMETER)?,
-                cfg.static_span(9, 15, ARGUMENTS)?,
-                cfg.static_span(15, 18, OPERATOR_END_OF_OPTIONS)?,
-                cfg.dynamic_span(19, 22, "zsh"),
-                cfg.static_span(22, 24, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(24, 25, PARAMETER)?,
-                cfg.static_span(25, 26, ARGUMENTS)?,
-                cfg.static_span(26, 27, STRING_QUOTED_BEGIN)?,
-                cfg.static_span(27, 36, STRING_QUOTED_SINGLE)?,
-                cfg.static_span(36, 37, STRING_QUOTED_END)?,
-                cfg.static_span(37, 38, PUNCTUATION_COMPOUND_END)?,
-            ]
-        );
-
-        // here, '--' is argv[0]
-        let highlighted = cfg.highlight(r#"(exec -a -- zsh -c 'echo "$0"')"#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 1, PUNCTUATION_COMPOUND_BEGIN)?,
-                cfg.static_span(1, 5, PRECOMMAND_EXEC)?,
-                cfg.static_span(5, 7, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(7, 8, PARAMETER)?,
-                cfg.static_span(9, 11, ARGUMENTS)?,
-                cfg.dynamic_span(12, 15, "zsh"),
-                cfg.static_span(15, 17, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(17, 18, PARAMETER)?,
-                cfg.static_span(18, 19, ARGUMENTS)?,
-                cfg.static_span(19, 20, STRING_QUOTED_BEGIN)?,
-                cfg.static_span(20, 29, STRING_QUOTED_SINGLE)?,
-                cfg.static_span(29, 30, STRING_QUOTED_END)?,
-                cfg.static_span(30, 31, PUNCTUATION_COMPOUND_END)?,
-            ]
-        );
-
-        // here, '--' is argv[0]
-        let highlighted = cfg.highlight(r#"(exec -a -- -- zsh -c 'echo "$0"')"#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 1, PUNCTUATION_COMPOUND_BEGIN)?,
-                cfg.static_span(1, 5, PRECOMMAND_EXEC)?,
-                cfg.static_span(5, 7, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(7, 8, PARAMETER)?,
-                cfg.static_span(9, 11, ARGUMENTS)?,
-                cfg.static_span(11, 14, OPERATOR_END_OF_OPTIONS)?,
-                cfg.dynamic_span(15, 18, "zsh"),
-                cfg.static_span(18, 20, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(20, 21, PARAMETER)?,
-                cfg.static_span(21, 22, ARGUMENTS)?,
-                cfg.static_span(22, 23, STRING_QUOTED_BEGIN)?,
-                cfg.static_span(23, 32, STRING_QUOTED_SINGLE)?,
-                cfg.static_span(32, 33, STRING_QUOTED_END)?,
-                cfg.static_span(33, 34, PUNCTUATION_COMPOUND_END)?,
-            ]
+        assert_snapshot!(
+            "exec__subshell_a_is_double_dash_end_of_options",
+            cfg.highlight(r#"(exec -a -- -- zsh -c 'echo "$0"')"#)?
         );
 
         Ok(())
@@ -2159,17 +1340,7 @@ mod tests {
     fn noglob() -> Result<()> {
         let cfg = test_cfg()?;
 
-        let highlighted = cfg.highlight(r"noglob ls *.toml")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 6, PRECOMMAND_NOGLOB)?,
-                cfg.dynamic_span(7, 9, "ls"),
-                cfg.static_span(9, 10, ARGUMENTS)?,
-                cfg.mixed_span(10, 11, ARGUMENTS, OPERATOR_REGEXP_QUANTIFIER)?,
-                cfg.static_span(11, 16, ARGUMENTS)?,
-            ]
-        );
+        assert_snapshot!("noglob__toml", cfg.highlight("noglob ls *.toml")?);
 
         Ok(())
     }
@@ -2178,72 +1349,22 @@ mod tests {
     fn repeat() -> Result<()> {
         let cfg = test_cfg()?;
 
-        let highlighted = cfg.highlight(r"repeat 5 echo Hello")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 6, CONTROL_REPEAT)?,
-                cfg.static_span(7, 8, INTEGER)?,
-                cfg.dynamic_span(9, 13, "echo"),
-                cfg.static_span(13, 19, ARGUMENTS)?,
-            ]
+        assert_snapshot!("repeat__5", cfg.highlight("repeat 5 echo Hello")?);
+        assert_snapshot!(
+            "repeat__expression",
+            cfg.highlight("repeat 1+9/2 echo Hello")?
         );
-
-        // arbitrary expressions
-        let highlighted = cfg.highlight(r"repeat 1+9/2 echo Hello")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 6, CONTROL_REPEAT)?,
-                cfg.static_span(7, 8, INTEGER)?,
-                cfg.static_span(8, 9, OPERATOR_ARITHMETIC)?,
-                cfg.static_span(9, 10, INTEGER)?,
-                cfg.static_span(10, 11, OPERATOR_ARITHMETIC)?,
-                cfg.static_span(11, 12, INTEGER)?,
-                cfg.dynamic_span(13, 17, "echo"),
-                cfg.static_span(17, 23, ARGUMENTS)?,
-            ]
+        assert_snapshot!(
+            "repeat__do_done",
+            cfg.highlight("repeat 1 do; echo Hello; done")?
         );
-
-        // arbitrary expressions
-        let highlighted = cfg.highlight(r"repeat 1 do; echo Hello; done")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 6, CONTROL_REPEAT)?,
-                cfg.static_span(7, 8, INTEGER)?,
-                cfg.static_span(9, 11, CONTROL_DO)?,
-                cfg.static_span(11, 12, OPERATOR_LOGICAL_CONTINUE)?,
-                cfg.dynamic_span(13, 17, "echo"),
-                cfg.static_span(17, 23, ARGUMENTS)?,
-                cfg.static_span(23, 24, OPERATOR_LOGICAL_CONTINUE)?,
-                cfg.static_span(25, 29, CONTROL_DONE)?,
-            ]
+        assert_snapshot!(
+            "repeat__missing_number",
+            cfg.highlight("repeat echo Hello")?
         );
-
-        // missing number should still work
-        let highlighted = cfg.highlight(r"repeat echo Hello")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 6, CONTROL_REPEAT)?,
-                cfg.dynamic_span(7, 11, "echo"),
-                cfg.static_span(11, 17, ARGUMENTS)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight(r"repeat do; echo Hello; done")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 6, CONTROL_REPEAT)?,
-                cfg.static_span(7, 9, CONTROL_DO)?,
-                cfg.static_span(9, 10, OPERATOR_LOGICAL_CONTINUE)?,
-                cfg.dynamic_span(11, 15, "echo"),
-                cfg.static_span(15, 21, ARGUMENTS)?,
-                cfg.static_span(21, 22, OPERATOR_LOGICAL_CONTINUE)?,
-                cfg.static_span(23, 27, CONTROL_DONE)?,
-            ]
+        assert_snapshot!(
+            "repeat__missing_number_do_done",
+            cfg.highlight("repeat do; echo Hello; done")?
         );
 
         Ok(())
@@ -2253,15 +1374,7 @@ mod tests {
     fn time() -> Result<()> {
         let cfg = test_cfg()?;
 
-        let highlighted = cfg.highlight(r"time sleep 2")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 4, CONTROL_TIME)?,
-                cfg.dynamic_span(5, 10, "sleep"),
-                cfg.static_span(10, 12, ARGUMENTS)?,
-            ]
-        );
+        assert_snapshot!("time__sleep", cfg.highlight("time sleep 2")?);
 
         Ok(())
     }
@@ -2270,15 +1383,7 @@ mod tests {
     fn nocorrect() -> Result<()> {
         let cfg = test_cfg()?;
 
-        let highlighted = cfg.highlight(r"nocorrect slep 2")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 9, CONTROL_NOCORRECT)?,
-                cfg.dynamic_span(10, 14, "slep"),
-                cfg.static_span(14, 16, ARGUMENTS)?,
-            ]
-        );
+        assert_snapshot!("nocorrect__typo", cfg.highlight("nocorrect slep 2")?);
 
         Ok(())
     }
@@ -2287,102 +1392,25 @@ mod tests {
     fn select() -> Result<()> {
         let cfg = test_cfg()?;
 
-        let highlighted = cfg.highlight(r"select x in a b c; do echo $x; done")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 6, CONTROL_SELECT)?,
-                cfg.static_span(6, 9, GROUP_SELECT)?,
-                cfg.static_span(9, 11, CONTROL_IN)?,
-                cfg.static_span(11, 17, GROUP_SELECT)?,
-                cfg.static_span(17, 18, OPERATOR_LOGICAL_CONTINUE)?,
-                cfg.static_span(19, 21, CONTROL_DO)?,
-                cfg.dynamic_span(22, 26, "echo"),
-                cfg.static_span(26, 27, ARGUMENTS)?,
-                cfg.static_span(27, 28, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(28, 29, ENVIRONMENT_VARIABLE)?,
-                cfg.static_span(29, 30, OPERATOR_LOGICAL_CONTINUE)?,
-                cfg.static_span(31, 35, CONTROL_DONE)?,
-            ]
+        assert_snapshot!(
+            "select__simple",
+            cfg.highlight("select x in a b c; do echo $x; done")?
         );
-
-        // without list
-        let highlighted = cfg.highlight(r"select x; do echo $x; done")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 6, CONTROL_SELECT)?,
-                cfg.static_span(6, 8, GROUP_SELECT)?,
-                cfg.static_span(8, 9, OPERATOR_LOGICAL_CONTINUE)?,
-                cfg.static_span(10, 12, CONTROL_DO)?,
-                cfg.dynamic_span(13, 17, "echo"),
-                cfg.static_span(17, 18, ARGUMENTS)?,
-                cfg.static_span(18, 19, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(19, 20, ENVIRONMENT_VARIABLE)?,
-                cfg.static_span(20, 21, OPERATOR_LOGICAL_CONTINUE)?,
-                cfg.static_span(22, 26, CONTROL_DONE)?,
-            ]
+        assert_snapshot!(
+            "select__without_list",
+            cfg.highlight("select x; do echo $x; done")?
         );
-
-        // with break
-        let highlighted = cfg.highlight(r"select x in a b; do break; done")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 6, CONTROL_SELECT)?,
-                cfg.static_span(6, 9, GROUP_SELECT)?,
-                cfg.static_span(9, 11, CONTROL_IN)?,
-                cfg.static_span(11, 15, GROUP_SELECT)?,
-                cfg.static_span(15, 16, OPERATOR_LOGICAL_CONTINUE)?,
-                cfg.static_span(17, 19, CONTROL_DO)?,
-                cfg.static_span(20, 25, CONTROL_BREAK)?,
-                cfg.static_span(25, 26, OPERATOR_LOGICAL_CONTINUE)?,
-                cfg.static_span(27, 31, CONTROL_DONE)?,
-            ]
+        assert_snapshot!(
+            "select__with_break",
+            cfg.highlight("select x in a b; do break; done")?
         );
-
-        // newlines instead of semicolons
-        let highlighted = cfg.highlight("select x in a b\ndo\necho $x\ndone")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 6, CONTROL_SELECT)?,
-                cfg.static_span(6, 9, GROUP_SELECT)?,
-                cfg.static_span(9, 11, CONTROL_IN)?,
-                cfg.static_span(11, 15, GROUP_SELECT)?,
-                cfg.static_span(16, 18, CONTROL_DO)?,
-                cfg.dynamic_span(19, 23, "echo"),
-                cfg.static_span(23, 24, ARGUMENTS)?,
-                cfg.static_span(24, 25, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(25, 26, ENVIRONMENT_VARIABLE)?,
-                cfg.static_span(27, 31, CONTROL_DONE)?,
-            ]
+        assert_snapshot!(
+            "select__newlines_instead_of_semicolons",
+            cfg.highlight("select x in a b\ndo\necho $x\ndone")?
         );
-
-        // select with case
-        let highlighted =
-            cfg.highlight(r"select x in a b; do case $x in a) echo yes;; esac; done")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 6, CONTROL_SELECT)?,
-                cfg.static_span(6, 9, GROUP_SELECT)?,
-                cfg.static_span(9, 11, CONTROL_IN)?,
-                cfg.static_span(11, 15, GROUP_SELECT)?,
-                cfg.static_span(15, 16, OPERATOR_LOGICAL_CONTINUE)?,
-                cfg.static_span(17, 19, CONTROL_DO)?,
-                cfg.static_span(20, 24, CONTROL_CASE_BEGIN)?,
-                cfg.static_span(25, 26, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(26, 27, ENVIRONMENT_VARIABLE)?,
-                cfg.static_span(28, 30, CONTROL_CASE_IN)?,
-                cfg.static_span(32, 33, CONTROL_CASE_ITEM)?,
-                cfg.dynamic_span(34, 38, "echo"),
-                cfg.static_span(38, 42, ARGUMENTS)?,
-                cfg.static_span(42, 44, PUNCTUATION_TERMINATOR_CASE)?,
-                cfg.static_span(45, 49, CONTROL_CASE_END)?,
-                cfg.static_span(49, 50, OPERATOR_LOGICAL_CONTINUE)?,
-                cfg.static_span(51, 55, CONTROL_DONE)?,
-            ]
+        assert_snapshot!(
+            "select__with_case",
+            cfg.highlight("select x in a b; do case $x in a) echo yes;; esac; done")?
         );
 
         Ok(())
@@ -2392,57 +1420,17 @@ mod tests {
     fn foreach() -> Result<()> {
         let cfg = test_cfg()?;
 
-        let highlighted = cfg.highlight(r"foreach x (a b c); echo $x; end")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, CONTROL_FOREACH)?,
-                cfg.static_span(7, 16, GROUP_FOREACH)?,
-                cfg.static_span(16, 17, POST_CMD)?,
-                cfg.static_span(17, 18, OPERATOR_LOGICAL_CONTINUE)?,
-                cfg.dynamic_span(19, 23, "echo"),
-                cfg.static_span(23, 24, ARGUMENTS)?,
-                cfg.static_span(24, 25, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(25, 26, ENVIRONMENT_VARIABLE)?,
-                cfg.static_span(26, 27, OPERATOR_LOGICAL_CONTINUE)?,
-                cfg.static_span(28, 31, CONTROL_END)?,
-            ]
+        assert_snapshot!(
+            "foreach__simple",
+            cfg.highlight("foreach x (a b c); echo $x; end")?
         );
-
-        // newlines instead of semicolons
-        let highlighted = cfg.highlight("foreach x (a b c)\necho $x\nend")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, CONTROL_FOREACH)?,
-                cfg.static_span(7, 16, GROUP_FOREACH)?,
-                cfg.static_span(16, 17, POST_CMD)?,
-                cfg.dynamic_span(18, 22, "echo"),
-                cfg.static_span(22, 23, ARGUMENTS)?,
-                cfg.static_span(23, 24, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(24, 25, ENVIRONMENT_VARIABLE)?,
-                cfg.static_span(26, 29, CONTROL_END)?,
-            ]
+        assert_snapshot!(
+            "foreach__newlines_instead_of_semicolons",
+            cfg.highlight("foreach x (a b c)\necho $x\nend")?
         );
-
-        // foreach with break
-        let highlighted = cfg.highlight("foreach x (a b c);echo $x; break ; end")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, CONTROL_FOREACH)?,
-                cfg.static_span(7, 16, GROUP_FOREACH)?,
-                cfg.static_span(16, 17, POST_CMD)?,
-                cfg.static_span(17, 18, OPERATOR_LOGICAL_CONTINUE)?,
-                cfg.dynamic_span(18, 22, "echo"),
-                cfg.static_span(22, 23, ARGUMENTS)?,
-                cfg.static_span(23, 24, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(24, 25, ENVIRONMENT_VARIABLE)?,
-                cfg.static_span(25, 26, OPERATOR_LOGICAL_CONTINUE)?,
-                cfg.static_span(27, 32, CONTROL_BREAK)?,
-                cfg.static_span(33, 34, OPERATOR_LOGICAL_CONTINUE)?,
-                cfg.static_span(35, 38, CONTROL_END)?,
-            ]
+        assert_snapshot!(
+            "foreach__with_break",
+            cfg.highlight("foreach x (a b c);echo $x; break ; end")?
         );
 
         Ok(())
@@ -2452,41 +1440,16 @@ mod tests {
     fn doas() -> Result<()> {
         let cfg = test_cfg()?;
 
-        let highlighted = cfg.highlight("doas -n -u root -C doas.conf ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "doas"),
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.static_span(11, 15, ARGUMENTS)?,
-                cfg.static_span(15, 17, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(17, 18, PARAMETER)?,
-                cfg.static_span(19, 28, ARGUMENTS)?,
-                cfg.dynamic_span(29, 31, "ls"),
-            ]
+        assert_snapshot!(
+            "doas__n_u_c",
+            cfg.highlight("doas -n -u root -C doas.conf ls")?
         );
 
         cfg.touch_file("doas.conf")?;
 
-        let highlighted = cfg.highlight("doas -n -uroot -Cdoas.conf -- ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "doas"),
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.static_span(10, 14, ARGUMENTS)?,
-                cfg.static_span(14, 16, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(16, 17, PARAMETER)?,
-                cfg.mixed_span(17, 26, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(26, 29, OPERATOR_END_OF_OPTIONS)?,
-                cfg.dynamic_span(30, 32, "ls"),
-            ]
+        assert_snapshot!(
+            "doas__n_u_c_conf_file_exists",
+            cfg.highlight("doas -n -uroot -Cdoas.conf -- ls")?
         );
 
         Ok(())
@@ -2497,365 +1460,83 @@ mod tests {
         let cfg = test_cfg()?;
         cfg.create_dir("mydir")?;
 
-        let highlighted = cfg.highlight("env -i ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(5, 6, PARAMETER)?,
-                cfg.dynamic_span(7, 9, "ls"),
-            ]
+        assert_snapshot!("env__i", cfg.highlight("env -i ls")?);
+        assert_snapshot!(
+            "env__ignore_environment",
+            cfg.highlight("env --ignore-environment ls")?
         );
-
-        let highlighted = cfg.highlight("env --ignore-environment ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 24, PARAMETER)?,
-                cfg.dynamic_span(25, 27, "ls"),
-            ]
+        assert_snapshot!("env__double_i", cfg.highlight("env -ii ls")?);
+        assert_snapshot!(
+            "env__c_existing_directory",
+            cfg.highlight("env -C mydir ls")?
         );
-
-        let highlighted = cfg.highlight("env -ii ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(5, 7, PARAMETER)?,
-                cfg.dynamic_span(8, 10, "ls"),
-            ]
+        assert_snapshot!(
+            "env__c_missing_directory",
+            cfg.highlight("env -C foobar ls")?
         );
-
-        // env -C mydir ls (existing directory)
-        let highlighted = cfg.highlight("env -C mydir ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(5, 6, PARAMETER)?,
-                cfg.mixed_span(7, 12, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
-                cfg.dynamic_span(13, 15, "ls"),
-            ]
+        assert_snapshot!(
+            "env__c_existing_directory_no_space",
+            cfg.highlight("env -Cmydir ls")?
         );
-
-        // env -C foobar ls (non-existing path)
-        let highlighted = cfg.highlight("env -C foobar ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(5, 6, PARAMETER)?,
-                cfg.static_span(7, 13, ARGUMENTS)?,
-                cfg.dynamic_span(14, 16, "ls"),
-            ]
+        assert_snapshot!(
+            "env__c_missing_directory_no_space",
+            cfg.highlight("env -Cfoobar ls")?
         );
-
-        // env -Cmydir ls (existing directory, no space)
-        let highlighted = cfg.highlight("env -Cmydir ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(5, 6, PARAMETER)?,
-                cfg.mixed_span(6, 11, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
-                cfg.dynamic_span(12, 14, "ls"),
-            ]
+        assert_snapshot!("env__i_u", cfg.highlight("env -i -u _ env")?);
+        assert_snapshot!("env__i_unset", cfg.highlight("env -i --unset=_ env")?);
+        assert_snapshot!("env__iu", cfg.highlight("env -iu _ env")?);
+        assert_snapshot!(
+            "env__p_existing_directory",
+            cfg.highlight("env -P mydir ls")?
         );
-
-        // env -Cfoobar ls (non-existing path, no space)
-        let highlighted = cfg.highlight("env -Cfoobar ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(5, 6, PARAMETER)?,
-                cfg.static_span(6, 12, ARGUMENTS)?,
-                cfg.dynamic_span(13, 15, "ls"),
-            ]
+        assert_snapshot!(
+            "env__p_missing_directory",
+            cfg.highlight("env -P foobar ls")?
         );
-
-        let highlighted = cfg.highlight("env -i -u _ env")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(5, 6, PARAMETER)?,
-                cfg.static_span(6, 8, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(8, 9, PARAMETER)?,
-                cfg.static_span(10, 11, ARGUMENTS)?,
-                cfg.dynamic_span(12, 15, "env"),
-            ]
+        assert_snapshot!(
+            "env__s_c_existing_directory",
+            cfg.highlight("env -S -C mydir ls")?
         );
-
-        let highlighted = cfg.highlight("env -i --unset=_ env")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(5, 6, PARAMETER)?,
-                cfg.static_span(6, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 14, PARAMETER)?,
-                cfg.static_span(14, 15, OPERATOR_ASSIGNMENT_OPTION)?,
-                cfg.static_span(15, 16, ARGUMENTS)?,
-                cfg.dynamic_span(17, 20, "env"),
-            ]
+        assert_snapshot!(
+            "env__s_c_missing_directory",
+            cfg.highlight("env -S -C foobar ls")?
         );
-
-        let highlighted = cfg.highlight("env -iu _ env")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(5, 7, PARAMETER)?,
-                cfg.static_span(8, 9, ARGUMENTS)?,
-                cfg.dynamic_span(10, 13, "env"),
-            ]
+        assert_snapshot!(
+            "env__s_c_existing_directory_no_space",
+            cfg.highlight("env -S -Cmydir ls")?
         );
-
-        // env -P mydir ls (existing directory)
-        let highlighted = cfg.highlight("env -P mydir ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(5, 6, PARAMETER)?,
-                cfg.mixed_span(7, 12, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
-                cfg.dynamic_span(13, 15, "ls"),
-            ]
+        assert_snapshot!(
+            "env__s_p_existing_directory",
+            cfg.highlight("env -S -P mydir ls")?
         );
-
-        // env -P foobar ls (non-existing path)
-        let highlighted = cfg.highlight("env -P foobar ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(5, 6, PARAMETER)?,
-                cfg.static_span(7, 13, ARGUMENTS)?,
-                cfg.dynamic_span(14, 16, "ls"),
-            ]
+        assert_snapshot!(
+            "env__s_p_missing_directory",
+            cfg.highlight("env -S -P foobar ls")?
         );
-
-        // env -S -C mydir ls (existing directory)
-        let highlighted = cfg.highlight("env -S -C mydir ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(5, 6, PARAMETER)?,
-                cfg.static_span(6, 8, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(8, 9, PARAMETER)?,
-                cfg.mixed_span(10, 15, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
-                cfg.dynamic_span(16, 18, "ls"),
-            ]
+        assert_snapshot!(
+            "env__s_p_existing_directory_no_space",
+            cfg.highlight("env -S -Pmydir ls")?
         );
-
-        // env -S -C foobar ls (non-existing path)
-        let highlighted = cfg.highlight("env -S -C foobar ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(5, 6, PARAMETER)?,
-                cfg.static_span(6, 8, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(8, 9, PARAMETER)?,
-                cfg.static_span(10, 16, ARGUMENTS)?,
-                cfg.dynamic_span(17, 19, "ls"),
-            ]
+        assert_snapshot!(
+            "env__s_single_quoted_c",
+            cfg.highlight("env -S '-C target' ls")?
         );
-
-        // env -S -Cmydir ls (existing directory, no space)
-        let highlighted = cfg.highlight("env -S -Cmydir ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(5, 6, PARAMETER)?,
-                cfg.static_span(6, 8, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(8, 9, PARAMETER)?,
-                cfg.mixed_span(9, 14, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
-                cfg.dynamic_span(15, 17, "ls"),
-            ]
+        assert_snapshot!(
+            "env__s_single_quoted_p",
+            cfg.highlight("env -S '-P mydir' ls")?
         );
-
-        // env -S -P mydir ls (existing directory)
-        let highlighted = cfg.highlight("env -S -P mydir ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(5, 6, PARAMETER)?,
-                cfg.static_span(6, 8, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(8, 9, PARAMETER)?,
-                cfg.mixed_span(10, 15, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
-                cfg.dynamic_span(16, 18, "ls"),
-            ]
+        assert_snapshot!("env__u", cfg.highlight("env -u _ env")?);
+        assert_snapshot!("env__u_no_space", cfg.highlight("env -u_ env")?);
+        assert_snapshot!("env__i_var", cfg.highlight("env -i bar=foo env")?);
+        assert_snapshot!(
+            "env__i_var_end_of_options",
+            cfg.highlight("env -i -- bar=foo env")?
         );
-
-        // env -S -P foobar ls (non-existing path)
-        let highlighted = cfg.highlight("env -S -P foobar ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(5, 6, PARAMETER)?,
-                cfg.static_span(6, 8, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(8, 9, PARAMETER)?,
-                cfg.static_span(10, 16, ARGUMENTS)?,
-                cfg.dynamic_span(17, 19, "ls"),
-            ]
-        );
-
-        // env -S -Pmydir ls (existing directory, no space)
-        let highlighted = cfg.highlight("env -S -Pmydir ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(5, 6, PARAMETER)?,
-                cfg.static_span(6, 8, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(8, 9, PARAMETER)?,
-                cfg.mixed_span(9, 14, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
-                cfg.dynamic_span(15, 17, "ls"),
-            ]
-        );
-
-        let highlighted = cfg.highlight("env -S '-C target' ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(5, 6, PARAMETER)?,
-                cfg.static_span(7, 8, STRING_QUOTED_BEGIN)?,
-                cfg.static_span(8, 17, STRING_QUOTED_SINGLE)?,
-                cfg.static_span(17, 18, STRING_QUOTED_END)?,
-                cfg.dynamic_span(19, 21, "ls"),
-            ]
-        );
-
-        let highlighted = cfg.highlight("env -S '-P mydir' ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(5, 6, PARAMETER)?,
-                cfg.static_span(7, 8, STRING_QUOTED_BEGIN)?,
-                cfg.static_span(8, 16, STRING_QUOTED_SINGLE)?,
-                cfg.static_span(16, 17, STRING_QUOTED_END)?,
-                cfg.dynamic_span(18, 20, "ls"),
-            ]
-        );
-
-        let highlighted = cfg.highlight("env -u _ env")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(5, 6, PARAMETER)?,
-                cfg.static_span(7, 8, ARGUMENTS)?,
-                cfg.dynamic_span(9, 12, "env"),
-            ]
-        );
-
-        let highlighted = cfg.highlight("env -u_ env")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(5, 6, PARAMETER)?,
-                cfg.static_span(6, 7, ARGUMENTS)?,
-                cfg.dynamic_span(8, 11, "env"),
-            ]
-        );
-
-        let highlighted = cfg.highlight("env -i bar=foo env")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(5, 6, PARAMETER)?,
-                cfg.static_span(7, 10, VARIABLE_ASSIGNMENT)?,
-                cfg.static_span(10, 11, OPERATOR_ASSIGNMENT)?,
-                cfg.static_span(11, 14, STRING_UNQUOTED)?,
-                cfg.dynamic_span(15, 18, "env"),
-            ]
-        );
-
-        let highlighted = cfg.highlight("env -i -- bar=foo env")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 5, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(5, 6, PARAMETER)?,
-                cfg.static_span(6, 9, OPERATOR_END_OF_OPTIONS)?,
-                cfg.static_span(10, 13, VARIABLE_ASSIGNMENT)?,
-                cfg.static_span(13, 14, OPERATOR_ASSIGNMENT)?,
-                cfg.static_span(14, 17, STRING_UNQUOTED)?,
-                cfg.dynamic_span(18, 21, "env"),
-            ]
-        );
-
-        let highlighted = cfg.highlight("env --unset _ env")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 11, PARAMETER)?,
-                cfg.static_span(12, 13, ARGUMENTS)?,
-                cfg.dynamic_span(14, 17, "env"),
-            ]
-        );
-
-        let highlighted = cfg.highlight("env --chdir mydir env")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 11, PARAMETER)?,
-                cfg.mixed_span(12, 17, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
-                cfg.dynamic_span(18, 21, "env"),
-            ]
-        );
-
-        let highlighted = cfg.highlight(r#"env --split-string "-C target" env"#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "env"),
-                cfg.static_span(3, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 18, PARAMETER)?,
-                cfg.static_span(19, 20, STRING_QUOTED_BEGIN)?,
-                cfg.static_span(20, 29, STRING_QUOTED_DOUBLE)?,
-                cfg.static_span(29, 30, STRING_QUOTED_END)?,
-                cfg.dynamic_span(31, 34, "env"),
-            ]
+        assert_snapshot!("env__unset", cfg.highlight("env --unset _ env")?);
+        assert_snapshot!("env__chdir", cfg.highlight("env --chdir mydir env")?);
+        assert_snapshot!(
+            "env__split_string",
+            cfg.highlight(r#"env --split-string "-C target" env"#)?
         );
 
         Ok(())
@@ -2865,114 +1546,22 @@ mod tests {
     fn nice() -> Result<()> {
         let cfg = test_cfg()?;
 
-        let highlighted = cfg.highlight("nice ls")?;
-        assert_eq!(
-            highlighted,
-            vec![cfg.dynamic_span(0, 4, "nice"), cfg.dynamic_span(5, 7, "ls")]
+        assert_snapshot!("nice__simple", cfg.highlight("nice ls")?);
+        assert_snapshot!(
+            "nice__version_help",
+            cfg.highlight("nice --version && nice --help")?
         );
-
-        let highlighted = cfg.highlight("nice --version && nice --help")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "nice"),
-                cfg.static_span(4, 7, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(7, 14, PARAMETER)?,
-                cfg.static_span(15, 17, OPERATOR_LOGICAL_AND)?,
-                cfg.dynamic_span(18, 22, "nice"),
-                cfg.static_span(22, 25, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(25, 29, PARAMETER)?,
-            ]
+        assert_snapshot!("nice__n", cfg.highlight("nice -n 5 date")?);
+        assert_snapshot!("nice__n_no_space", cfg.highlight("nice -n5 date")?);
+        assert_snapshot!("nice__twice", cfg.highlight("nice -n 16 nice -n -35 date")?);
+        assert_snapshot!("nice__end_of_options", cfg.highlight("nice -n 5 -- date")?);
+        assert_snapshot!(
+            "nice__adjustment_equals",
+            cfg.highlight("nice --adjustment=5 date")?
         );
-
-        let highlighted = cfg.highlight("nice -n 5 date")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "nice"),
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.static_span(8, 9, ARGUMENTS)?,
-                cfg.dynamic_span(10, 14, "date")
-            ]
-        );
-
-        let highlighted = cfg.highlight("nice -n 5 date")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "nice"),
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.static_span(8, 9, ARGUMENTS)?,
-                cfg.dynamic_span(10, 14, "date")
-            ]
-        );
-
-        let highlighted = cfg.highlight("nice -n5 date")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "nice"),
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.static_span(7, 8, ARGUMENTS)?,
-                cfg.dynamic_span(9, 13, "date")
-            ]
-        );
-
-        let highlighted = cfg.highlight("nice -n 16 nice -n -35 date")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "nice"),
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.static_span(8, 10, ARGUMENTS)?,
-                cfg.dynamic_span(11, 15, "nice"),
-                cfg.static_span(15, 17, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(17, 18, PARAMETER)?,
-                cfg.static_span(19, 22, ARGUMENTS)?,
-                cfg.dynamic_span(23, 27, "date")
-            ]
-        );
-
-        let highlighted = cfg.highlight("nice -n 5 -- date")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "nice"),
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.static_span(8, 9, ARGUMENTS)?,
-                cfg.static_span(9, 12, OPERATOR_END_OF_OPTIONS)?,
-                cfg.dynamic_span(13, 17, "date")
-            ]
-        );
-
-        let highlighted = cfg.highlight("nice --adjustment=5 date")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "nice"),
-                cfg.static_span(4, 7, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(7, 17, PARAMETER)?,
-                cfg.static_span(17, 18, OPERATOR_ASSIGNMENT_OPTION)?,
-                cfg.static_span(18, 19, ARGUMENTS)?,
-                cfg.dynamic_span(20, 24, "date")
-            ]
-        );
-
-        let highlighted = cfg.highlight("nice --adjustment 5 date")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "nice"),
-                cfg.static_span(4, 7, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(7, 17, PARAMETER)?,
-                cfg.static_span(18, 19, ARGUMENTS)?,
-                cfg.dynamic_span(20, 24, "date")
-            ]
+        assert_snapshot!(
+            "nice__adjustment",
+            cfg.highlight("nice --adjustment 5 date")?
         );
 
         Ok(())
@@ -2982,38 +1571,12 @@ mod tests {
     fn nohup() -> Result<()> {
         let cfg = test_cfg()?;
 
-        let highlighted = cfg.highlight("nohup ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 5, "nohup"),
-                cfg.dynamic_span(6, 8, "ls")
-            ]
+        assert_snapshot!("nohup__simple", cfg.highlight("nohup ls")?);
+        assert_snapshot!(
+            "nohup__version_help",
+            cfg.highlight("nohup --version && nohup --help")?
         );
-
-        let highlighted = cfg.highlight("nohup --version && nohup --help")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 5, "nohup"),
-                cfg.static_span(5, 8, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(8, 15, PARAMETER)?,
-                cfg.static_span(16, 18, OPERATOR_LOGICAL_AND)?,
-                cfg.dynamic_span(19, 24, "nohup"),
-                cfg.static_span(24, 27, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(27, 31, PARAMETER)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight("nohup -- ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 5, "nohup"),
-                cfg.static_span(5, 8, OPERATOR_END_OF_OPTIONS)?,
-                cfg.dynamic_span(9, 11, "ls")
-            ]
-        );
+        assert_snapshot!("nohup__end_of_options", cfg.highlight("nohup -- ls")?);
 
         Ok(())
     }
@@ -3022,129 +1585,28 @@ mod tests {
     fn sudo() -> Result<()> {
         let cfg = test_cfg()?;
 
-        let highlighted = cfg.highlight("sudo ls")?;
-        assert_eq!(
-            highlighted,
-            vec![cfg.dynamic_span(0, 4, "sudo"), cfg.dynamic_span(5, 7, "ls")]
+        assert_snapshot!("sudo__simple", cfg.highlight("sudo ls")?);
+        assert_snapshot!("sudo__n", cfg.highlight("sudo -n ls")?);
+        assert_snapshot!(
+            "sudo__n_u_end_of_options",
+            cfg.highlight("sudo -n -u root -- ls")?
         );
-
-        let highlighted = cfg.highlight("sudo -n ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "sudo"),
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.dynamic_span(8, 10, "ls"),
-            ]
+        assert_snapshot!(
+            "sudo__ng_end_of_options",
+            cfg.highlight("sudo -ng wheel -- ls")?
         );
-
-        let highlighted = cfg.highlight("sudo -n -u root -- ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "sudo"),
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.static_span(11, 15, ARGUMENTS)?,
-                cfg.static_span(15, 18, OPERATOR_END_OF_OPTIONS)?,
-                cfg.dynamic_span(19, 21, "ls"),
-            ]
+        assert_snapshot!(
+            "sudo__version_help",
+            cfg.highlight("sudo --version && sudo --help")?
         );
-
-        let highlighted = cfg.highlight("sudo -ng wheel -- ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "sudo"),
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 8, PARAMETER)?,
-                cfg.static_span(9, 14, ARGUMENTS)?,
-                cfg.static_span(14, 17, OPERATOR_END_OF_OPTIONS)?,
-                cfg.dynamic_span(18, 20, "ls"),
-            ]
-        );
-
-        let highlighted = cfg.highlight("sudo --version && sudo --help")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "sudo"),
-                cfg.static_span(4, 7, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(7, 14, PARAMETER)?,
-                cfg.static_span(15, 17, OPERATOR_LOGICAL_AND)?,
-                cfg.dynamic_span(18, 22, "sudo"),
-                cfg.static_span(22, 25, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(25, 29, PARAMETER)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight("sudo --user=root ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "sudo"),
-                cfg.static_span(4, 7, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(7, 11, PARAMETER)?,
-                cfg.static_span(11, 12, OPERATOR_ASSIGNMENT_OPTION)?,
-                cfg.static_span(12, 16, ARGUMENTS)?,
-                cfg.dynamic_span(17, 19, "ls"),
-            ]
-        );
+        assert_snapshot!("sudo__user", cfg.highlight("sudo --user=root ls")?);
 
         cfg.create_dir("mydir")?;
 
-        let highlighted = cfg.highlight("sudo --chdir mydir ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "sudo"),
-                cfg.static_span(4, 7, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(7, 12, PARAMETER)?,
-                cfg.mixed_span(13, 18, ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE)?,
-                cfg.dynamic_span(19, 21, "ls"),
-            ]
-        );
-
-        let highlighted = cfg.highlight("sudo -h localhost -l")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "sudo"),
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.static_span(8, 17, ARGUMENTS)?,
-                cfg.static_span(17, 19, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(19, 20, PARAMETER)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight("sudo -h -i ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "sudo"),
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.dynamic_span(11, 13, "ls"),
-            ]
-        );
-
-        let highlighted = cfg.highlight("sudo -h && ls")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "sudo"),
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.static_span(8, 10, OPERATOR_LOGICAL_AND)?,
-                cfg.dynamic_span(11, 13, "ls"),
-            ]
-        );
+        assert_snapshot!("sudo__chdir", cfg.highlight("sudo --chdir mydir ls")?);
+        assert_snapshot!("sudo__h_host", cfg.highlight("sudo -h localhost -l")?);
+        assert_snapshot!("sudo__h_i", cfg.highlight("sudo -h -i ls")?);
+        assert_snapshot!("sudo__h_help", cfg.highlight("sudo -h && ls")?);
 
         Ok(())
     }
@@ -3156,67 +1618,18 @@ mod tests {
         cfg.touch_file("file1")?;
         cfg.touch_file("file2")?;
 
-        let highlighted = cfg.highlight("sudo -e file1 file2")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "sudo"),
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.static_span(7, 8, ARGUMENTS)?,
-                cfg.mixed_span(8, 13, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(13, 14, ARGUMENTS)?,
-                cfg.mixed_span(14, 19, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-            ]
+        assert_snapshot!("sudoedit__sudo_e", cfg.highlight("sudo -e file1 file2")?);
+        assert_snapshot!(
+            "sudoedit__sudo_i_e",
+            cfg.highlight("sudo -i -e -- file1 file2")?
         );
-
-        let highlighted = cfg.highlight("sudo -i -e -- file1 file2")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "sudo"),
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 7, PARAMETER)?,
-                cfg.static_span(7, 9, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(9, 10, PARAMETER)?,
-                cfg.static_span(10, 13, OPERATOR_END_OF_OPTIONS)?,
-                cfg.static_span(13, 14, ARGUMENTS)?,
-                cfg.mixed_span(14, 19, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(19, 20, ARGUMENTS)?,
-                cfg.mixed_span(20, 25, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-            ]
+        assert_snapshot!(
+            "sudoedit__sudo_ie",
+            cfg.highlight("sudo -ie -- file1 file2")?
         );
-
-        let highlighted = cfg.highlight("sudo -ie -- file1 file2")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "sudo"),
-                cfg.static_span(4, 6, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(6, 8, PARAMETER)?,
-                cfg.static_span(8, 11, OPERATOR_END_OF_OPTIONS)?,
-                cfg.static_span(11, 12, ARGUMENTS)?,
-                cfg.mixed_span(12, 17, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(17, 18, ARGUMENTS)?,
-                cfg.mixed_span(18, 23, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight("sudoedit -u user -g wheel file1 file2")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 8, "sudoedit"),
-                cfg.static_span(8, 10, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(10, 11, PARAMETER)?,
-                cfg.static_span(11, 16, ARGUMENTS)?,
-                cfg.static_span(16, 18, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(18, 19, PARAMETER)?,
-                cfg.static_span(19, 26, ARGUMENTS)?,
-                cfg.mixed_span(26, 31, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-                cfg.static_span(31, 32, ARGUMENTS)?,
-                cfg.mixed_span(32, 37, ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE)?,
-            ]
+        assert_snapshot!(
+            "sudoedit__u_g",
+            cfg.highlight("sudoedit -u user -g wheel file1 file2")?
         );
 
         Ok(())
@@ -3226,132 +1639,68 @@ mod tests {
     fn history_expansions() -> Result<()> {
         let cfg = test_cfg()?;
 
-        let highlighted = cfg.highlight("!!")?;
-        assert_eq!(highlighted, vec![cfg.static_span(0, 2, EXPANSION_HISTORY)?]);
-
-        let highlighted = cfg.highlight("ls !!")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.static_span(3, 5, EXPANSION_HISTORY)?,
-            ]
+        assert_snapshot!("history_expansions__last_command", cfg.highlight("!!")?);
+        assert_snapshot!(
+            "history_expansions__ls_last_command",
+            cfg.highlight("ls !!")?
+        );
+        assert_snapshot!(
+            "history_expansions__ls_then_last_command",
+            cfg.highlight("ls; !!")?
+        );
+        assert_snapshot!(
+            "history_expansions__echo_last_command",
+            cfg.highlight(r#"echo !! "!!""#)?
+        );
+        assert_snapshot!(
+            "history_expansions__back_twenty_foobar",
+            cfg.highlight("!-20 foobar")?
+        );
+        assert_snapshot!("history_expansions__fourth_echo", cfg.highlight("!4echo")?);
+        assert_snapshot!(
+            "history_expansions__vi_first_word",
+            cfg.highlight("vi !!:0")?
+        );
+        assert_snapshot!(
+            "history_expansions__vi_twentieth_word_bak",
+            cfg.highlight("vi !!:20.bak")?
+        );
+        assert_snapshot!(
+            "history_expansions__command_last_word_with_parameters",
+            cfg.highlight("command !!:$ next parameter")?
+        );
+        assert_snapshot!(
+            "history_expansions__ls_last_word",
+            cfg.highlight("ls -l !!:$")?
+        );
+        assert_snapshot!(
+            "history_expansions__most_recent_search",
+            cfg.highlight("!% stop")?
+        );
+        assert_snapshot!(
+            "history_expansions__backward_search",
+            cfg.highlight("!zsh-patina")?
+        );
+        assert_snapshot!(
+            "history_expansions__backward_search_delimited",
+            cfg.highlight(r#"echo "!?cbr?-i""#)?
         );
 
-        let highlighted = cfg.highlight("ls; !!")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(2, 3, OPERATOR_LOGICAL_CONTINUE)?,
-                cfg.static_span(4, 6, EXPANSION_HISTORY)?,
-            ]
-        );
+        Ok(())
+    }
 
-        let highlighted = cfg.highlight(r#"echo !! "!!""#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "echo"),
-                cfg.static_span(4, 5, ARGUMENTS)?,
-                cfg.static_span(5, 7, EXPANSION_HISTORY)?,
-                cfg.static_span(7, 8, ARGUMENTS)?,
-                cfg.static_span(8, 9, STRING_QUOTED_DOUBLE)?,
-                cfg.static_span(9, 11, EXPANSION_HISTORY)?,
-                cfg.static_span(11, 12, STRING_QUOTED_DOUBLE)?,
-            ]
-        );
+    #[test]
+    fn history_expansions_disabled() -> Result<()> {
+        let cfg = test_cfg()?;
 
-        let highlighted = cfg.highlight("!-20 foobar")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 4, EXPANSION_HISTORY)?,
-                cfg.static_span(4, 11, ARGUMENTS)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight("!4echo")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 2, EXPANSION_HISTORY)?,
-                cfg.static_span(2, 6, CALLABLE)?
-            ]
-        );
-
-        let highlighted = cfg.highlight("vi !!:0")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "vi"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.static_span(3, 7, EXPANSION_HISTORY)?
-            ]
-        );
-
-        let highlighted = cfg.highlight("vi !!:20.bak")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "vi"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.static_span(3, 8, EXPANSION_HISTORY)?,
-                cfg.static_span(8, 12, ARGUMENTS)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight("command !!:$ next parameter")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 7, PRECOMMAND_COMMAND)?,
-                cfg.static_span(8, 12, EXPANSION_HISTORY)?,
-                cfg.static_span(12, 27, ARGUMENTS)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight("ls -l !!:$")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(2, 4, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(4, 5, PARAMETER)?,
-                cfg.static_span(5, 6, ARGUMENTS)?,
-                cfg.static_span(6, 10, EXPANSION_HISTORY)?
-            ]
-        );
-
-        let highlighted = cfg.highlight("!% stop")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 2, EXPANSION_HISTORY)?,
-                cfg.static_span(2, 7, ARGUMENTS)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight("!zsh-patina")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(0, 5, EXPANSION_HISTORY)?,
-                cfg.static_span(5, 11, CALLABLE)?
-            ]
-        );
-
-        let highlighted = cfg.highlight(r#"echo "!?cbr?-i""#)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "echo"),
-                cfg.static_span(4, 5, ARGUMENTS)?,
-                cfg.static_span(5, 6, STRING_QUOTED_DOUBLE)?,
-                cfg.static_span(6, 13, EXPANSION_HISTORY)?,
-                cfg.static_span(13, 15, STRING_QUOTED_DOUBLE)?,
-            ]
+        assert_snapshot!(
+            "history_expansions_disabled__last_command",
+            cfg.highlight_with_request(
+                "ls !!",
+                HighlightingRequest::default()
+                    .with_history_expansions(false)
+                    .with_pwd(cfg.pwd.as_str()),
+            )?
         );
 
         Ok(())
@@ -3361,25 +1710,13 @@ mod tests {
     fn percent_jobs_are_still_job_expansions() -> Result<()> {
         let cfg = test_cfg()?;
 
-        let highlighted = cfg.highlight("fg %")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "fg"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.static_span(3, 4, PUNCTUATION_JOB_VARIABLE)?
-            ]
+        assert_snapshot!(
+            "percent_jobs_are_still_job_expansions__fg",
+            cfg.highlight("fg %")?
         );
-
-        let highlighted = cfg.highlight("fg %1")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "fg"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.static_span(3, 4, PUNCTUATION_JOB_VARIABLE)?,
-                cfg.static_span(4, 5, INTEGER_JOB)?
-            ]
+        assert_snapshot!(
+            "percent_jobs_are_still_job_expansions__fg1",
+            cfg.highlight("fg %1")?
         );
 
         Ok(())
@@ -3389,26 +1726,13 @@ mod tests {
     fn percent_formats_are_not_job_expansions() -> Result<()> {
         let cfg = test_cfg()?;
 
-        let highlighted = cfg.highlight("date +%s")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 4, "date"),
-                cfg.static_span(4, 8, ARGUMENTS)?
-            ]
+        assert_snapshot!(
+            "percent_formats_are_not_job_expansions__date",
+            cfg.highlight("date +%s")?
         );
-
-        let highlighted = cfg.highlight("git log --pretty=%aD")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 3, "git"),
-                cfg.static_span(3, 7, ARGUMENTS)?,
-                cfg.static_span(7, 10, PUNCTUATION_PARAMETER)?,
-                cfg.static_span(10, 16, PARAMETER)?,
-                cfg.static_span(16, 17, OPERATOR_ASSIGNMENT_OPTION)?,
-                cfg.static_span(17, 20, ARGUMENTS)?
-            ]
+        assert_snapshot!(
+            "percent_formats_are_not_job_expansions__git_log",
+            cfg.highlight("git log --pretty=%aD")?
         );
 
         Ok(())
@@ -3427,58 +1751,7 @@ mod tests {
             EOF"#;
 
         let cfg = test_cfg()?;
-        let highlighted = cfg.highlight(cmd)?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.static_span(13, 17, CONTROL_CASE_BEGIN)?,
-                cfg.static_span(18, 19, STRING_QUOTED_BEGIN)?,
-                cfg.static_span(19, 20, PUNCTUATION_VARIABLE)?,
-                cfg.static_span(20, 21, ENVIRONMENT_VARIABLE)?,
-                cfg.static_span(21, 22, STRING_QUOTED_END)?,
-                cfg.static_span(23, 25, CONTROL_CASE_IN)?,
-                cfg.static_span(42, 43, OPERATOR_REGEXP_QUANTIFIER)?,
-                cfg.static_span(43, 44, CONTROL_CASE_ITEM)?,
-                cfg.dynamic_span(45, 48, "cat"),
-                cfg.static_span(61, 65, CONTROL_CASE_END)?,
-                cfg.static_span(66, 68, OPERATOR_ASSIGNMENT_REDIRECTION)?,
-                cfg.static_span(68, 69, STRING_QUOTED_BEGIN)?,
-                cfg.static_span(69, 72, CONTROL_HEREDOC)?,
-                cfg.static_span(72, 73, STRING_QUOTED_END)?,
-                cfg.static_span(73, 131, STRING_UNQUOTED_HEREDOC)?,
-            ]
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn history_expansions_disabled() -> Result<()> {
-        let cfg = test_cfg()?;
-
-        let highlighted = cfg.highlight("ls !!")?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(2, 3, ARGUMENTS)?,
-                cfg.static_span(3, 5, EXPANSION_HISTORY)?,
-            ]
-        );
-
-        let highlighted = cfg.highlight_with_request(
-            "ls !!",
-            HighlightingRequest::default()
-                .with_history_expansions(false)
-                .with_pwd(cfg.pwd.as_str()),
-        )?;
-        assert_eq!(
-            highlighted,
-            vec![
-                cfg.dynamic_span(0, 2, "ls"),
-                cfg.static_span(2, 5, ARGUMENTS)?,
-            ]
-        );
+        assert_snapshot!(cfg.highlight(cmd)?);
 
         Ok(())
     }

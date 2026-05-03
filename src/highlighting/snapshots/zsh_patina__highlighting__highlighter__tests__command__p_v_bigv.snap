@@ -1,0 +1,10 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"command -pvV echo\")?"
+---
+command -pvV echo
+
+0   7   `command`  precommand.builtin.command
+7   9   ` -`       punctuation.definition.parameter
+9   12  `pvV`      variable.parameter.option
+13  17  `echo`     CALLABLE `echo`

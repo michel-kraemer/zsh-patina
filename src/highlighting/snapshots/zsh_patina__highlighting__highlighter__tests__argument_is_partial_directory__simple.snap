@@ -1,0 +1,9 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "AssertableSpans\n{\n    command: \"rm de\".to_string(), spans:\n    cfg.highlighter.highlight(\"rm de\", &request)?,\n}"
+---
+rm de
+
+0  2  `rm`  CALLABLE `rm`
+2  3  ` `   meta.function-call.arguments
+3  5  `de`  meta.function-call.arguments + dynamic.path.directory.partial

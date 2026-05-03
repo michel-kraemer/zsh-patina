@@ -1,0 +1,9 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"time sleep 2\")?"
+---
+time sleep 2
+
+0   4   `time`   keyword.control.flow.time
+5   10  `sleep`  CALLABLE `sleep`
+10  12  ` 2`     meta.function-call.arguments

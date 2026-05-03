@@ -1,0 +1,9 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"exec -- foobar\")?"
+---
+exec -- foobar
+
+0  4   `exec`    precommand.builtin.exec
+4  7   ` --`     keyword.operator.end-of-options
+8  14  `foobar`  CALLABLE `foobar`

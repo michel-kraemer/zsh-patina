@@ -1,0 +1,11 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"sudo -h && ls\")?"
+---
+sudo -h && ls
+
+0   4   `sudo`  CALLABLE `sudo`
+4   6   ` -`    punctuation.definition.parameter
+6   7   `h`     variable.parameter.option
+8   10  `&&`    keyword.operator.logical.and
+11  13  `ls`    CALLABLE `ls`

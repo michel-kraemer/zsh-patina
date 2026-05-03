@@ -1,0 +1,9 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"nocorrect slep 2\")?"
+---
+nocorrect slep 2
+
+0   9   `nocorrect`  keyword.control.flow.nocorrect
+10  14  `slep`       CALLABLE `slep`
+14  16  ` 2`         meta.function-call.arguments

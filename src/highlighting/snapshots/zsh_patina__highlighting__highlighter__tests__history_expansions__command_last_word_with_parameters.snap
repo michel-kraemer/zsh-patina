@@ -1,0 +1,9 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"command !!:$ next parameter\")?"
+---
+command !!:$ next parameter
+
+0   7   `command`          precommand.builtin.command
+8   12  `!!:$`             meta.group.expansion.history
+12  27  ` next parameter`  meta.function-call.arguments

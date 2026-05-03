@@ -1,0 +1,16 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"sudoedit -u user -g wheel file1 file2\")?"
+---
+sudoedit -u user -g wheel file1 file2
+
+0   8   `sudoedit`  CALLABLE `sudoedit`
+8   10  ` -`        punctuation.definition.parameter
+10  11  `u`         variable.parameter.option
+11  16  ` user`     meta.function-call.arguments
+16  18  ` -`        punctuation.definition.parameter
+18  19  `g`         variable.parameter.option
+19  26  ` wheel `   meta.function-call.arguments
+26  31  `file1`     meta.function-call.arguments + dynamic.path.file.complete
+31  32  ` `         meta.function-call.arguments
+32  37  `file2`     meta.function-call.arguments + dynamic.path.file.complete

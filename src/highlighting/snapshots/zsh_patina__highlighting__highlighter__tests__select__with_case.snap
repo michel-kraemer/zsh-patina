@@ -1,0 +1,23 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"select x in a b; do case $x in a) echo yes;; esac; done\")?"
+---
+select x in a b; do case $x in a) echo yes;; esac; done
+
+0   6   `select`  keyword.control.select
+6   9   ` x `     meta.group.select
+9   11  `in`      keyword.control.in
+11  15  ` a b`    meta.group.select
+15  16  `;`       keyword.operator.logical.continue
+17  19  `do`      keyword.control.do
+20  24  `case`    keyword.control.case.begin
+25  26  `$`       punctuation.definition.variable
+26  27  `x`       variable.other.readwrite
+28  30  `in`      keyword.control.case.in
+32  33  `)`       keyword.control.case.item
+34  38  `echo`    CALLABLE `echo`
+38  42  ` yes`    meta.function-call.arguments
+42  44  `;;`      punctuation.terminator.case
+45  49  `esac`    keyword.control.case.end
+49  50  `;`       keyword.operator.logical.continue
+51  55  `done`    keyword.control.done

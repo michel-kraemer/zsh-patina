@@ -1,0 +1,11 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"foo test.txt -C\")?"
+---
+foo test.txt -C
+
+0   3   `foo`       CALLABLE `foo`
+3   4   ` `         meta.function-call.arguments
+4   12  `test.txt`  meta.function-call.arguments + dynamic.path.file.complete
+12  14  ` -`        punctuation.definition.parameter
+14  15  `C`         variable.parameter.option

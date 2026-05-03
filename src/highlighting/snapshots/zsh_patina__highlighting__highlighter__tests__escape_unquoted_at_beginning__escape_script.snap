@@ -1,0 +1,7 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(r\"\\script.sh\")?"
+---
+\script.sh
+
+0  10  `\script.sh`  CALLABLE `script.sh`

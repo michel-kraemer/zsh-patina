@@ -1,0 +1,13 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"env -S -P foobar ls\")?"
+---
+env -S -P foobar ls
+
+0   3   `env`     CALLABLE `env`
+3   5   ` -`      punctuation.definition.parameter
+5   6   `S`       variable.parameter.option
+6   8   ` -`      punctuation.definition.parameter
+8   9   `P`       variable.parameter.option
+10  16  `foobar`  meta.function-call.arguments
+17  19  `ls`      CALLABLE `ls`

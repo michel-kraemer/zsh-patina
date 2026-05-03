@@ -1,0 +1,12 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"ls ~/ test.txt\")?"
+---
+ls ~/ test.txt
+
+0  2   `ls`        CALLABLE `ls`
+2  3   ` `         meta.function-call.arguments
+3  4   `~`         variable.language.tilde + dynamic.path.directory.complete
+4  5   `/`         meta.function-call.arguments + dynamic.path.directory.complete
+5  6   ` `         meta.function-call.arguments
+6  14  `test.txt`  meta.function-call.arguments + dynamic.path.file.complete

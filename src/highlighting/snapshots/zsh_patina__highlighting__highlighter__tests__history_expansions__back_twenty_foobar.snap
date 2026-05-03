@@ -1,0 +1,8 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"!-20 foobar\")?"
+---
+!-20 foobar
+
+0  4   `!-20`     meta.group.expansion.history
+4  11  ` foobar`  meta.function-call.arguments

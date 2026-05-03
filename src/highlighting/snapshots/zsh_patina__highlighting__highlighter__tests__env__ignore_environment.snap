@@ -1,0 +1,10 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"env --ignore-environment ls\")?"
+---
+env --ignore-environment ls
+
+0   3   `env`                 CALLABLE `env`
+3   6   ` --`                 punctuation.definition.parameter
+6   24  `ignore-environment`  variable.parameter.option
+25  27  `ls`                  CALLABLE `ls`

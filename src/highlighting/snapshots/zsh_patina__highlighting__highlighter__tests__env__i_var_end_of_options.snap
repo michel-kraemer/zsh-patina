@@ -1,0 +1,14 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"env -i -- bar=foo env\")?"
+---
+env -i -- bar=foo env
+
+0   3   `env`  CALLABLE `env`
+3   5   ` -`   punctuation.definition.parameter
+5   6   `i`    variable.parameter.option
+6   9   ` --`  keyword.operator.end-of-options
+10  13  `bar`  variable.other.readwrite.assignment
+13  14  `=`    keyword.operator.assignment
+14  17  `foo`  string.unquoted
+18  21  `env`  CALLABLE `env`

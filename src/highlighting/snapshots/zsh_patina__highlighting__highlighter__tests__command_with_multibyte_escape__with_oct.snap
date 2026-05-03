@@ -1,0 +1,11 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(r\"$'sub/test\\xF0\\237\\x98\\x8E.sh'\")?"
+---
+$'sub/test\xF0\237\x98\x8E.sh'
+
+0   2   `$'`                punctuation.definition.string.begin + dynamic.callable.command
+2   10  `sub/test`          string.quoted.single.ansi-c + dynamic.callable.command
+10  26  `\xF0\237\x98\x8E`  constant.character.escape + dynamic.callable.command
+26  29  `.sh`               string.quoted.single.ansi-c + dynamic.callable.command
+29  30  `'`                 punctuation.definition.string.end + dynamic.callable.command

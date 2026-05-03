@@ -1,0 +1,22 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"foo commit -m \\\"This is\\na multi-line commit\\nmessage\\\" && touch test.txt\")?"
+---
+foo commit -m "This is
+a multi-line commit
+message" && touch test.txt
+
+0   3   `foo`      CALLABLE `foo`
+3   10  ` commit`  meta.function-call.arguments
+10  12  ` -`       punctuation.definition.parameter
+12  13  `m`        variable.parameter.option
+13  14  ` `        meta.function-call.arguments
+14  15  `"`        punctuation.definition.string.begin
+15  50  `This is
+a multi-line commit
+message`  string.quoted.double
+50        51  `"`         punctuation.definition.string.end
+52        54  `&&`        keyword.operator.logical.and
+55        60  `touch`     CALLABLE `touch`
+60        61  ` `         meta.function-call.arguments
+61        69  `test.txt`  meta.function-call.arguments + dynamic.path.file.complete

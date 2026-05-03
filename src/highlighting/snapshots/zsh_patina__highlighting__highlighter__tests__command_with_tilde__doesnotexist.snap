@@ -1,0 +1,7 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"~doesnotexist\")?"
+---
+~doesnotexist
+
+0  13  `~doesnotexist`  CALLABLE `~doesnotexist`

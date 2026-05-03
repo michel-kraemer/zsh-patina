@@ -1,0 +1,9 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"command -- echo\")?"
+---
+command -- echo
+
+0   7   `command`  precommand.builtin.command
+7   10  ` --`      keyword.operator.end-of-options
+11  15  `echo`     CALLABLE `echo`

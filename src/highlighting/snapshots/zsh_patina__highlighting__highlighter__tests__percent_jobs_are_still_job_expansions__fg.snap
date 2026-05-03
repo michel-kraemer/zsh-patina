@@ -1,0 +1,9 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"fg %\")?"
+---
+fg %
+
+0  2  `fg`  CALLABLE `fg`
+2  3  ` `   meta.function-call.arguments
+3  4  `%`   punctuation.definition.variable.job

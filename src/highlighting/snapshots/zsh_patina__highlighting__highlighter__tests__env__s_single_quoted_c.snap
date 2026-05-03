@@ -1,0 +1,13 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"env -S '-C target' ls\")?"
+---
+env -S '-C target' ls
+
+0   3   `env`        CALLABLE `env`
+3   5   ` -`         punctuation.definition.parameter
+5   6   `S`          variable.parameter.option
+7   8   `'`          punctuation.definition.string.begin
+8   17  `-C target`  string.quoted.single
+17  18  `'`          punctuation.definition.string.end
+19  21  `ls`         CALLABLE `ls`

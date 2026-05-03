@@ -1,0 +1,11 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"noglob ls *.toml\")?"
+---
+noglob ls *.toml
+
+0   6   `noglob`  precommand.builtin.noglob
+7   9   `ls`      CALLABLE `ls`
+9   10  ` `       meta.function-call.arguments
+10  11  `*`       keyword.operator.regexp.quantifier
+11  16  `.toml`   meta.function-call.arguments

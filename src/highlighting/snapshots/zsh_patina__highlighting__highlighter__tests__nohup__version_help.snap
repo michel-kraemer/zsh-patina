@@ -1,0 +1,13 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"nohup --version && nohup --help\")?"
+---
+nohup --version && nohup --help
+
+0   5   `nohup`    CALLABLE `nohup`
+5   8   ` --`      punctuation.definition.parameter
+8   15  `version`  variable.parameter.option
+16  18  `&&`       keyword.operator.logical.and
+19  24  `nohup`    CALLABLE `nohup`
+24  27  ` --`      punctuation.definition.parameter
+27  31  `help`     variable.parameter.option

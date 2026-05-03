@@ -1,0 +1,13 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(r#\"env --split-string \"-C target\" env\"#)?"
+---
+env --split-string "-C target" env
+
+0   3   `env`           CALLABLE `env`
+3   6   ` --`           punctuation.definition.parameter
+6   18  `split-string`  variable.parameter.option
+19  20  `"`             punctuation.definition.string.begin
+20  29  `-C target`     string.quoted.double
+29  30  `"`             punctuation.definition.string.end
+31  34  `env`           CALLABLE `env`

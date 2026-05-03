@@ -1,0 +1,11 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"env -iu _ env\")?"
+---
+env -iu _ env
+
+0   3   `env`  CALLABLE `env`
+3   5   ` -`   punctuation.definition.parameter
+5   7   `iu`   variable.parameter.option
+8   9   `_`    meta.function-call.arguments
+10  13  `env`  CALLABLE `env`

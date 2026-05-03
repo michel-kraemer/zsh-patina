@@ -1,0 +1,32 @@
+---
+source: src/highlighting/highlighter.rs
+expression: cfg.highlight(cmd)?
+---
+
+            case "$a" in
+                *) cat
+            esac <<'EOF'
+            A
+            B
+            C
+            EOF
+
+13  17   `case`  keyword.control.case.begin
+18  19   `"`     punctuation.definition.string.begin
+19  20   `$`     punctuation.definition.variable
+20  21   `a`     variable.other.readwrite
+21  22   `"`     punctuation.definition.string.end
+23  25   `in`    keyword.control.case.in
+42  43   `*`     keyword.operator.regexp.quantifier
+43  44   `)`     keyword.control.case.item
+45  48   `cat`   CALLABLE `cat`
+61  65   `esac`  keyword.control.case.end
+66  68   `<<`    keyword.operator.assignment.redirection
+68  69   `'`     punctuation.definition.string.begin
+69  72   `EOF`   keyword.control.heredoc-token
+72  73   `'`     punctuation.definition.string.end
+73  131  `
+            A
+            B
+            C
+            EOF`  string.unquoted.heredoc

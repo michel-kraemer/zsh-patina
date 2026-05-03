@@ -1,0 +1,14 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(r#\"command -p echo \"file\"\"#)?"
+---
+command -p echo "file"
+
+0   7   `command`  precommand.builtin.command
+7   9   ` -`       punctuation.definition.parameter
+9   10  `p`        variable.parameter.option
+11  15  `echo`     CALLABLE `echo`
+15  16  ` `        meta.function-call.arguments
+16  17  `"`        punctuation.definition.string.begin
+17  21  `file`     string.quoted.double
+21  22  `"`        punctuation.definition.string.end

@@ -1,0 +1,8 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"!zsh-patina\")?"
+---
+!zsh-patina
+
+0  5   `!zsh-`   meta.group.expansion.history
+5  11  `patina`  variable.function

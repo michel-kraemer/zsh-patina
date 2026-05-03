@@ -1,0 +1,10 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"ls test/~/\")?"
+---
+ls test/~/
+
+0  2   `ls`      CALLABLE `ls`
+2  8   ` test/`  meta.function-call.arguments
+8  9   `~`       variable.language.tilde
+9  10  `/`       meta.function-call.arguments

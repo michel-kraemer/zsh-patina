@@ -1,0 +1,7 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(r\"\\s\")?"
+---
+\s
+
+0  2  `\s`  constant.character.escape

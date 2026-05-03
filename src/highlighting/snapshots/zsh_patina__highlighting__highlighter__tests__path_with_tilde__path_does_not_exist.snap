@@ -1,0 +1,10 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"ls ~/this/path/does/not/exist\")?"
+---
+ls ~/this/path/does/not/exist
+
+0  2   `ls`                         CALLABLE `ls`
+2  3   ` `                          meta.function-call.arguments
+3  4   `~`                          variable.language.tilde
+4  29  `/this/path/does/not/exist`  meta.function-call.arguments

@@ -1,0 +1,16 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"foreach x (a b c); echo $x; end\")?"
+---
+foreach x (a b c); echo $x; end
+
+0   7   `foreach`    keyword.control.foreach
+7   16  ` x (a b c`  meta.group.foreach
+16  17  `)`          meta.post-cmd
+17  18  `;`          keyword.operator.logical.continue
+19  23  `echo`       CALLABLE `echo`
+23  24  ` `          meta.function-call.arguments
+24  25  `$`          punctuation.definition.variable
+25  26  `x`          variable.other.readwrite
+26  27  `;`          keyword.operator.logical.continue
+28  31  `end`        keyword.control.end

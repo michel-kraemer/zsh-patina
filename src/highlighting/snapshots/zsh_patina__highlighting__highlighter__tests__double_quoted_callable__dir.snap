@@ -1,0 +1,11 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(r#\"foo/\"bar\"/\"#)?"
+---
+foo/"bar"/
+
+0  4   `foo/`  variable.function + dynamic.callable.command
+4  5   `"`     punctuation.definition.string.begin + dynamic.callable.command
+5  8   `bar`   string.quoted.double + dynamic.callable.command
+8  9   `"`     punctuation.definition.string.end + dynamic.callable.command
+9  10  `/`     variable.function + dynamic.callable.command

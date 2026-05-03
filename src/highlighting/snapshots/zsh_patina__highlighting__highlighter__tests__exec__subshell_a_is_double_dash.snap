@@ -1,0 +1,19 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(r#\"(exec -a -- zsh -c 'echo \"$0\"')\"#)?"
+---
+(exec -a -- zsh -c 'echo "$0"')
+
+0   1   `(`          punctuation.definition.compound.begin
+1   5   `exec`       precommand.builtin.exec
+5   7   ` -`         punctuation.definition.parameter
+7   8   `a`          variable.parameter.option
+9   11  `--`         meta.function-call.arguments
+12  15  `zsh`        CALLABLE `zsh`
+15  17  ` -`         punctuation.definition.parameter
+17  18  `c`          variable.parameter.option
+18  19  ` `          meta.function-call.arguments
+19  20  `'`          punctuation.definition.string.begin
+20  29  `echo "$0"`  string.quoted.single
+29  30  `'`          punctuation.definition.string.end
+30  31  `)`          punctuation.definition.compound.end
