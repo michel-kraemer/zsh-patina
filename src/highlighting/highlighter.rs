@@ -1620,6 +1620,10 @@ mod tests {
 
         assert_snapshot!("sudoedit__sudo_e", cfg.highlight("sudo -e file1 file2")?);
         assert_snapshot!(
+            "sudoedit__sudo_edit",
+            cfg.highlight("sudo --edit file1 file2")?
+        );
+        assert_snapshot!(
             "sudoedit__sudo_i_e",
             cfg.highlight("sudo -i -e -- file1 file2")?
         );

@@ -304,9 +304,14 @@ contexts:
     - match: \bsudo{{keyword_boundary_end}}
       scope: meta.function-call.shell variable.function.shell
       set:
-        # if `-e` is given, we switch to "edit" mode where we parse plain
-        # arguments instead of a command
+        # if `-e` or `--edit` are given, we switch to "edit" mode where we parse
+        # plain arguments instead of a command
         - match: '(?={{start_of_short_option}}[a-zA-Z]*e[a-zA-Z]*(?={{is_end_of_option}}))'
+          captures:
+            0: variable.parameter.option.shell
+            1: punctuation.definition.parameter.shell
+          set: [multiple-arguments, precommand-sudo-edit]
+        - match: '(?={{start_of_long_option}}edit(?={{is_end_of_option}}))'
           captures:
             0: variable.parameter.option.shell
             1: punctuation.definition.parameter.shell
