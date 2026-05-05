@@ -81,9 +81,6 @@ _zsh_patina_resolve_callable() {
     shift
     local -a visited=("$@")
 
-    # Refresh Zsh's command hash so newly installed utilities in PATH are found
-    rehash
-
     local matched_alias
     if (( $+aliases[(e)$word] )); then
         matched_alias=$aliases[$word]
@@ -104,6 +101,11 @@ _zsh_patina_resolve_callable() {
     elif (( $+builtins[(e)$word] )); then
         REPLY=b
     elif (( $+commands[(e)$word] )); then
+        REPLY=c
+    # $commands may stay stale until rehash after a new executable appears in
+    # an existing PATH entry.  Fall back to a targeted PATH lookup for this one
+    # word instead of refreshing the whole command hash with each keystroke.
+    elif whence -p -- "$word" >/dev/null 2>&1; then
         REPLY=c
     else
         REPLY=m
