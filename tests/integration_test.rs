@@ -95,19 +95,25 @@ async fn setup() -> GenericImage {
 
 /// Runs zsh-patina in a container and highlights the given buffer. Compares
 /// `$region_highlight` to the expected result.
-async fn run_highlight(
+async fn run_highlight_with(
     image: &GenericImage,
-    setup_commands: &[&str],
+    before_activate_commands: &[&str],
+    after_activate_commands: &[&str],
     buffer: &str,
     expected: &[String],
 ) {
-    let setup = if setup_commands.is_empty() {
+    let before_activate = if before_activate_commands.is_empty() {
         String::new()
     } else {
-        format!("{}; ", setup_commands.join("; "))
+        format!("{}; ", before_activate_commands.join("; "))
+    };
+    let after_activate = if after_activate_commands.is_empty() {
+        String::new()
+    } else {
+        format!("{}; ", after_activate_commands.join("; "))
     };
     let zsh_script = format!(
-        r#"eval "$(zsh-patina activate)"; {setup}
+        r#"{before_activate}eval "$(zsh-patina activate)"; {after_activate}
         BUFFER="{buffer}"; CURSOR=${{#BUFFER}}; for i in {{1..50}}; do _zsh_patina; [[ ${{#region_highlight[@]}} -gt 0 ]] && break; sleep 0.1; done;
         printf '%s\n' "${{region_highlight[@]}}""#
     );
@@ -149,6 +155,15 @@ async fn run_highlight(
         .collect::<Vec<_>>();
 
     assert_eq!(lines, expected);
+}
+
+async fn run_highlight(
+    image: &GenericImage,
+    setup_commands: &[&str],
+    buffer: &str,
+    expected: &[String],
+) {
+    run_highlight_with(image, setup_commands, &[], buffer, expected).await;
 }
 
 /// Test if a simple `ls -l` command is highlighted correctly
@@ -287,6 +302,26 @@ async fn resolve_alias() {
             h(5, 7, OPERATOR_LOGICAL_AND),
             h(8, 9, DYNAMIC_CALLABLE_ALIAS),
         ],
+    )
+    .await;
+}
+
+/// Test if a command created in an existing PATH entry after activation is
+/// highlighted correctly.
+#[tokio::test]
+#[ignore]
+async fn highlight_command_created_after_activation_in_existing_path_entry() {
+    let image = setup().await;
+
+    run_highlight_with(
+        &image,
+        &["mkdir -p /tmp/bin", "export PATH=/tmp/bin:$PATH"],
+        &[
+            "printf '#!/bin/sh\n' > /tmp/bin/freshcmd",
+            "chmod +x /tmp/bin/freshcmd",
+        ],
+        "freshcmd",
+        &[h(0, 8, DYNAMIC_CALLABLE_COMMAND)],
     )
     .await;
 }

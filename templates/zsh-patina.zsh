@@ -102,6 +102,11 @@ _zsh_patina_resolve_callable() {
         REPLY=b
     elif (( $+commands[(e)$word] )); then
         REPLY=c
+    # $commands may stay stale until rehash after a new executable appears in
+    # an existing PATH entry.  Fall back to a targeted PATH lookup for this one
+    # word instead of refreshing the whole command hash with each keystroke.
+    elif whence -p -- "$word" >/dev/null 2>&1; then
+        REPLY=c
     else
         REPLY=m
     fi
