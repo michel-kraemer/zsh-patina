@@ -81,6 +81,9 @@ _zsh_patina_resolve_callable() {
     shift
     local -a visited=("$@")
 
+    # Refresh Zsh's command hash so newly installed utilities in PATH are found
+    rehash
+
     local matched_alias
     if (( $+aliases[(e)$word] )); then
         matched_alias=$aliases[$word]
