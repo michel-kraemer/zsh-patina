@@ -9,7 +9,7 @@ use crate::{
     color::Color,
     config::{Config, HighlightingConfig},
     highlighting::{Highlighter, HighlightingRequest, Span, SpanStyle},
-    theme::{Style, Theme, ThemeSource},
+    theme::{Style, Theme, ThemeConfig, ThemeSource},
 };
 
 /// Convert a style to a termcolor ColorSpec
@@ -110,7 +110,7 @@ where
     W: WriteColor,
 {
     let config = HighlightingConfig {
-        theme: theme_source,
+        theme: ThemeConfig::Single(theme_source),
         timeout: Duration::from_secs(3600),
         ..Default::default()
     };
@@ -163,10 +163,19 @@ pub fn list_themes(config: &Config) -> Result<()> {
     let bufwtr = BufferWriter::stdout(ColorChoice::Auto);
     let mut buffer = bufwtr.buffer();
 
+    let config_sources = config.highlighting.theme.sources();
+    let default_theme = HighlightingConfig::default().theme;
+    let default_sources = default_theme.sources();
+
     for mut theme in ThemeSource::iter() {
         if matches!(theme, ThemeSource::File(_)) {
-            if matches!(config.highlighting.theme, ThemeSource::File(_)) {
-                theme = config.highlighting.theme.clone();
+            // The iterator yields a single placeholder `file:` entry. Substitute
+            // it with the user's custom theme file, if they configured one.
+            if let Some(&file_source) = config_sources
+                .iter()
+                .find(|s| matches!(s, ThemeSource::File(_)))
+            {
+                theme = file_source.clone();
             } else {
                 continue;
             }
@@ -180,8 +189,8 @@ pub fn list_themes(config: &Config) -> Result<()> {
         write!(buffer, "{theme}")?;
         buffer.set_color(ColorSpec::new().set_fg(Some(TermColor::Rgb(160, 160, 160))))?;
 
-        let active = theme == config.highlighting.theme;
-        let default = theme == HighlightingConfig::default().theme;
+        let active = config_sources.contains(&&theme);
+        let default = default_sources.contains(&&theme);
 
         if active || default {
             write!(buffer, " (")?;

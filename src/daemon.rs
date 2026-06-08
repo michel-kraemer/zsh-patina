@@ -1,4 +1,5 @@
 use anyhow::{Context, Result, bail};
+use arc_swap::ArcSwap;
 use askama::Template;
 use rayon::ThreadPoolBuilder;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -1330,18 +1331,60 @@ fn start_daemon_internal(
 
     let pool = ThreadPoolBuilder::new().num_threads(4).build().unwrap();
 
-    // initialize highlighter
-    let highlighter = Arc::new(HighlighterBuilder::new(&config.highlighting).build()?);
+    // Own a copy of the highlighting configuration so the appearance watcher
+    // thread can rebuild the highlighter for its whole lifetime.
+    let highlighting = Arc::new(config.highlighting.clone());
+
+    // Initialize the highlighter. It is held in an `ArcSwap` so the appearance
+    // watcher can atomically replace it when the system switches between light
+    // and dark mode. Connection workers take a lock-free snapshot for each
+    // request, so an in-flight request finishes with the theme it started with.
+    let highlighter = Arc::new(ArcSwap::from_pointee(
+        HighlighterBuilder::new(&highlighting).build()?,
+    ));
 
     // highlight something to make sure everything is loaded - do this in a
     // background task to not delay the main thread
-    let init_highlighter = Arc::clone(&highlighter);
+    let init_highlighter = highlighter.load_full();
     pool.spawn(move || {
         let _ = init_highlighter.highlight(
             "echo Welcome to zsh-patina!",
             &HighlightingRequest::default(),
         );
     });
+
+    // For adaptive themes, watch the system appearance and swap the highlighter
+    // when it changes. Polling the appearance is cheap, so a 5 second interval
+    // is negligible.
+    if highlighting.theme.is_adaptive() {
+        let highlighting = Arc::clone(&highlighting);
+        let highlighter = Arc::clone(&highlighter);
+        std::thread::spawn(move || {
+            let mut current_dark_mode = crate::appearance::is_dark_mode();
+            loop {
+                std::thread::sleep(Duration::from_secs(5));
+
+                let dark_mode = crate::appearance::is_dark_mode();
+                if dark_mode == current_dark_mode {
+                    continue;
+                }
+                current_dark_mode = dark_mode;
+
+                match HighlighterBuilder::new(&highlighting).build() {
+                    Ok(new_highlighter) => {
+                        highlighter.store(Arc::new(new_highlighter));
+                        log::info!(
+                            "System appearance changed; switched to {} theme.",
+                            if dark_mode { "dark" } else { "light" }
+                        );
+                    }
+                    Err(e) => {
+                        log::error!("Failed to rebuild highlighter after appearance change: {e}");
+                    }
+                }
+            }
+        });
+    }
 
     // bind the Unix domain socket
     let listener = UnixListener::bind(&socket_path)
@@ -1367,7 +1410,10 @@ fn start_daemon_internal(
                 stream.set_read_timeout(Some(Duration::from_secs(1)))?;
                 stream.set_write_timeout(Some(Duration::from_secs(1)))?;
 
-                let highlighter = Arc::clone(&highlighter);
+                // Take a lock-free snapshot of the current highlighter. If the
+                // appearance watcher swaps in a new one, in-flight connections
+                // keep using the snapshot they started with.
+                let highlighter = highlighter.load_full();
                 pool.spawn(|| {
                     log::debug!("New connection ...");
 

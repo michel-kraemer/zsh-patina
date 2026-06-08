@@ -260,8 +260,11 @@ If the file doesn't exist at either location, the plugin uses the default settin
 
 ```toml
 [highlighting]
-# Either the name of a built-in theme (e.g. `"simple"`, `"patina"`) or a string
-# in the form `"file:/path/mytheme.toml"` pointing to a custom theme toml file.
+# The name of a built-in theme (e.g. `"simple"`, `"patina"`), a string in the
+# form `"file:/path/mytheme.toml"` pointing to a custom theme toml file, or an
+# adaptive theme that follows the system appearance (see "Automatic light/dark
+# theme switching" below), e.g.
+# `{ light = "catppuccin-latte", dark = "catppuccin-mocha" }`.
 theme = "patina"
 
 # Enable or disable dynamic highlighting. Can be `true` or `false` ...
@@ -297,6 +300,29 @@ timeout_ms = 500
 ```shell
 zsh-patina restart
 ```
+
+### Automatic light/dark theme switching
+
+zsh-patina can automatically follow the system appearance and switch between a
+light and a dark theme. Configure the `theme` option with a table that holds a
+`light` and a `dark` theme:
+
+```toml
+[highlighting]
+theme = { light = "catppuccin-latte", dark = "catppuccin-mocha" }
+```
+
+Both entries accept anything the `theme` option normally accepts, including
+custom theme files, e.g. `{ light = "file:/path/light.toml", dark = "nord" }`.
+
+The daemon detects appearance changes on its own — there is no need to restart
+it or reload your shell. After you toggle your system between light and dark
+mode (on macOS, *System Settings → Appearance*), the highlighting follows
+within a few seconds.
+
+Appearance detection works on macOS, Windows, and Linux (the latter via the
+XDG desktop portal). Where the appearance cannot be determined, adaptive themes
+fall back to their `light` variant.
 
 ### Custom precommands
 

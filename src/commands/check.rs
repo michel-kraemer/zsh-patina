@@ -51,8 +51,11 @@ pub fn check_config(config: &Config) -> Result<()> {
     // configuration is parseable. Otherwise, we would not have a `config`
     // object.
 
-    // check if we can load the custom theme and if it's syntax is OK
-    Theme::load(&config.highlighting.theme)?;
+    // check if we can load the custom theme(s) and if their syntax is OK. For
+    // an adaptive theme, both the light and the dark variant are checked.
+    for source in config.highlighting.theme.sources() {
+        Theme::load(source)?;
+    }
 
     Ok(())
 }
@@ -194,18 +197,21 @@ fn check_zsh_version() -> (String, MessageType) {
     }
 }
 
-/// Check if the configured theme can be loaded
+/// Check if the configured theme can be loaded. For an adaptive theme, both the
+/// light and the dark variant are loaded.
 fn check_theme(config: &Config) -> (String, MessageType) {
-    match Theme::load(&config.highlighting.theme) {
-        Err(e) => (
-            format!("Theme could not be loaded\n\n{e:?}"),
-            MessageType::Error,
-        ),
-        Ok(_) => (
-            format!("Theme `{}' loaded successfully.", config.highlighting.theme),
-            MessageType::Success,
-        ),
+    for source in config.highlighting.theme.sources() {
+        if let Err(e) = Theme::load(source) {
+            return (
+                format!("Theme could not be loaded\n\n{e:?}"),
+                MessageType::Error,
+            );
+        }
     }
+    (
+        format!("Theme `{}' loaded successfully.", config.highlighting.theme),
+        MessageType::Success,
+    )
 }
 
 /// Check if zsh-patina is active in the current shell session

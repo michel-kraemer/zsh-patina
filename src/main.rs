@@ -14,6 +14,7 @@ use crate::{
     daemon::{activate, start_daemon, status_daemon, stop_daemon},
 };
 
+mod appearance;
 mod color;
 mod commands;
 pub mod config;

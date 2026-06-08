@@ -9,6 +9,7 @@ use rustc_hash::FxHashMap;
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
     de::{Error, MapAccess, Visitor, value::MapAccessDeserializer},
+    ser::SerializeMap,
 };
 use strum::EnumIter;
 use syntect::{
@@ -47,13 +48,11 @@ impl Serialize for ThemeSource {
     }
 }
 
-impl<'de> Deserialize<'de> for ThemeSource {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        match s.as_str() {
+impl ThemeSource {
+    /// Parse a single theme source from a string such as `"nord"` or
+    /// `"file:mytheme.toml"`. Returns a human-readable error message on failure.
+    fn parse(s: &str) -> std::result::Result<Self, String> {
+        match s {
             "catppuccin-frappe" => Ok(ThemeSource::CatppuccinFrappe),
             "catppuccin-latte" => Ok(ThemeSource::CatppuccinLatte),
             "catppuccin-macchiato" => Ok(ThemeSource::CatppuccinMacchiato),
@@ -68,11 +67,144 @@ impl<'de> Deserialize<'de> for ThemeSource {
             "tokyonight" => Ok(ThemeSource::TokyoNight),
             _ if s.starts_with("file:") => Ok(ThemeSource::File(
                 shellexpand::full(&s[5..])
-                    .map_err(D::Error::custom)?
+                    .map_err(|e| e.to_string())?
                     .to_string(),
             )),
-            _ => Err(Error::custom(format!("Unsupported theme source: {s}"))),
+            _ => Err(format!("Unsupported theme source: {s}")),
         }
+    }
+}
+
+impl<'de> Deserialize<'de> for ThemeSource {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        ThemeSource::parse(&s).map_err(Error::custom)
+    }
+}
+
+/// The `theme` setting in the configuration file. This is either a single
+/// [`ThemeSource`] (a plain string) or an adaptive pair that follows the
+/// operating system's light/dark appearance, expressed as a table:
+///
+/// ```toml
+/// theme = "catppuccin-latte"
+///
+/// # or, adaptive:
+/// theme = { light = "catppuccin-latte", dark = "catppuccin-mocha" }
+/// ```
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum ThemeConfig {
+    Single(ThemeSource),
+    Adaptive {
+        light: ThemeSource,
+        dark: ThemeSource,
+    },
+}
+
+impl ThemeConfig {
+    /// Resolve to the concrete theme source that should be used for the given
+    /// appearance. For a single theme, the appearance is ignored.
+    pub fn resolve(&self, dark_mode: bool) -> &ThemeSource {
+        match self {
+            ThemeConfig::Single(source) => source,
+            ThemeConfig::Adaptive { light, dark } => {
+                if dark_mode {
+                    dark
+                } else {
+                    light
+                }
+            }
+        }
+    }
+
+    /// All concrete theme sources referenced by this configuration (one for a
+    /// single theme, two for an adaptive theme).
+    pub fn sources(&self) -> Vec<&ThemeSource> {
+        match self {
+            ThemeConfig::Single(source) => vec![source],
+            ThemeConfig::Adaptive { light, dark } => vec![light, dark],
+        }
+    }
+
+    /// Whether this configuration switches themes based on the system
+    /// appearance.
+    pub fn is_adaptive(&self) -> bool {
+        matches!(self, ThemeConfig::Adaptive { .. })
+    }
+}
+
+impl Display for ThemeConfig {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            ThemeConfig::Single(source) => write!(f, "{source}"),
+            ThemeConfig::Adaptive { light, dark } => write!(f, "light: {light}, dark: {dark}"),
+        }
+    }
+}
+
+impl Serialize for ThemeConfig {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            ThemeConfig::Single(source) => source.serialize(serializer),
+            ThemeConfig::Adaptive { light, dark } => {
+                let mut map = serializer.serialize_map(Some(2))?;
+                map.serialize_entry("light", light)?;
+                map.serialize_entry("dark", dark)?;
+                map.end()
+            }
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ThemeConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct StringOrTable;
+
+        impl<'de> Visitor<'de> for StringOrTable {
+            type Value = ThemeConfig;
+
+            fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+                formatter.write_str("a theme name, or a table with `light` and `dark` theme names")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<ThemeConfig, E>
+            where
+                E: serde::de::Error,
+            {
+                ThemeSource::parse(value)
+                    .map(ThemeConfig::Single)
+                    .map_err(E::custom)
+            }
+
+            fn visit_map<M>(self, map: M) -> Result<ThemeConfig, M::Error>
+            where
+                M: MapAccess<'de>,
+            {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct Helper {
+                    light: ThemeSource,
+                    dark: ThemeSource,
+                }
+
+                let h = Helper::deserialize(MapAccessDeserializer::new(map))?;
+                Ok(ThemeConfig::Adaptive {
+                    light: h.light,
+                    dark: h.dark,
+                })
+            }
+        }
+
+        deserializer.deserialize_any(StringOrTable)
     }
 }
 
@@ -399,6 +531,95 @@ mod tests {
     fn load_builtin_without_metadata() {
         let theme = Theme::load(&ThemeSource::Patina).unwrap();
         assert!(theme.resolve("comment").is_some());
+    }
+
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct ThemeWrapper {
+        theme: ThemeConfig,
+    }
+
+    /// Deserialize a `ThemeConfig` from the `theme = ...` line of a TOML config,
+    /// exercising the same path the real configuration loader uses.
+    fn parse_theme(toml_line: &str) -> std::result::Result<ThemeConfig, toml::de::Error> {
+        toml::from_str::<ThemeWrapper>(toml_line).map(|w| w.theme)
+    }
+
+    #[test]
+    fn theme_config_parses_single() {
+        let config = parse_theme(r#"theme = "nord""#).unwrap();
+        assert_eq!(config, ThemeConfig::Single(ThemeSource::Nord));
+        assert!(!config.is_adaptive());
+        assert_eq!(config.resolve(false), &ThemeSource::Nord);
+        assert_eq!(config.resolve(true), &ThemeSource::Nord);
+        assert_eq!(config.to_string(), "nord");
+    }
+
+    #[test]
+    fn theme_config_parses_adaptive_table() {
+        let config =
+            parse_theme(r#"theme = { light = "catppuccin-latte", dark = "catppuccin-mocha" }"#)
+                .unwrap();
+        assert_eq!(
+            config,
+            ThemeConfig::Adaptive {
+                light: ThemeSource::CatppuccinLatte,
+                dark: ThemeSource::CatppuccinMocha,
+            }
+        );
+        assert!(config.is_adaptive());
+        assert_eq!(config.resolve(false), &ThemeSource::CatppuccinLatte);
+        assert_eq!(config.resolve(true), &ThemeSource::CatppuccinMocha);
+        assert_eq!(
+            config.sources(),
+            vec![&ThemeSource::CatppuccinLatte, &ThemeSource::CatppuccinMocha]
+        );
+    }
+
+    #[test]
+    fn theme_config_adaptive_key_order_independent() {
+        let config = parse_theme(r#"theme = { dark = "nord", light = "solarized" }"#).unwrap();
+        assert_eq!(
+            config,
+            ThemeConfig::Adaptive {
+                light: ThemeSource::Solarized,
+                dark: ThemeSource::Nord,
+            }
+        );
+    }
+
+    #[test]
+    fn theme_config_round_trips_through_toml() {
+        for config in [
+            ThemeConfig::Single(ThemeSource::Nord),
+            ThemeConfig::Adaptive {
+                light: ThemeSource::Nord,
+                dark: ThemeSource::Patina,
+            },
+        ] {
+            let serialized = toml::to_string(&ThemeWrapper {
+                theme: config.clone(),
+            })
+            .unwrap();
+            assert_eq!(parse_theme(&serialized).unwrap(), config);
+        }
+    }
+
+    #[test]
+    fn theme_config_rejects_missing_variant() {
+        assert!(parse_theme(r#"theme = { light = "nord" }"#).is_err());
+        assert!(parse_theme(r#"theme = { dark = "nord" }"#).is_err());
+    }
+
+    #[test]
+    fn theme_config_rejects_unknown_field_and_unknown_theme() {
+        // unknown key in the adaptive table
+        assert!(
+            parse_theme(r#"theme = { light = "nord", dark = "patina", bright = "x" }"#).is_err()
+        );
+        // unknown theme name in the table
+        assert!(parse_theme(r#"theme = { light = "does-not-exist", dark = "nord" }"#).is_err());
+        // unknown single theme name
+        assert!(parse_theme(r#"theme = "does-not-exist""#).is_err());
     }
 
     #[test]

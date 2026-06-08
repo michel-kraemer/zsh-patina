@@ -23,7 +23,7 @@ use crate::{
         historyexpansion::HistoryExpanded,
         syntax::load_syntax_set,
     },
-    theme::{ScopeMapping, Theme, ThemeSource},
+    theme::{ScopeMapping, Theme},
 };
 
 fn mix_spans(base: Vec<Span>, mut mixins: Vec<Span>) -> Vec<Span> {
@@ -238,34 +238,16 @@ impl Highlighter {
     pub fn new(config: &HighlightingConfig, home_dir: String) -> Result<Self> {
         let syntax_set = load_syntax_set(&config.precommands);
 
-        let theme = Theme::load(&config.theme)?;
+        // Resolve adaptive themes to the concrete source for the current system
+        // appearance. The daemon rebuilds the highlighter when the appearance
+        // changes, so reading it here is sufficient.
+        let theme_source = config.theme.resolve(crate::appearance::is_dark_mode());
+
+        let theme = Theme::load(theme_source)?;
         let scope_mapping = ScopeMapping::new(&theme);
-        let syntect_theme =
-            theme
-                .to_syntect(&scope_mapping)
-                .with_context(|| match &config.theme {
-                    ThemeSource::CatppuccinFrappe => {
-                        "Failed to parse catppuccin-frappe theme".to_string()
-                    }
-                    ThemeSource::CatppuccinLatte => {
-                        "Failed to parse catppuccin-latte theme".to_string()
-                    }
-                    ThemeSource::CatppuccinMacchiato => {
-                        "Failed to parse catppuccin-macchiato theme".to_string()
-                    }
-                    ThemeSource::CatppuccinMocha => {
-                        "Failed to parse catppuccin-mocha theme".to_string()
-                    }
-                    ThemeSource::Classic => "Failed to parse classic theme".to_string(),
-                    ThemeSource::Kanagawa => "Failed to parse kanagawa theme".to_string(),
-                    ThemeSource::Lavender => "Failed to parse lavender theme".to_string(),
-                    ThemeSource::Nord => "Failed to parse nord theme".to_string(),
-                    ThemeSource::Patina => "Failed to parse default theme".to_string(),
-                    ThemeSource::Simple => "Failed to parse simple theme".to_string(),
-                    ThemeSource::Solarized => "Failed to parse solarized theme".to_string(),
-                    ThemeSource::TokyoNight => "Failed to parse tokyonight theme".to_string(),
-                    ThemeSource::File(path) => format!("Failed to parse theme file `{path}'"),
-                })?;
+        let syntect_theme = theme
+            .to_syntect(&scope_mapping)
+            .with_context(|| format!("Failed to parse theme `{theme_source}'"))?;
 
         let mut callable_choices: FxHashMap<CallableType, StaticStyle> = FxHashMap::default();
         if let Some(alias_style) = resolve_static_style(DYNAMIC_CALLABLE_ALIAS, &theme) {
@@ -549,6 +531,7 @@ pub mod tests {
     use crate::config::DynamicConfig;
 
     use super::*;
+    use crate::theme::{ThemeConfig, ThemeSource};
     use anyhow::Result;
     use insta::assert_snapshot;
     use pretty_assertions::assert_eq;
@@ -557,7 +540,9 @@ pub mod tests {
 
     pub fn test_config() -> HighlightingConfig {
         HighlightingConfig {
-            theme: ThemeSource::File(concat!(env!("OUT_DIR"), "/test_theme.toml").to_string()),
+            theme: ThemeConfig::Single(ThemeSource::File(
+                concat!(env!("OUT_DIR"), "/test_theme.toml").to_string(),
+            )),
             timeout: Duration::from_secs(3600),
             ..Default::default()
         }

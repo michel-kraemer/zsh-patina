@@ -7,7 +7,7 @@ use serde::{
     ser::SerializeMap,
 };
 
-use crate::theme::ThemeSource;
+use crate::theme::{ThemeConfig, ThemeSource};
 
 #[derive(Serialize, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
@@ -15,13 +15,15 @@ pub struct Config {
     pub highlighting: HighlightingConfig,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct HighlightingConfig {
     /// Either the name of a built-in theme (`"simple"`, `"patina"`,
-    /// `"lavender"`) or a string in the form `"file:mytheme.toml"` pointing to
-    /// a custom theme toml file.
-    pub theme: ThemeSource,
+    /// `"lavender"`), a string in the form `"file:mytheme.toml"` pointing to a
+    /// custom theme toml file, or an adaptive table that follows the operating
+    /// system's light/dark appearance, e.g.
+    /// `{ light = "catppuccin-latte", dark = "catppuccin-mocha" }`.
+    pub theme: ThemeConfig,
 
     /// If enabled, zsh-patina will highlight callables (aliases, builtins,
     /// commands, and functions) as well as files and directories dynamically
@@ -99,7 +101,7 @@ fn deserialize_duration_ms<'de, D: Deserializer<'de>>(d: D) -> Result<Duration, 
 impl Default for HighlightingConfig {
     fn default() -> Self {
         Self {
-            theme: ThemeSource::Patina,
+            theme: ThemeConfig::Single(ThemeSource::Patina),
             dynamic: DynamicConfig::default(),
             max_line_length: 20000,
             timeout: Duration::from_millis(500),
@@ -304,7 +306,7 @@ pub enum PrecommandArg {
 ///
 /// At least one of `short` or `long` should be set. Both may be set if the
 /// option has both a short and a long form.
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct PrecommandOption {
     /// The short form of the option, without the leading dash (e.g. `"u"` for
@@ -343,7 +345,7 @@ pub struct PrecommandOption {
 ///     { short = "n", arg = "none" },
 /// ]
 /// ```
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct PrecommandConfig {
     /// The name of the precommand as it appears in the shell

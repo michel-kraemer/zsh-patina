@@ -15,7 +15,12 @@ use crate::{
 /// Tokenize an input file and print the identified tokens to stdout. If the
 /// input file is `None`, read from stdin.
 pub fn tokenize(config: &Config, input_file: &Option<String>) -> Result<()> {
-    let theme = Theme::load(&config.highlighting.theme)?;
+    let theme = Theme::load(
+        config
+            .highlighting
+            .theme
+            .resolve(crate::appearance::is_dark_mode()),
+    )?;
 
     // read input
     let input = if let Some(input_file) = input_file {
