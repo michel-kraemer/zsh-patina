@@ -8,7 +8,7 @@ jobs:
   msrv:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # Install Rust
       - name: Install MSRV
@@ -34,7 +34,7 @@ jobs:
   integration-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # Install Rust
       - uses: dtolnay/rust-toolchain@stable
@@ -64,7 +64,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # Install Rust
       - uses: dtolnay/rust-toolchain@stable
