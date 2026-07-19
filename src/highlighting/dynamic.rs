@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use syntect::parsing::{ClearAmount, Scope, ScopeStackOp};
 
 use crate::{
-    path::{PathType, is_path_executable, path_type},
+    path::{PathType, is_path_executable, named_directory, path_type},
     unescape::ZshUnescape,
 };
 
@@ -50,6 +50,7 @@ pub struct DynamicHighlightingOptions<'a> {
     pwd: &'a str,
     autocd: bool,
     home_dir: &'a str,
+    nameddirs: Option<&'a rustc_hash::FxHashMap<String, String>>,
     theme: &'a Theme,
     highlight_partial_paths: bool,
 }
@@ -60,6 +61,7 @@ impl<'a> DynamicHighlightingOptions<'a> {
         pwd: &'a str,
         autocd: bool,
         home_dir: &'a str,
+        nameddirs: Option<&'a rustc_hash::FxHashMap<String, String>>,
         theme: &'a Theme,
         highlight_partial_paths: bool,
     ) -> Self {
@@ -68,6 +70,7 @@ impl<'a> DynamicHighlightingOptions<'a> {
             pwd,
             autocd,
             home_dir,
+            nameddirs,
             theme,
             highlight_partial_paths,
         }
@@ -96,7 +99,7 @@ impl DynamicTokenGroup {
     ) -> Result<Vec<Span>> {
         let mut result = Vec::new();
 
-        let parsed = self.parse(line, options.home_dir)?;
+        let parsed = self.parse(line, options)?;
         for (p, range) in parsed.into_iter().take(1) {
             log::trace!("Dynamically highlighting callable: {p}");
             let span_style = if p == "."
@@ -152,7 +155,7 @@ impl DynamicTokenGroup {
     ) -> Result<Vec<Span>> {
         let mut result = Vec::new();
 
-        let parsed = self.parse(line, options.home_dir)?;
+        let parsed = self.parse(line, options)?;
         for (p, range) in parsed {
             log::trace!("Dynamically highlighting argument: {p}");
 
@@ -185,13 +188,18 @@ impl DynamicTokenGroup {
         Ok(result)
     }
 
-    fn parse(&self, line: &str, home_dir: &str) -> Result<Vec<(String, Range<usize>)>> {
+    fn parse(
+        &self,
+        line: &str,
+        options: &DynamicHighlightingOptions,
+    ) -> Result<Vec<(String, Range<usize>)>> {
         if self.tokens.is_empty() {
             return Ok(Vec::new());
         }
 
         struct State<'a> {
             home_dir: &'a str,
+            nameddirs: Option<&'a rustc_hash::FxHashMap<String, String>>,
             s: String,
             start: usize,
             end: usize,
@@ -215,10 +223,21 @@ impl DynamicTokenGroup {
 
             fn push_string(&mut self) -> Result<()> {
                 if !self.s.is_empty() && !self.is_poison {
-                    // resolve tilde only if the whole string is a tilde or if it starts
-                    // with '~/', because '~foobar', for example, should not be resolved
-                    if self.resolve_tilde && (self.s == "~" || self.s.starts_with("~/")) {
-                        self.s.replace_range(0..1, self.home_dir);
+                    // Resolve bare tilde locally and named directories supplied
+                    // by the Zsh client in response to NMD requests.
+                    if self.resolve_tilde {
+                        if self.s == "~" || self.s.starts_with("~/") {
+                            self.s.replace_range(0..1, self.home_dir);
+                        } else if let Some((name, home)) =
+                            named_directory(&self.s).and_then(|name| {
+                                self.nameddirs?
+                                    .get(name)
+                                    .filter(|home| !home.is_empty())
+                                    .map(|home| (name, home))
+                            })
+                        {
+                            self.s.replace_range(0..name.len() + 1, home);
+                        }
                     }
 
                     self.result
@@ -236,7 +255,8 @@ impl DynamicTokenGroup {
 
         let chars_count = line[0..self.tokens[0].byte_range.start].chars().count();
         let mut state = State {
-            home_dir,
+            home_dir: options.home_dir,
+            nameddirs: options.nameddirs,
             s: String::new(),
             start: chars_count,
             end: chars_count,

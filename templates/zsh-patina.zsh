@@ -40,6 +40,13 @@ _zsh_patina_resolve_callable() {
     fi
 }
 
+_zsh_patina_resolve_nameddir() {
+    REPLY=
+    if [[ -n "$1" && "$1" != *[^[:alnum:]_.-]* ]]; then
+        eval "print -v REPLY -r -- ~${1}" 2>/dev/null
+    fi
+}
+
 _zsh_patina_encode_string() {
     # fast path
     [[ $1 != *[%$'\n']* ]] && { REPLY="$1"; return }
@@ -205,6 +212,14 @@ _zsh_patina() {
                         IFS= read -r -u "$fd" qline
                         _zsh_patina_decode_string "$qline"
                         _zsh_patina_resolve_callable "$REPLY" "$query_las"
+                        print -r -u "$fd" -- "$REPLY"
+                    done
+                elif [[ "$query_cmd" == "NMD" ]]; then
+                    for (( qi = 0; qi < query_lns; qi++ )); do
+                        IFS= read -r -u "$fd" qline
+                        _zsh_patina_decode_string "$qline"
+                        _zsh_patina_resolve_nameddir "$REPLY"
+                        _zsh_patina_encode_string "$REPLY"
                         print -r -u "$fd" -- "$REPLY"
                     done
                 else

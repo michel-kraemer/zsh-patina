@@ -10,6 +10,30 @@ pub enum PathType {
     Directory,
 }
 
+/// Return the name from a Zsh named-directory expression such as `~name/path`.
+pub fn named_directory(path: &str) -> Option<&str> {
+    let name = path.strip_prefix('~')?.split('/').next()?;
+    (!name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.')))
+    .then_some(name)
+}
+
+/// Find potential named-directory expressions in a command line.  These
+/// may be false positive, merely used to query the client for preliminary
+/// named-directory mappings.
+pub fn potential_nameddirs(command: &str) -> impl Iterator<Item = &str> {
+    command.match_indices('~').filter_map(|(start, _)| {
+        let rest = &command[start..];
+        let end = rest[1..]
+            .find(|c: char| !(c.is_alphanumeric() || matches!(c, '_' | '-' | '.')))
+            .map(|i| i + 1)
+            .unwrap_or(rest.len());
+        named_directory(&rest[..end])
+    })
+}
+
 /// Find a file or directory that starts with the given prefix and return its
 /// metadata.
 /// * If the prefix is relative, it is resolved against the provided `pwd`.
@@ -126,6 +150,21 @@ mod tests {
 
     use std::fs::{self, Permissions};
     use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn parse_potential_nameddirs() {
+        assert_eq!(
+            named_directory("~some_dir-1.0/testfile"),
+            Some("some_dir-1.0")
+        );
+        assert_eq!(named_directory("~some+dir/testfile"), None);
+        assert_eq!(named_directory("~/testfile"), None);
+        assert_eq!(named_directory("hel~lo"), None);
+        assert_eq!(
+            potential_nameddirs("cp ~one/a '~two/b' x~three ~four+five").collect::<Vec<_>>(),
+            ["one", "two", "three", "four"]
+        );
+    }
 
     #[test]
     fn metadata_absolute_path() {

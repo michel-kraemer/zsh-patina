@@ -159,6 +159,7 @@ where
     pwd: Option<&'a str>,
     history_expansions_enabled: bool,
     autocd_enabled: bool,
+    nameddirs: Option<&'a FxHashMap<String, String>>,
     predicate: P,
 }
 
@@ -178,6 +179,7 @@ where
     pub fn with_pwd<'b, O>(&self, pwd: O) -> HighlightingRequest<'b, P>
     where
         O: Into<Option<&'b str>>,
+        'a: 'b,
     {
         HighlightingRequest {
             pwd: pwd.into(),
@@ -216,7 +218,21 @@ where
             pwd: self.pwd,
             history_expansions_enabled: self.history_expansions_enabled,
             autocd_enabled: self.autocd_enabled,
+            nameddirs: self.nameddirs,
             predicate,
+        }
+    }
+
+    pub(crate) fn with_nameddirs<'b>(
+        &self,
+        nameddirs: &'b FxHashMap<String, String>,
+    ) -> HighlightingRequest<'b, P>
+    where
+        'a: 'b,
+    {
+        HighlightingRequest {
+            nameddirs: Some(nameddirs),
+            ..*self
         }
     }
 }
@@ -228,6 +244,7 @@ impl Default for HighlightingRequest<'_, fn(&Range<usize>) -> bool> {
             pwd: None,
             history_expansions_enabled: true,
             autocd_enabled: false,
+            nameddirs: None,
             predicate: |_: &Range<usize>| true,
         }
     }
@@ -354,6 +371,7 @@ impl Highlighter {
                 pwd,
                 request.autocd_enabled,
                 &self.home_dir,
+                request.nameddirs,
                 &self.theme,
                 self.dynamic_arguments_type == DynamicConfigType::Partial,
             )
