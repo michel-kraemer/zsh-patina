@@ -22,9 +22,13 @@ use tokio::fs;
 const DYNAMIC_CALLABLE_ALIAS: &str = "dynamic.callable.alias.shell";
 const DYNAMIC_CALLABLE_COMMAND: &str = "dynamic.callable.command.shell";
 const DYNAMIC_CALLABLE_MISSING: &str = "dynamic.callable.missing.shell";
+const DYNAMIC_PATH_FILE_COMPLETE: &str = "dynamic.path.file.complete.shell";
+const ARGUMENTS: &str = "meta.function-call.arguments.shell";
 const OPERATOR_LOGICAL_AND: &str = "keyword.operator.logical.and.shell";
 const PUNCTUATION_PARAMETER: &str = "punctuation.definition.parameter.shell";
 const PARAMETER: &str = "variable.parameter.option.shell";
+const FUNCTION: &str = "variable.function.shell";
+const TILDE: &str = "variable.language.tilde.shell";
 
 static TEST_THEME: LazyLock<toml::Table> = LazyLock::new(|| {
     include_str!(concat!(env!("OUT_DIR"), "/test_theme.toml"))
@@ -32,24 +36,27 @@ static TEST_THEME: LazyLock<toml::Table> = LazyLock::new(|| {
         .expect("test_theme.toml must be valid TOML")
 });
 
-/// Look up a scope name in the test theme and return a region_highlight entry
-/// string for the given start/end positions. Foreground-only scopes produce
-/// `"<start> <end> fg=<n>"`, background-only scopes produce
-/// `"<start> <end> bg=<n>"`.
-fn h(start: usize, end: usize, scope: &str) -> String {
-    let value = TEST_THEME
-        .get(scope)
-        .unwrap_or_else(|| panic!("scope '{scope}' not found in test_theme.toml"));
-    match value {
-        toml::Value::Integer(n) => format!("{start} {end} fg={n}"),
-        toml::Value::Table(t) => {
-            let bg = t["background"]
-                .as_integer()
-                .expect("background must be an integer");
-            format!("{start} {end} bg={bg}")
-        }
-        _ => panic!("unexpected TOML value type for scope '{scope}'"),
-    }
+/// Look up scopes in the test theme and return a region_highlight entry for the
+/// given range, combining their foreground and background styles if needed.
+fn h<const N: usize>(start: usize, end: usize, scopes: [&str; N]) -> String {
+    let styles = scopes
+        .map(|scope| {
+            let value = TEST_THEME
+                .get(scope)
+                .unwrap_or_else(|| panic!("scope '{scope}' not found in test_theme.toml"));
+            match value {
+                toml::Value::Integer(n) => format!("fg={n}"),
+                toml::Value::Table(t) => {
+                    let bg = t["background"]
+                        .as_integer()
+                        .expect("background must be an integer");
+                    format!("bg={bg}")
+                }
+                _ => panic!("unexpected TOML value type for scope '{scope}'"),
+            }
+        })
+        .join(",");
+    format!("{start} {end} {styles}")
 }
 
 /// Common setup code required by every test in this module
@@ -186,9 +193,66 @@ async fn ls_with_option() {
         &[],
         "ls -l",
         &[
-            h(0, 2, DYNAMIC_CALLABLE_COMMAND),
-            h(2, 4, PUNCTUATION_PARAMETER),
-            h(4, 5, PARAMETER),
+            h(0, 2, [DYNAMIC_CALLABLE_COMMAND]),
+            h(2, 4, [PUNCTUATION_PARAMETER]),
+            h(4, 5, [PARAMETER]),
+        ],
+    )
+    .await;
+}
+
+/// Test if a named directory created with `hash -d` is resolved by Zsh.
+#[tokio::test]
+#[ignore]
+async fn named_directory() {
+    let image = setup().await;
+    run_highlight(
+        &image,
+        &[
+            "mkdir -p /tmp/named",
+            "touch /tmp/named/test.txt",
+            "printf '#!/bin/sh\n' > /tmp/named/test.sh",
+            "chmod u+x /tmp/named/test.sh",
+            "hash -d named=/tmp/named",
+        ],
+        &[],
+        "ls ~named/test.txt",
+        &[
+            h(0, 2, [DYNAMIC_CALLABLE_COMMAND]),
+            h(2, 3, [ARGUMENTS]),
+            h(3, 4, [TILDE, DYNAMIC_PATH_FILE_COMPLETE]),
+            h(4, 18, [ARGUMENTS, DYNAMIC_PATH_FILE_COMPLETE]),
+        ],
+    )
+    .await;
+
+    run_highlight(
+        &image,
+        &[
+            "mkdir -p /tmp/named",
+            "printf '#!/bin/sh\n' > /tmp/named/test.sh",
+            "chmod +x /tmp/named/test.sh",
+            "hash -d named=/tmp/named",
+        ],
+        &[],
+        "~named/test.sh",
+        &[
+            h(0, 1, [TILDE, DYNAMIC_CALLABLE_COMMAND]),
+            h(1, 14, [FUNCTION, DYNAMIC_CALLABLE_COMMAND]),
+        ],
+    )
+    .await;
+
+    run_highlight(
+        &image,
+        &[],
+        &[],
+        "ls ~missing/test.txt",
+        &[
+            h(0, 2, [DYNAMIC_CALLABLE_COMMAND]),
+            h(2, 3, [ARGUMENTS]),
+            h(3, 4, [TILDE]),
+            h(4, 20, [ARGUMENTS]),
         ],
     )
     .await;
@@ -207,9 +271,9 @@ async fn resolve_alias() {
         &[],
         "ll -a",
         &[
-            h(0, 2, DYNAMIC_CALLABLE_ALIAS),
-            h(2, 4, PUNCTUATION_PARAMETER),
-            h(4, 5, PARAMETER),
+            h(0, 2, [DYNAMIC_CALLABLE_ALIAS]),
+            h(2, 4, [PUNCTUATION_PARAMETER]),
+            h(4, 5, [PARAMETER]),
         ],
     )
     .await;
@@ -221,9 +285,9 @@ async fn resolve_alias() {
         &[],
         "ll -a",
         &[
-            h(0, 2, DYNAMIC_CALLABLE_ALIAS),
-            h(2, 4, PUNCTUATION_PARAMETER),
-            h(4, 5, PARAMETER),
+            h(0, 2, [DYNAMIC_CALLABLE_ALIAS]),
+            h(2, 4, [PUNCTUATION_PARAMETER]),
+            h(4, 5, [PARAMETER]),
         ],
     )
     .await;
@@ -235,9 +299,9 @@ async fn resolve_alias() {
         &[],
         "lla && ll",
         &[
-            h(0, 3, DYNAMIC_CALLABLE_ALIAS),
-            h(4, 6, OPERATOR_LOGICAL_AND),
-            h(7, 9, DYNAMIC_CALLABLE_ALIAS),
+            h(0, 3, [DYNAMIC_CALLABLE_ALIAS]),
+            h(4, 6, [OPERATOR_LOGICAL_AND]),
+            h(7, 9, [DYNAMIC_CALLABLE_ALIAS]),
         ],
     )
     .await;
@@ -248,7 +312,7 @@ async fn resolve_alias() {
         &["alias fb=foobar"],
         &[],
         "fb",
-        &[h(0, 2, DYNAMIC_CALLABLE_MISSING)],
+        &[h(0, 2, [DYNAMIC_CALLABLE_MISSING])],
     )
     .await;
 
@@ -258,7 +322,7 @@ async fn resolve_alias() {
         &["alias foobar='ls -l && echo OK'"],
         &[],
         "foobar",
-        &[h(0, 6, DYNAMIC_CALLABLE_ALIAS)],
+        &[h(0, 6, [DYNAMIC_CALLABLE_ALIAS])],
     )
     .await;
 
@@ -268,7 +332,7 @@ async fn resolve_alias() {
         &["alias foobar='ls -l && missing OK'"],
         &[],
         "foobar",
-        &[h(0, 6, DYNAMIC_CALLABLE_MISSING)],
+        &[h(0, 6, [DYNAMIC_CALLABLE_MISSING])],
     )
     .await;
 
@@ -281,7 +345,7 @@ async fn resolve_alias() {
         ],
         &[],
         "fb",
-        &[h(0, 2, DYNAMIC_CALLABLE_MISSING)],
+        &[h(0, 2, [DYNAMIC_CALLABLE_MISSING])],
     )
     .await;
 
@@ -291,7 +355,7 @@ async fn resolve_alias() {
         &["alias grep='grep --color'"],
         &[],
         "grep",
-        &[h(0, 4, DYNAMIC_CALLABLE_ALIAS)],
+        &[h(0, 4, [DYNAMIC_CALLABLE_ALIAS])],
     )
     .await;
 
@@ -303,9 +367,9 @@ async fn resolve_alias() {
         &[],
         "grep && g",
         &[
-            h(0, 4, DYNAMIC_CALLABLE_ALIAS),
-            h(5, 7, OPERATOR_LOGICAL_AND),
-            h(8, 9, DYNAMIC_CALLABLE_MISSING),
+            h(0, 4, [DYNAMIC_CALLABLE_ALIAS]),
+            h(5, 7, [OPERATOR_LOGICAL_AND]),
+            h(8, 9, [DYNAMIC_CALLABLE_MISSING]),
         ],
     )
     .await;
@@ -318,9 +382,9 @@ async fn resolve_alias() {
         &[],
         "grep && g",
         &[
-            h(0, 4, DYNAMIC_CALLABLE_ALIAS),
-            h(5, 7, OPERATOR_LOGICAL_AND),
-            h(8, 9, DYNAMIC_CALLABLE_ALIAS),
+            h(0, 4, [DYNAMIC_CALLABLE_ALIAS]),
+            h(5, 7, [OPERATOR_LOGICAL_AND]),
+            h(8, 9, [DYNAMIC_CALLABLE_ALIAS]),
         ],
     )
     .await;
@@ -341,7 +405,7 @@ async fn command_created_after_activation_in_existing_path_entry() {
             "chmod +x /tmp/bin/freshcmd",
         ],
         "freshcmd",
-        &[h(0, 8, DYNAMIC_CALLABLE_COMMAND)],
+        &[h(0, 8, [DYNAMIC_CALLABLE_COMMAND])],
     )
     .await;
 }
