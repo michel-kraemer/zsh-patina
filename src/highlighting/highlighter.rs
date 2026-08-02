@@ -19,6 +19,7 @@ use crate::{
     highlighting::{
         dynamic::{
             DynamicHighlightingOptions, DynamicScopes, DynamicTokenGroupBuilder, DynamicType,
+            classify_argument, classify_callable,
         },
         historyexpansion::HistoryExpanded,
         syntax::load_syntax_set,
@@ -159,7 +160,7 @@ where
     pwd: Option<&'a str>,
     history_expansions_enabled: bool,
     autocd_enabled: bool,
-    nameddirs: Option<&'a FxHashMap<String, String>>,
+    resolve_nameddirs: bool,
     predicate: P,
 }
 
@@ -205,6 +206,13 @@ where
         }
     }
 
+    pub(crate) fn with_nameddirs(&self, enabled: bool) -> Self {
+        Self {
+            resolve_nameddirs: enabled,
+            ..*self
+        }
+    }
+
     /// Set the predicate function that determines which spans should be
     /// highlighted The predicate function takes a character index range and
     /// returns `true` if the span within that range should be highlighted, and
@@ -218,21 +226,8 @@ where
             pwd: self.pwd,
             history_expansions_enabled: self.history_expansions_enabled,
             autocd_enabled: self.autocd_enabled,
-            nameddirs: self.nameddirs,
+            resolve_nameddirs: self.resolve_nameddirs,
             predicate,
-        }
-    }
-
-    pub(crate) fn with_nameddirs<'b>(
-        &self,
-        nameddirs: &'b FxHashMap<String, String>,
-    ) -> HighlightingRequest<'b, P>
-    where
-        'a: 'b,
-    {
-        HighlightingRequest {
-            nameddirs: Some(nameddirs),
-            ..*self
         }
     }
 }
@@ -244,7 +239,7 @@ impl Default for HighlightingRequest<'_, fn(&Range<usize>) -> bool> {
             pwd: None,
             history_expansions_enabled: true,
             autocd_enabled: false,
-            nameddirs: None,
+            resolve_nameddirs: false,
             predicate: |_: &Range<usize>| true,
         }
     }
@@ -342,6 +337,32 @@ impl Highlighter {
         &self.callable_choices
     }
 
+    pub fn classify_dynamic<P>(
+        &self,
+        path: String,
+        range: &Range<usize>,
+        dynamic_type: DynamicType,
+        request: &HighlightingRequest<P>,
+    ) -> Option<SpanStyle>
+    where
+        P: Fn(&Range<usize>) -> bool + Copy,
+    {
+        let options = DynamicHighlightingOptions::new(
+            request.cursor,
+            request.pwd?,
+            request.autocd_enabled,
+            &self.home_dir,
+            &self.theme,
+            self.dynamic_arguments_type == DynamicConfigType::Partial,
+            request.resolve_nameddirs,
+        );
+        match dynamic_type {
+            DynamicType::Callable => classify_callable(path, range, &options),
+            DynamicType::Arguments => classify_argument(&path, range, &options),
+            DynamicType::Unknown => None,
+        }
+    }
+
     fn should_highlight_dynamic(&self, dynamic_type: &DynamicType) -> bool {
         match dynamic_type {
             DynamicType::Unknown => true,
@@ -371,9 +392,9 @@ impl Highlighter {
                 pwd,
                 request.autocd_enabled,
                 &self.home_dir,
-                request.nameddirs,
                 &self.theme,
                 self.dynamic_arguments_type == DynamicConfigType::Partial,
+                request.resolve_nameddirs,
             )
         });
 
@@ -654,6 +675,9 @@ pub mod tests {
                         }
                     }
                     SpanStyle::Dynamic(dynamic_style) => match dynamic_style {
+                        DynamicStyle::Nameddir { parsed_path, .. } => {
+                            write!(tw, "NAMEDDIR `{parsed_path}`").unwrap();
+                        }
                         DynamicStyle::Callable { parsed_callable } => {
                             write!(tw, "CALLABLE `{parsed_callable}`").unwrap();
                         }

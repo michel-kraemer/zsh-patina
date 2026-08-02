@@ -7,7 +7,7 @@ mod syntax;
 
 pub use highlighter::{CallableType, Highlighter, HighlighterBuilder, HighlightingRequest};
 
-use crate::theme::Theme;
+use crate::{highlighting::dynamic::DynamicType, theme::Theme};
 
 const ARGUMENTS: &str = "meta.function-call.arguments.shell";
 const DYNAMIC_PATH_DIRECTORY_COMPLETE: &str = "dynamic.path.directory.complete.shell";
@@ -69,7 +69,14 @@ pub struct StaticStyle {
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum DynamicStyle {
-    Callable { parsed_callable: String },
+    Callable {
+        parsed_callable: String,
+    },
+    Nameddir {
+        name: String,
+        parsed_path: String,
+        dynamic_type: DynamicType,
+    },
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]

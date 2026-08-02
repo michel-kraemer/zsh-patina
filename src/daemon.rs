@@ -27,7 +27,6 @@ use crate::{
         CallableType, DynamicStyle, Highlighter, HighlighterBuilder, HighlightingRequest, Span,
         SpanStyle, StaticStyle,
     },
-    path::potential_nameddirs,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -673,6 +672,7 @@ fn handle_connection_v1<R: BufRead, W: Write>(
                         ))
                     }
                 }
+                DynamicStyle::Nameddir { .. } => None,
             },
         };
 
@@ -1021,6 +1021,7 @@ where
         .with_cursor(pre_buffer_total_len + cursor)
         .with_pwd(pwd.as_deref())
         .with_autocd(autocd_enabled)
+        .with_nameddirs(supports_nameddirs)
         .with_history_expansions(history_expansions_enabled)
         .with_predicate(|range| {
             // skip spans in the pre-buffer
@@ -1035,17 +1036,53 @@ where
             // skip spans outside the current terminal window
             start < max && end > min
         });
-    let names = potential_nameddirs(&lines).collect::<FxHashSet<_>>();
-    let nameddirs = if supports_nameddirs && !names.is_empty() {
+    let mut result = highlighter.highlight(&lines, &request)?;
+
+    // collect unique nameddirs that need to be resolved
+    let nameddirs_to_resolve = result
+        .iter()
+        .filter_map(|span| match &span.style {
+            SpanStyle::Dynamic(DynamicStyle::Nameddir { name, .. }) => Some(name.as_str()),
+            _ => None,
+        })
+        .collect::<FxHashSet<_>>();
+    // resolve nameddirs to their absolute paths
+    let resolved_nameddirs = if supports_nameddirs && !nameddirs_to_resolve.is_empty() {
         resolve_nameddirs(
-            &names.into_iter().collect::<Vec<_>>(),
+            &nameddirs_to_resolve.into_iter().collect::<Vec<_>>(),
             &mut reader,
             &mut writer,
         )?
     } else {
         FxHashMap::default()
     };
-    let result = highlighter.highlight(&lines, &request.with_nameddirs(&nameddirs))?;
+
+    // re-classify Nameddir-style Spans with their intended final style
+    result.retain_mut(|span| {
+        let SpanStyle::Dynamic(DynamicStyle::Nameddir {
+            name,
+            parsed_path,
+            dynamic_type,
+        }) = &span.style
+        else {
+            return true;
+        };
+
+        let mut path = parsed_path.clone();
+        if let Some(directory) = resolved_nameddirs
+            .get(name)
+            .filter(|directory| !directory.is_empty())
+        {
+            path.replace_range(0..name.len() + 1, directory);
+        }
+        let Some(style) =
+            highlighter.classify_dynamic(path, &(span.start..span.end), *dynamic_type, &request)
+        else {
+            return false;
+        };
+        span.style = style;
+        true
+    });
 
     // merge consecutive spans with the same style
     let mut merged: Vec<Span> = Vec::new();
@@ -1107,6 +1144,7 @@ where
                         .filter(|s| !s.is_empty())
                         .map(|style| format!("{} {} {}\n", s.start, s.end, style))
                 }),
+            SpanStyle::Dynamic(DynamicStyle::Nameddir { .. }) => None,
         };
 
         if let Some(message) = message {

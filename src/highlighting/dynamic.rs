@@ -50,9 +50,9 @@ pub struct DynamicHighlightingOptions<'a> {
     pwd: &'a str,
     autocd: bool,
     home_dir: &'a str,
-    nameddirs: Option<&'a rustc_hash::FxHashMap<String, String>>,
     theme: &'a Theme,
     highlight_partial_paths: bool,
+    resolve_nameddirs: bool,
 }
 
 impl<'a> DynamicHighlightingOptions<'a> {
@@ -61,18 +61,18 @@ impl<'a> DynamicHighlightingOptions<'a> {
         pwd: &'a str,
         autocd: bool,
         home_dir: &'a str,
-        nameddirs: Option<&'a rustc_hash::FxHashMap<String, String>>,
         theme: &'a Theme,
         highlight_partial_paths: bool,
+        resolve_nameddirs: bool,
     ) -> Self {
         Self {
             cursor,
             pwd,
             autocd,
             home_dir,
-            nameddirs,
             theme,
             highlight_partial_paths,
+            resolve_nameddirs,
         }
     }
 }
@@ -99,43 +99,20 @@ impl DynamicTokenGroup {
     ) -> Result<Vec<Span>> {
         let mut result = Vec::new();
 
-        let parsed = self.parse(line, options)?;
-        for (p, range) in parsed.into_iter().take(1) {
+        let parsed = self.parse(line, options.home_dir)?;
+        for (p, range, nameddir) in parsed.into_iter().take(1) {
             log::trace!("Dynamically highlighting callable: {p}");
-            let span_style = if p == "."
-                || p == ".."
-                || (p.contains('/') && is_path_executable(&p, options.pwd, options.autocd))
+            let span_style = if options.resolve_nameddirs
+                && let Some(name) = nameddir
             {
-                log::trace!("Callable `{p}' is executable.");
-                resolve_static_style(DYNAMIC_CALLABLE_COMMAND, options.theme)
-                    .or_else(|| resolve_static_style(CALLABLE, options.theme))
-                    .map(SpanStyle::Static)
-            } else if options.autocd {
-                // only perform highlighting of partial paths if it is enabled and
-                // if the cursor touches the prefix
-                let partial = options.highlight_partial_paths
-                    && options
-                        .cursor
-                        .map(|c| (range.start..=range.end).contains(&c))
-                        .unwrap_or_default();
-
-                match path_type(&p, options.pwd, partial) {
-                    Some((PathType::Directory, _)) => {
-                        log::trace!("Callable `{p}' is a directory (autocd).");
-                        resolve_static_style(DYNAMIC_CALLABLE_COMMAND, options.theme)
-                            .or_else(|| resolve_static_style(CALLABLE, options.theme))
-                            .map(SpanStyle::Static)
-                    }
-                    _ => Some(SpanStyle::Dynamic(DynamicStyle::Callable {
-                        parsed_callable: p,
-                    })),
-                }
-            } else {
-                Some(SpanStyle::Dynamic(DynamicStyle::Callable {
-                    parsed_callable: p,
+                Some(SpanStyle::Dynamic(DynamicStyle::Nameddir {
+                    name,
+                    parsed_path: p,
+                    dynamic_type: DynamicType::Callable,
                 }))
+            } else {
+                classify_callable(p, &range, options)
             };
-
             if let Some(span_style) = span_style {
                 result.push(Span {
                     start: range.start,
@@ -155,33 +132,26 @@ impl DynamicTokenGroup {
     ) -> Result<Vec<Span>> {
         let mut result = Vec::new();
 
-        let parsed = self.parse(line, options)?;
-        for (p, range) in parsed {
+        let parsed = self.parse(line, options.home_dir)?;
+        for (p, range, nameddir) in parsed {
             log::trace!("Dynamically highlighting argument: {p}");
-
-            // only perform highlighting of partial paths if it is enabled and
-            // if the cursor touches the prefix
-            let partial = options.highlight_partial_paths
-                && options
-                    .cursor
-                    .map(|c| (range.start..=range.end).contains(&c))
-                    .unwrap_or_default();
-
-            if let Some((t, matched_partially)) = path_type(&p, options.pwd, partial) {
-                log::trace!("Argument `{p}' is {t:?}.");
-                let dynamic_scope = match (t, matched_partially) {
-                    (PathType::File, true) => DYNAMIC_PATH_FILE_PARTIAL,
-                    (PathType::File, false) => DYNAMIC_PATH_FILE_COMPLETE,
-                    (PathType::Directory, true) => DYNAMIC_PATH_DIRECTORY_PARTIAL,
-                    (PathType::Directory, false) => DYNAMIC_PATH_DIRECTORY_COMPLETE,
-                };
-                if let Some(style) = resolve_static_style(dynamic_scope, options.theme) {
-                    result.push(Span {
-                        start: range.start,
-                        end: range.end,
-                        style: SpanStyle::Static(style),
-                    });
-                }
+            let style = if options.resolve_nameddirs
+                && let Some(name) = nameddir
+            {
+                Some(SpanStyle::Dynamic(DynamicStyle::Nameddir {
+                    name,
+                    parsed_path: p,
+                    dynamic_type: DynamicType::Arguments,
+                }))
+            } else {
+                classify_argument(&p, &range, options)
+            };
+            if let Some(style) = style {
+                result.push(Span {
+                    start: range.start,
+                    end: range.end,
+                    style,
+                });
             }
         }
 
@@ -191,22 +161,21 @@ impl DynamicTokenGroup {
     fn parse(
         &self,
         line: &str,
-        options: &DynamicHighlightingOptions,
-    ) -> Result<Vec<(String, Range<usize>)>> {
+        home_dir: &str,
+    ) -> Result<Vec<(String, Range<usize>, Option<String>)>> {
         if self.tokens.is_empty() {
             return Ok(Vec::new());
         }
 
         struct State<'a> {
             home_dir: &'a str,
-            nameddirs: Option<&'a rustc_hash::FxHashMap<String, String>>,
             s: String,
             start: usize,
             end: usize,
             utf8_buf: Vec<u8>,
             resolve_tilde: bool,
             is_poison: bool,
-            result: Vec<(String, Range<usize>)>,
+            result: Vec<(String, Range<usize>, Option<String>)>,
         }
 
         impl State<'_> {
@@ -223,25 +192,18 @@ impl DynamicTokenGroup {
 
             fn push_string(&mut self) -> Result<()> {
                 if !self.s.is_empty() && !self.is_poison {
-                    // Resolve bare tilde locally and named directories supplied
-                    // by the Zsh client in response to NMD requests.
-                    if self.resolve_tilde {
-                        if self.s == "~" || self.s.starts_with("~/") {
-                            self.s.replace_range(0..1, self.home_dir);
-                        } else if let Some((name, home)) =
-                            named_directory(&self.s).and_then(|name| {
-                                self.nameddirs?
-                                    .get(name)
-                                    .filter(|home| !home.is_empty())
-                                    .map(|home| (name, home))
-                            })
-                        {
-                            self.s.replace_range(0..name.len() + 1, home);
-                        }
-                    }
-
+                    // resolve tilde only if the whole string is a tilde or if it starts
+                    // with '~/', because '~foobar', for example, should not be resolved
+                    let nameddir = if !self.resolve_tilde {
+                        None
+                    } else if self.s == "~" || self.s.starts_with("~/") {
+                        self.s.replace_range(0..1, self.home_dir);
+                        None
+                    } else {
+                        named_directory(&self.s).map(str::to_owned)
+                    };
                     self.result
-                        .push((std::mem::take(&mut self.s), self.start..self.end));
+                        .push((std::mem::take(&mut self.s), self.start..self.end, nameddir));
                 } else {
                     self.s = String::new();
                 }
@@ -255,8 +217,7 @@ impl DynamicTokenGroup {
 
         let chars_count = line[0..self.tokens[0].byte_range.start].chars().count();
         let mut state = State {
-            home_dir: options.home_dir,
-            nameddirs: options.nameddirs,
+            home_dir,
             s: String::new(),
             start: chars_count,
             end: chars_count,
@@ -405,6 +366,65 @@ impl DynamicTokenGroup {
 
         Ok(state.result)
     }
+}
+
+pub(super) fn classify_callable(
+    path: String,
+    range: &Range<usize>,
+    options: &DynamicHighlightingOptions,
+) -> Option<SpanStyle> {
+    if path == "."
+        || path == ".."
+        || (path.contains('/') && is_path_executable(&path, options.pwd, options.autocd))
+    {
+        log::trace!("Callable `{path}' is executable.");
+        resolve_static_style(DYNAMIC_CALLABLE_COMMAND, options.theme)
+            .or_else(|| resolve_static_style(CALLABLE, options.theme))
+            .map(SpanStyle::Static)
+    } else if options.autocd {
+        let partial = options.highlight_partial_paths
+            && options
+                .cursor
+                .map(|cursor| (range.start..=range.end).contains(&cursor))
+                .unwrap_or_default();
+        match path_type(&path, options.pwd, partial) {
+            Some((PathType::Directory, _)) => {
+                log::trace!("Callable `{path}' is a directory (autocd).");
+                resolve_static_style(DYNAMIC_CALLABLE_COMMAND, options.theme)
+                    .or_else(|| resolve_static_style(CALLABLE, options.theme))
+                    .map(SpanStyle::Static)
+            }
+            _ => Some(SpanStyle::Dynamic(DynamicStyle::Callable {
+                parsed_callable: path,
+            })),
+        }
+    } else {
+        Some(SpanStyle::Dynamic(DynamicStyle::Callable {
+            parsed_callable: path,
+        }))
+    }
+}
+
+pub(super) fn classify_argument(
+    path: &str,
+    range: &Range<usize>,
+    options: &DynamicHighlightingOptions,
+) -> Option<SpanStyle> {
+    let partial = options.highlight_partial_paths
+        && options
+            .cursor
+            .map(|cursor| (range.start..=range.end).contains(&cursor))
+            .unwrap_or_default();
+    let (path_type, matched_partially) = path_type(path, options.pwd, partial)?;
+
+    log::trace!("Argument `{path}' is {path_type:?}.");
+    let dynamic_scope = match (path_type, matched_partially) {
+        (PathType::File, true) => DYNAMIC_PATH_FILE_PARTIAL,
+        (PathType::File, false) => DYNAMIC_PATH_FILE_COMPLETE,
+        (PathType::Directory, true) => DYNAMIC_PATH_DIRECTORY_PARTIAL,
+        (PathType::Directory, false) => DYNAMIC_PATH_DIRECTORY_COMPLETE,
+    };
+    resolve_static_style(dynamic_scope, options.theme).map(SpanStyle::Static)
 }
 
 #[derive(Clone, Copy)]
