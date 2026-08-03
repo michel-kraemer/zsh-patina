@@ -4,4 +4,4 @@ expression: "cfg.highlight(\"./mydir\")?"
 ---
 ./mydir
 
-0  7  `./mydir`  variable.function + dynamic.callable.command
+0  7  `./mydir`  CALLABLE `./mydir`

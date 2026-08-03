@@ -837,8 +837,7 @@ pub mod tests {
             cfg.highlight("mydir")?
         );
 
-        // will be highlighted as a command (because the directory exists and is
-        // executable)
+        // will be highlighted as a dynamic callable
         assert_snapshot!(
             "directory_in_callable_position__dotslash_name",
             cfg.highlight("./mydir")?
@@ -877,8 +876,7 @@ pub mod tests {
             )?
         );
 
-        // will be highlighted as a command (similar to when autocd is not
-        // enabled)
+        // will be highlighted as a command
         assert_snapshot!(
             "directory_in_callable_position_autocd__dotslash_name",
             cfg.highlight_with_request(
@@ -998,8 +996,7 @@ pub mod tests {
             )?
         );
 
-        // will be highlighted as a command (similar to when autocd is not
-        // enabled)
+        // will be highlighted as a command
         assert_snapshot!(
             "directory_in_callable_position_partial__full_dotslash_name_autocd",
             cfg.highlight_with_request(
@@ -1084,23 +1081,41 @@ pub mod tests {
     fn command_with_tilde() -> Result<()> {
         let cfg = test_cfg()?;
 
-        assert_snapshot!("command_with_tilde__tilde", cfg.highlight("~")?);
-        assert_snapshot!("command_with_tilde__tilde_slash", cfg.highlight("~/")?);
+        assert_snapshot!(
+            "command_with_tilde__tilde",
+            cfg.highlight("~")?
+                .to_string()
+                .replace(cfg.homedir.path().to_str().unwrap(), "<HOME>")
+        );
+        assert_snapshot!(
+            "command_with_tilde__tilde_slash",
+            cfg.highlight("~/")?
+                .to_string()
+                .replace(cfg.homedir.path().to_str().unwrap(), "<HOME>")
+        );
         assert_snapshot!(
             "command_with_tilde__tilde_command",
             cfg.highlight("~ echo")?
+                .to_string()
+                .replace(cfg.homedir.path().to_str().unwrap(), "<HOME>")
         );
         assert_snapshot!(
             "command_with_tilde__doesnotexist",
             cfg.highlight("~doesnotexist")?
+                .to_string()
+                .replace(cfg.homedir.path().to_str().unwrap(), "<HOME>")
         );
         assert_snapshot!(
             "command_with_tilde__double_quoted",
             cfg.highlight(r#""~""#)?
+                .to_string()
+                .replace(cfg.homedir.path().to_str().unwrap(), "<HOME>")
         );
         assert_snapshot!(
             "command_with_tilde__double_quoted_slash",
             cfg.highlight(r#""~/""#)?
+                .to_string()
+                .replace(cfg.homedir.path().to_str().unwrap(), "<HOME>")
         );
 
         Ok(())
