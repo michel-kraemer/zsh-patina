@@ -1063,6 +1063,7 @@ where
             name,
             parsed_path,
             dynamic_type,
+            base_style,
         }) = &span.style
         else {
             return true;
@@ -1075,9 +1076,13 @@ where
         {
             path.replace_range(0..name.len() + 1, directory);
         }
-        let Some(style) =
-            highlighter.classify_dynamic(path, &(span.start..span.end), *dynamic_type, &request)
-        else {
+        let Some(style) = highlighter.classify_dynamic(
+            path,
+            &(span.start..span.end),
+            *dynamic_type,
+            base_style.as_ref(),
+            &request,
+        ) else {
             return false;
         };
         span.style = style;

@@ -102,6 +102,21 @@ fn mix_styles(base: &SpanStyle, mixin: &SpanStyle) -> SpanStyle {
             underline: if m.underline { true } else { b.underline },
         }),
 
+        (
+            SpanStyle::Static(base_style),
+            SpanStyle::Dynamic(DynamicStyle::Nameddir {
+                name,
+                parsed_path,
+                dynamic_type,
+                ..
+            }),
+        ) => SpanStyle::Dynamic(DynamicStyle::Nameddir {
+            name: name.clone(),
+            parsed_path: parsed_path.clone(),
+            dynamic_type: *dynamic_type,
+            base_style: Some(base_style.clone()),
+        }),
+
         (_, SpanStyle::Dynamic(m)) => SpanStyle::Dynamic(m.clone()),
 
         // this should actually be unreachable since base should always only
@@ -342,6 +357,7 @@ impl Highlighter {
         path: String,
         range: &Range<usize>,
         dynamic_type: DynamicType,
+        base_style: Option<&StaticStyle>,
         request: &HighlightingRequest<P>,
     ) -> Option<SpanStyle>
     where
@@ -356,10 +372,17 @@ impl Highlighter {
             self.dynamic_arguments_type == DynamicConfigType::Partial,
             request.resolve_nameddirs,
         );
-        match dynamic_type {
+        let style = match dynamic_type {
             DynamicType::Callable => classify_callable(path, range, &options),
             DynamicType::Arguments => classify_argument(&path, range, &options),
             DynamicType::Unknown => None,
+        };
+        match (base_style, style) {
+            (Some(base_style), Some(style)) => {
+                Some(mix_styles(&SpanStyle::Static(base_style.clone()), &style))
+            }
+            (Some(base_style), None) => Some(SpanStyle::Static(base_style.clone())),
+            (None, style) => style,
         }
     }
 

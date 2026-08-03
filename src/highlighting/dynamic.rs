@@ -109,6 +109,7 @@ impl DynamicTokenGroup {
                     name,
                     parsed_path: p,
                     dynamic_type: DynamicType::Callable,
+                    base_style: None,
                 }))
             } else {
                 classify_callable(p, &range, options)
@@ -142,6 +143,7 @@ impl DynamicTokenGroup {
                     name,
                     parsed_path: p,
                     dynamic_type: DynamicType::Arguments,
+                    base_style: None,
                 }))
             } else {
                 classify_argument(&p, &range, options)

@@ -76,6 +76,7 @@ pub enum DynamicStyle {
         name: String,
         parsed_path: String,
         dynamic_type: DynamicType,
+        base_style: Option<StaticStyle>,
     },
 }
 
