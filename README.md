@@ -20,7 +20,7 @@ Besides normal static highlighting, zsh-patina is able to dynamically detect whe
   * [Zinit (for Zinit users)](#zinit-for-zinit-users)
   * [`.deb` package (for Debian/Ubuntu)](#deb-package-for-debianubuntu)
   * [AUR (for Arch Linux)](#aur-for-arch-linux)
-  * [flake.nix (for Nix users)](#flakenix-for-nix-users)
+  * [Nixpkgs (for Nix users)](#nixpkgs-for-nix-users)
   * [Scoop (for Windows)](#scoop-for-windows)
   * [Pre-compiled binaries (for everyone)](#pre-compiled-binaries-for-everyone)
   * [Build from source (for the brave ones)](#build-from-source-for-the-brave-ones)
@@ -128,41 +128,25 @@ zinit light michel-kraemer/zsh-patina
    exec zsh
    ```
 
-### flake.nix (for Nix users)
+### Nixpkgs (for Nix users)
 
-A flake is provided to make the executable the plugin requires available in `/nix/store`.
-
-1. Add this flake to your flake inputs:
+1. Add the executable to your `systemPackages`, making it available in your PATH (optional):
 
    ```nix
-   inputs = {
-     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-     zsh-patina = {
-       url = "github:michel-kraemer/zsh-patina";
-       inputs.nixpkgs.follows = "nixpkgs";
-     };
-   }
+   environment.systemPackages = [ pkgs.zsh-patina ];
    ```
 
-2. Add the executable to your `systemPackages`, making it available in your PATH (optional):
-
-   ```nix
-   environment.systemPackages = [
-     inputs.zsh-patina.packages.${pkgs.stdenv.hostPlatform.system}.default
-   ];
-   ```
-
-3. Activate the plugin in your `.zshrc` file:
+2. Activate the plugin in your `.zshrc` file:
 
    ```shell
    # If you've added zsh-patina to systemPackages
    eval "$(zsh-patina activate)"
 
    # Reference the executable direcly
-   eval "$(${inputs.zsh-patina.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/zsh-patina activate)"
+   eval "$(${pkgs.zsh-patina}/bin/zsh-patina activate)"
    ```
 
-4. Restart your terminal, or run:
+3. Restart your terminal, or run:
 
    ```shell
    exec zsh

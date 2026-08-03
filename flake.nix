@@ -19,12 +19,19 @@
         pkgs = import nixpkgs {inherit system;};
         manifest = (pkgs.lib.importTOML ./Cargo.toml).package;
       in {
-        default = pkgs.rustPlatform.buildRustPackage rec {
-          pname = manifest.name;
-          version = manifest.version;
-          cargoLock.lockFile = ./Cargo.lock;
-          src = pkgs.lib.cleanSource ./.;
-        };
+        default = pkgs.lib.warn
+          ''
+            zsh-patina has been added to nixpkgs-26.05 and nixpkgs-unstable.
+            The flake.nix in the zsh-patina repository is deprecated and will be removed.
+            Please change your configuration to use pkgs.zsh-patina from nixpkgs.
+            If unclear, consult the README of zsh-patina for instructions.
+          ''
+          (pkgs.rustPlatform.buildRustPackage rec {
+            pname = manifest.name;
+            version = manifest.version;
+            cargoLock.lockFile = ./Cargo.lock;
+            src = pkgs.lib.cleanSource ./.;
+          });
       });
     };
 }
