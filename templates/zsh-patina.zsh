@@ -69,8 +69,35 @@ _zsh_highlight() {
     _zsh_patina
 }
 
+# State for the asynchronous request/response cycle. The request phase
+# (_zsh_patina, registered on line-pre-redraw) sends the buffer state to the
+# daemon and returns immediately. The response phase
+# (_zsh_patina_async_response, registered via `zle -F`) reads the daemon's
+# reply whenever the socket becomes readable, so zle's event loop is never
+# blocked by network I/O.
+typeset -g _zsh_patina_fd=
+typeset -gi _zsh_patina_generation=0
+typeset -gi _zsh_patina_request_gen=0
+typeset -g _zsh_patina_buffer=
+typeset -ga _zsh_patina_new_regions=()
+typeset -g _zsh_patina_state=regions
+typeset -g _zsh_patina_query_cmd=
+typeset -gi _zsh_patina_query_lns=0
+typeset -gi _zsh_patina_query_las=1
+typeset -gi _zsh_patina_query_i=0
+
 _zsh_patina() {
     # start=$EPOCHREALTIME
+
+    # Cancel any previous in-flight request: unregister its fd handler, close
+    # the socket and invalidate its results by bumping the generation counter.
+    if [[ -n "$_zsh_patina_fd" ]]; then
+        zle -F "$_zsh_patina_fd" 2>/dev/null
+        exec {_zsh_patina_fd}>&- 2>/dev/null
+        _zsh_patina_fd=
+        _zsh_patina_buffer=
+    fi
+    (( ++_zsh_patina_generation ))
 
     # Performance: Return immediately if there are bytes pending for input. This
     # can happen when pasting from the clipboard or when positioning the cursor
@@ -128,109 +155,180 @@ _zsh_patina() {
             _ZSH_PATINA_ENCODED_PWD=$REPLY
         fi
 
-        {
-            # build header
-            local lns=$(( $pre_count + $count ))
-            local header="VER=<{version}>"$'\n'"COL=$COLUMNS"$'\n'"ROW=$LINES"$'\n'"CUR=$CURSOR"$'\n'"PRL=$pre_count"$'\n'"LNS=$lns"$'\n'"PWD=$_ZSH_PATINA_ENCODED_PWD"$'\n'
+        # build header
+        local lns=$(( $pre_count + $count ))
+        local header="VER=<{version}>"$'\n'"COL=$COLUMNS"$'\n'"ROW=$LINES"$'\n'"CUR=$CURSOR"$'\n'"PRL=$pre_count"$'\n'"LNS=$lns"$'\n'"PWD=$_ZSH_PATINA_ENCODED_PWD"$'\n'
 
-            if (( $+REGION_ACTIVE )) && (( REGION_ACTIVE != 0 )); then
-                _zsh_patina_encode_string "${${zle_highlight[(r)region:*]-}#*:}"
-                header="${header}RGA=1"$'\n'"RGE=$MARK"$'\n'"RGH=$REPLY"$'\n'
-            fi
-            if (( $+SUFFIX_ACTIVE )) && (( SUFFIX_ACTIVE != 0 )); then
-                _zsh_patina_encode_string "${${zle_highlight[(r)suffix:*]-}#*:}"
-                header="${header}SFA=1"$'\n'"SFS=$SUFFIX_START"$'\n'"SFE=$SUFFIX_END"$'\n'"SFH=$REPLY"$'\n'
-            fi
-            if (( $+ISEARCHMATCH_ACTIVE )) && (( ISEARCHMATCH_ACTIVE != 0 )); then
-                _zsh_patina_encode_string "${${zle_highlight[(r)isearch:*]-}#*:}"
-                header="${header}ISA=1"$'\n'"ISS=$ISEARCHMATCH_START"$'\n'"ISE=$ISEARCHMATCH_END"$'\n'"ISH=$REPLY"$'\n'
-            fi
-            if (( $+YANK_ACTIVE )) && (( YANK_ACTIVE != 0 )); then
-                _zsh_patina_encode_string "${${zle_highlight[(r)paste:*]-}#*:}"
-                header="${header}YKA=1"$'\n'"YKS=$YANK_START"$'\n'"YKE=$YANK_END"$'\n'"YKH=$REPLY"$'\n'
-            fi
+        if (( $+REGION_ACTIVE )) && (( REGION_ACTIVE != 0 )); then
+            _zsh_patina_encode_string "${${zle_highlight[(r)region:*]-}#*:}"
+            header="${header}RGA=1"$'\n'"RGE=$MARK"$'\n'"RGH=$REPLY"$'\n'
+        fi
+        if (( $+SUFFIX_ACTIVE )) && (( SUFFIX_ACTIVE != 0 )); then
+            _zsh_patina_encode_string "${${zle_highlight[(r)suffix:*]-}#*:}"
+            header="${header}SFA=1"$'\n'"SFS=$SUFFIX_START"$'\n'"SFE=$SUFFIX_END"$'\n'"SFH=$REPLY"$'\n'
+        fi
+        if (( $+ISEARCHMATCH_ACTIVE )) && (( ISEARCHMATCH_ACTIVE != 0 )); then
+            _zsh_patina_encode_string "${${zle_highlight[(r)isearch:*]-}#*:}"
+            header="${header}ISA=1"$'\n'"ISS=$ISEARCHMATCH_START"$'\n'"ISE=$ISEARCHMATCH_END"$'\n'"ISH=$REPLY"$'\n'
+        fi
+        if (( $+YANK_ACTIVE )) && (( YANK_ACTIVE != 0 )); then
+            _zsh_patina_encode_string "${${zle_highlight[(r)paste:*]-}#*:}"
+            header="${header}YKA=1"$'\n'"YKS=$YANK_START"$'\n'"YKE=$YANK_END"$'\n'"YKH=$REPLY"$'\n'
+        fi
 
-            if [[ -o autocd ]]; then
-                header="${header}ACD=1"$'\n'
-            fi
-            if [[ ! -o banghist ]]; then
-                header="${header}BNG=0"$'\n'
-            fi
+        if [[ -o autocd ]]; then
+            header="${header}ACD=1"$'\n'
+        fi
+        if [[ ! -o banghist ]]; then
+            header="${header}BNG=0"$'\n'
+        fi
 
-            # send header
-            print -r -- "$header"
+        # send header
+        print -r -- "$header"
 
-            # send pre-buffer lines
-            if (( pre_count != 0 )); then
-                print -r -- "$trimmed_prebuffer"
-            fi
+        # send pre-buffer lines
+        if (( pre_count != 0 )); then
+            print -r -- "$trimmed_prebuffer"
+        fi
 
-            # send lines
-            if (( count != 0 )); then
-                print -r -- "$BUFFER"
-            fi
-        } >&"$fd" || {
-            print -u2 "zsh-patina: Write to socket failed"
-            return
-        }
-
-        # Must be declared here because we reuse them in the while loop.
-        # Otherwise, their contents will be printed in the second loop iteration
-        # (strange Zsh behaviour). As a matter of fact, declaring all variables
-        # outside the while loop (outside the hot path), slightly increases
-        # performance.
-        local query_cmd query_lns query_las qline qi
-
-        local new_regions=("${region_highlight[@]}") # preserve existing highlighting
-        local line
-        while IFS= read -r -u "$fd" line; do
-            [[ -z "$line" ]] && continue
-
-            if [[ "$line" == "?"* ]]; then
-                # query block: read header fields until blank line
-                query_cmd="${line#?CMD=}"
-                query_lns=0
-                query_las=1
-                while IFS= read -r -u "$fd" qline; do
-                    [[ -z "$qline" ]] && break
-                    if [[ "$qline" == "LNS="* ]]; then
-                        query_lns="${qline#LNS=}"
-                    elif [[ "$qline" == "LAS="* ]]; then
-                        query_las="${qline#LAS=}"
-                    fi
-                done
-
-                if [[ "$query_cmd" == "CAL" ]]; then
-                    for (( qi = 0; qi < query_lns; qi++ )); do
-                        IFS= read -r -u "$fd" qline
-                        _zsh_patina_decode_string "$qline"
-                        _zsh_patina_resolve_callable "$REPLY" "$query_las"
-                        print -r -u "$fd" -- "$REPLY"
-                    done
-                else
-                    # unknown query type: drain body lines to keep socket in
-                    # sync
-                    for (( qi = 0; qi < query_lns; qi++ )); do
-                        IFS= read -r -u "$fd" qline
-                    done
-                fi
-            else
-                new_regions+=("$line memo=zsh_patina")
-            fi
-        done
-
-        # performance: set region_highlight once at the end rather than updating
-        # it for every region
-        region_highlight=("${new_regions[@]}")
-    } always {
-        # close socket connection
+        # send lines
+        if (( count != 0 )); then
+            print -r -- "$BUFFER"
+        fi
+    } >&"$fd" || {
+        print -u2 "zsh-patina: Write to socket failed"
         exec {fd}>&-
+        return
     }
+
+    # Hand the socket over to zle's event loop. The response phase runs in
+    # _zsh_patina_async_response whenever the fd becomes readable.
+    _zsh_patina_fd=$fd
+    _zsh_patina_request_gen=$_zsh_patina_generation
+    _zsh_patina_buffer=
+    _zsh_patina_new_regions=()
+    _zsh_patina_state=regions
+    zle -F "$fd" _zsh_patina_async_response
 
     # end=$EPOCHREALTIME
     # elapsed_ms=$(( (end - start) * 1000 ))
     # zle -M $elapsed_ms
     # printf "%.3f ms\n" $elapsed_ms
+}
+
+# Process one complete protocol line received from the daemon. This is a state
+# machine because data may arrive in arbitrarily sized chunks: a query block
+# can span several invocations of the fd handler.
+_zsh_patina_process_line() {
+    local fd=$1
+    local line=$2
+
+    case $_zsh_patina_state in
+        regions)
+            if [[ -z "$line" ]]; then
+                return
+            elif [[ "$line" == "?"* ]]; then
+                # query block: header fields follow until a blank line
+                _zsh_patina_query_cmd="${line#?CMD=}"
+                _zsh_patina_query_lns=0
+                _zsh_patina_query_las=1
+                _zsh_patina_state=query_header
+            else
+                _zsh_patina_new_regions+=("$line memo=zsh_patina")
+            fi
+            ;;
+        query_header)
+            if [[ -z "$line" ]]; then
+                _zsh_patina_query_i=0
+                if (( _zsh_patina_query_lns == 0 )); then
+                    _zsh_patina_state=regions
+                else
+                    _zsh_patina_state=query_body
+                fi
+            elif [[ "$line" == "LNS="* ]]; then
+                _zsh_patina_query_lns="${line#LNS=}"
+            elif [[ "$line" == "LAS="* ]]; then
+                _zsh_patina_query_las="${line#LAS=}"
+            fi
+            ;;
+        query_body)
+            if [[ "$_zsh_patina_query_cmd" == "CAL" ]]; then
+                _zsh_patina_decode_string "$line"
+                _zsh_patina_resolve_callable "$REPLY" "$_zsh_patina_query_las"
+                print -r -u "$fd" -- "$REPLY"
+            fi
+            # unknown query types only get their body lines drained to keep the
+            # socket in sync
+            (( ++_zsh_patina_query_i ))
+            if (( _zsh_patina_query_i >= _zsh_patina_query_lns )); then
+                _zsh_patina_state=regions
+            fi
+            ;;
+    esac
+}
+
+# fd handler invoked by zle's event loop (`zle -F`) when the daemon socket is
+# readable. $1 is the fd, $2 an error condition (e.g. "hup" on EOF).
+_zsh_patina_async_response() {
+    local fd=$1
+    local err=$2
+
+    # discard results from a request that has been superseded by a newer one
+    if (( _zsh_patina_request_gen != _zsh_patina_generation )); then
+        zle -F "$fd" 2>/dev/null
+        exec {fd}>&- 2>/dev/null
+        [[ "$_zsh_patina_fd" == "$fd" ]] && _zsh_patina_fd=
+        return 0
+    fi
+
+    # Read all data that is immediately available. sysread never blocks here:
+    # zle only calls this handler when the fd is readable, and further reads
+    # are guarded by a zero-timeout zselect poll.
+    local chunk eof=0
+    while true; do
+        if sysread -i "$fd" -s 65536 chunk 2>/dev/null; then
+            _zsh_patina_buffer+=$chunk
+            zselect -r "$fd" -t 0 2>/dev/null || break
+        else
+            # EOF: the daemon closes the connection after the last line
+            eof=1
+            break
+        fi
+    done
+
+    # process complete lines from the buffer, keeping any partial tail
+    local line
+    while [[ "$_zsh_patina_buffer" == *$'\n'* ]]; do
+        line=${_zsh_patina_buffer%%$'\n'*}
+        _zsh_patina_buffer=${_zsh_patina_buffer#*$'\n'}
+        _zsh_patina_process_line "$fd" "$line"
+    done
+
+    if (( eof )); then
+        # flush a trailing partial line, if any
+        if [[ -n "$_zsh_patina_buffer" ]]; then
+            _zsh_patina_process_line "$fd" "$_zsh_patina_buffer"
+            _zsh_patina_buffer=
+        fi
+
+        # verify the generation once more before applying the results
+        if (( _zsh_patina_request_gen == _zsh_patina_generation )); then
+            # performance: set region_highlight once at the end rather than
+            # updating it for every region
+            region_highlight=( "${region_highlight[@]:#*memo=zsh_patina}" "${_zsh_patina_new_regions[@]}" )
+            zle -R
+        fi
+
+        # close socket connection and unregister the handler
+        zle -F "$fd" 2>/dev/null
+        exec {fd}>&- 2>/dev/null
+        _zsh_patina_fd=
+        _zsh_patina_buffer=
+        _zsh_patina_new_regions=()
+        _zsh_patina_state=regions
+    fi
+
+    return 0
 }
 
 # store and update the current working directory in an encoded form
@@ -241,6 +339,15 @@ _zsh_patina_chpwd() {
 
 if ! zmodload zsh/net/socket 2>/dev/null; then
     print -u2 "zsh-patina: failed to load zsh/net/socket module"
+fi
+
+# needed for the asynchronous response handler: sysread (zsh/system) and
+# zero-timeout polling of the socket (zsh/zselect)
+if ! zmodload zsh/system 2>/dev/null; then
+    print -u2 "zsh-patina: failed to load zsh/system module"
+fi
+if ! zmodload zsh/zselect 2>/dev/null; then
+    print -u2 "zsh-patina: failed to load zsh/zselect module"
 fi
 
 autoload -U add-zle-hook-widget add-zsh-hook
