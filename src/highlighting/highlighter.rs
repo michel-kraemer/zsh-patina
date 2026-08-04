@@ -170,6 +170,7 @@ impl<'a> HighlighterBuilder<'a> {
 pub struct HighlightingRequest<'a, P> {
     cursor: Option<usize>,
     pwd: Option<&'a str>,
+    cdpath: &'a str,
     history_expansions_enabled: bool,
     autocd_enabled: bool,
     resolve_nameddirs: bool,
@@ -193,11 +194,20 @@ impl<'a, P> HighlightingRequest<'a, P> {
     where
         O: Into<Option<&'b str>>,
         P: Copy,
+        'a: 'b,
     {
         HighlightingRequest {
             pwd: pwd.into(),
             ..*self
         }
+    }
+
+    pub fn with_cdpath<'b>(&self, cdpath: &'b str) -> HighlightingRequest<'b, P>
+    where
+        P: Copy,
+        'a: 'b,
+    {
+        HighlightingRequest { cdpath, ..*self }
     }
 
     /// Enable or disable highlighting of history expansions
@@ -246,6 +256,7 @@ impl<'a, P> HighlightingRequest<'a, P> {
         HighlightingRequest {
             cursor: self.cursor,
             pwd: self.pwd,
+            cdpath: self.cdpath,
             history_expansions_enabled: self.history_expansions_enabled,
             autocd_enabled: self.autocd_enabled,
             resolve_nameddirs: self.resolve_nameddirs,
@@ -259,6 +270,7 @@ impl Default for HighlightingRequest<'_, fn(&Range<usize>) -> bool> {
         Self {
             cursor: None,
             pwd: None,
+            cdpath: "",
             history_expansions_enabled: true,
             autocd_enabled: false,
             resolve_nameddirs: false,
@@ -369,9 +381,11 @@ impl Highlighter {
         base_style: Option<&StaticStyle>,
         request: &HighlightingRequest<P>,
     ) -> Option<SpanStyle> {
+        let cdpath = request.cdpath.lines().collect::<Vec<_>>();
         let options = DynamicHighlightingOptions::new(
             request.cursor,
             request.pwd?,
+            &cdpath,
             request.autocd_enabled,
             &self.home_dir,
             &self.theme,
@@ -381,7 +395,7 @@ impl Highlighter {
 
         let style = match dynamic_type {
             DynamicType::Callable => classify_callable(path, range, &options),
-            DynamicType::Arguments => classify_argument(&path, range, &options),
+            DynamicType::Arguments => classify_argument(&path, range, &options, false),
             DynamicType::Unknown => None,
         };
 
@@ -416,11 +430,14 @@ impl Highlighter {
 
         let mut dynamic_builder = DynamicTokenGroupBuilder::new(self.dynamic_scopes);
         let mut mixins = Vec::new();
+        let mut is_cd_like = false;
 
+        let cdpath = request.cdpath.lines().collect::<Vec<_>>();
         let dynamic_highlighting_options = request.pwd.map(|pwd| {
             DynamicHighlightingOptions::new(
                 request.cursor,
                 pwd,
+                &cdpath,
                 request.autocd_enabled,
                 &self.home_dir,
                 &self.theme,
@@ -485,8 +502,10 @@ impl Highlighter {
                 && let Some(dynamic_highlighting_options) = &dynamic_highlighting_options
             {
                 for g in dynamic_builder.build(&ops, byte_offset) {
-                    if self.should_highlight_dynamic(&g.dynamic_type)
-                        && let Ok(group_spans) = g.highlight(command, dynamic_highlighting_options)
+                    let dynamic_type = g.dynamic_type;
+                    if let Ok(group_spans) =
+                        g.highlight(command, dynamic_highlighting_options, &mut is_cd_like)
+                        && self.should_highlight_dynamic(&dynamic_type)
                     {
                         mixins.extend(group_spans);
                     }
@@ -502,8 +521,10 @@ impl Highlighter {
             && let Some(dynamic_highlighting_options) = &dynamic_highlighting_options
         {
             for g in dynamic_builder.finish(byte_offset) {
-                if self.should_highlight_dynamic(&g.dynamic_type)
-                    && let Ok(group_spans) = g.highlight(command, dynamic_highlighting_options)
+                let dynamic_type = g.dynamic_type;
+                if let Ok(group_spans) =
+                    g.highlight(command, dynamic_highlighting_options, &mut is_cd_like)
+                    && self.should_highlight_dynamic(&dynamic_type)
                 {
                     mixins.extend(group_spans);
                 }
@@ -938,6 +959,8 @@ pub mod tests {
     fn directory_in_callable_position_autocd() -> Result<()> {
         let cfg = test_cfg()?;
         cfg.create_dir("mydir")?;
+        let cdpath = tempfile::tempdir()?;
+        fs::create_dir(cdpath.path().join("cdpathdir"))?;
 
         // will be highlighted as a command
         assert_snapshot!(
@@ -958,6 +981,18 @@ pub mod tests {
                 HighlightingRequest::default()
                     .with_autocd(true)
                     .with_pwd(cfg.pwd.as_str()),
+            )?
+        );
+
+        // will be highlighted as a command through cdpath
+        assert_snapshot!(
+            "directory_in_callable_position_autocd__cdpath_name",
+            cfg.highlight_with_request(
+                "cdpathdir",
+                HighlightingRequest::default()
+                    .with_autocd(true)
+                    .with_pwd(cfg.pwd.as_str())
+                    .with_cdpath(cdpath.path().to_str().unwrap()),
             )?
         );
 
@@ -1096,6 +1131,33 @@ pub mod tests {
             "argument_is_directory__simple",
             cfg.highlight("cp test.txt dest")?
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn cdpath_only_applies_to_cd_commands() -> Result<()> {
+        let cfg = test_cfg()?;
+        let cdpath = tempfile::tempdir()?;
+        fs::create_dir(cdpath.path().join("dest"))?;
+        let request = HighlightingRequest::default()
+            .with_pwd(cfg.pwd.as_str())
+            .with_cdpath(cdpath.path().to_str().unwrap());
+
+        let cd = cfg.highlighter.highlight("cd dest", &request)?;
+        assert!(cd.iter().any(|span| span.start == 3 && span.end == 7));
+        let quoted = cfg.highlighter.highlight(r#""cd" dest"#, &request)?;
+        assert!(quoted.iter().any(|span| span.start == 5 && span.end == 9));
+        let escaped = cfg.highlighter.highlight(r"\cd dest", &request)?;
+        assert!(escaped.iter().any(|span| span.start == 4 && span.end == 8));
+        let end_of_options = cfg.highlighter.highlight("cd -- dest", &request)?;
+        assert!(
+            end_of_options
+                .iter()
+                .any(|span| span.start == 6 && span.end == 10)
+        );
+        let cp = cfg.highlighter.highlight("cp dest", &request)?;
+        assert!(!cp.iter().any(|span| span.start == 3 && span.end == 7));
 
         Ok(())
     }

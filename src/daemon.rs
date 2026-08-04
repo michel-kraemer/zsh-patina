@@ -842,6 +842,7 @@ where
     let mut pre_buffer_line_count = 0;
 
     let mut pwd = None;
+    let mut cdpath = None;
     let mut autocd_enabled = false;
     let mut history_expansions_enabled = true;
 
@@ -880,6 +881,8 @@ where
                 .context("Unable to parse cursor position")?;
         } else if let Some(value) = line.strip_prefix("PWD=") {
             pwd = Some(decode_string(value));
+        } else if let Some(value) = line.strip_prefix("CDP=") {
+            cdpath = Some(decode_string(value));
         } else if let Some(value) = line.strip_prefix("ACD=") {
             autocd_enabled = value
                 .parse::<u8>()
@@ -1046,6 +1049,7 @@ where
     let request = HighlightingRequest::default()
         .with_cursor(pre_buffer_total_len + cursor)
         .with_pwd(pwd.as_deref())
+        .with_cdpath(cdpath.as_deref().unwrap_or_default())
         .with_autocd(autocd_enabled)
         .with_nameddirs(supports_nameddirs)
         .with_history_expansions(history_expansions_enabled)

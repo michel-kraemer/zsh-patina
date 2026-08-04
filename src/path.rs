@@ -93,12 +93,21 @@ fn metadata(path: &str, pwd: &str) -> Option<Metadata> {
 /// Returns a tuple of the path type and a boolean indicating whether the path
 /// was matched partially (i.e. if `partial` is `true` and the path was found by
 /// prefix).
-pub fn path_type(path: &str, pwd: &str, partial: bool) -> Option<(PathType, bool)> {
-    let (metadata, matched_partially) = if partial && !path.ends_with('/') {
-        find_by_prefix(path, pwd)?
-    } else {
-        (metadata(path, pwd)?, false)
-    };
+pub fn path_type(
+    path: &str,
+    pwd: &str,
+    cdpath: Option<&[&str]>,
+    partial: bool,
+) -> Option<(PathType, bool)> {
+    let (metadata, matched_partially) = std::iter::once(pwd)
+        .chain(cdpath.into_iter().flatten().copied())
+        .find_map(|pwd| {
+            if partial && !path.ends_with('/') {
+                find_by_prefix(path, pwd)
+            } else {
+                metadata(path, pwd).map(|m| (m, false))
+            }
+        })?;
     Some(if metadata.is_dir() {
         (PathType::Directory, matched_partially)
     } else {
@@ -172,7 +181,7 @@ mod tests {
         fs::write(&file_path, "content").unwrap();
 
         assert_eq!(
-            path_type(file_path.to_str().unwrap(), "/", false),
+            path_type(file_path.to_str().unwrap(), "/", None, false),
             Some((PathType::File, false))
         );
     }
@@ -184,7 +193,18 @@ mod tests {
         fs::create_dir(&sub).unwrap();
 
         assert_eq!(
-            path_type(sub.to_str().unwrap(), "/", false),
+            path_type(sub.to_str().unwrap(), "/", None, false),
+            Some((PathType::Directory, false))
+        );
+    }
+
+    #[test]
+    fn path_type_cdpath() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir(dir.path().join("subdir")).unwrap();
+
+        assert_eq!(
+            path_type("subdir", "/", Some(&[dir.path().to_str().unwrap()]), false,),
             Some((PathType::Directory, false))
         );
     }
@@ -195,18 +215,21 @@ mod tests {
         let file_path = dir.path().join("afile");
         fs::write(&file_path, "content").unwrap();
 
-        assert_eq!(path_type("afi", dir.path().to_str().unwrap(), false), None);
         assert_eq!(
-            path_type("afile/", dir.path().to_str().unwrap(), false),
+            path_type("afi", dir.path().to_str().unwrap(), None, false),
+            None
+        );
+        assert_eq!(
+            path_type("afile/", dir.path().to_str().unwrap(), None, false),
             None
         );
 
         assert_eq!(
-            path_type("afi", dir.path().to_str().unwrap(), true),
+            path_type("afi", dir.path().to_str().unwrap(), None, true),
             Some((PathType::File, true))
         );
         assert_eq!(
-            path_type("afile", dir.path().to_str().unwrap(), true),
+            path_type("afile", dir.path().to_str().unwrap(), None, true),
             Some((PathType::File, false))
         );
 
@@ -214,7 +237,7 @@ mod tests {
         fs::create_dir(&sub).unwrap();
 
         assert_eq!(
-            path_type("../afi", sub.to_str().unwrap(), true),
+            path_type("../afi", sub.to_str().unwrap(), None, true),
             Some((PathType::File, true))
         );
     }
@@ -225,28 +248,31 @@ mod tests {
         let sub = dir.path().join("subdir");
         fs::create_dir(&sub).unwrap();
 
-        assert_eq!(path_type("sub", dir.path().to_str().unwrap(), false), None);
+        assert_eq!(
+            path_type("sub", dir.path().to_str().unwrap(), None, false),
+            None
+        );
 
         assert_eq!(
-            path_type("sub", dir.path().to_str().unwrap(), true),
+            path_type("sub", dir.path().to_str().unwrap(), None, true),
             Some((PathType::Directory, true))
         );
 
         assert_eq!(
-            path_type("subdir", dir.path().to_str().unwrap(), true),
+            path_type("subdir", dir.path().to_str().unwrap(), None, true),
             Some((PathType::Directory, false))
         );
         assert_eq!(
-            path_type("subdir/", dir.path().to_str().unwrap(), true),
+            path_type("subdir/", dir.path().to_str().unwrap(), None, true),
             Some((PathType::Directory, false))
         );
 
         assert_eq!(
-            path_type(".", sub.to_str().unwrap(), true),
+            path_type(".", sub.to_str().unwrap(), None, true),
             Some((PathType::Directory, false))
         );
         assert_eq!(
-            path_type("..", sub.to_str().unwrap(), true),
+            path_type("..", sub.to_str().unwrap(), None, true),
             Some((PathType::Directory, false))
         );
     }
