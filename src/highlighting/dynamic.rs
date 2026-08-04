@@ -427,7 +427,7 @@ pub(super) fn classify_callable(
         match path_type(&path, search_dirs, true, partial) {
             Some((PathType::Directory, _)) => {
                 log::trace!("Callable `{path}' is a directory (autocd).");
-                resolve_static_style(DYNAMIC_CALLABLE_COMMAND, options.theme)
+                resolve_static_style(DYNAMIC_CALLABLE_AUTOCD, options.theme)
                     .or_else(|| resolve_static_style(CALLABLE, options.theme))
                     .map(SpanStyle::Static)
             }

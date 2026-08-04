@@ -17,6 +17,7 @@ const DYNAMIC_PATH_FILE_PARTIAL: &str = "dynamic.path.file.partial.shell";
 
 const CALLABLE: &str = "variable.function.shell";
 const DYNAMIC_CALLABLE_ALIAS: &str = "dynamic.callable.alias.shell";
+const DYNAMIC_CALLABLE_AUTOCD: &str = "dynamic.callable.autocd.shell";
 const DYNAMIC_CALLABLE_BUILTIN: &str = "dynamic.callable.builtin.shell";
 const DYNAMIC_CALLABLE_COMMAND: &str = "dynamic.callable.command.shell";
 const DYNAMIC_CALLABLE_FUNCTION: &str = "dynamic.callable.function.shell";

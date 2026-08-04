@@ -63,6 +63,7 @@ fn main() -> Result<()> {
     scopes.push("dynamic.path.file.complete.shell".to_string());
     scopes.push("dynamic.path.file.partial.shell".to_string());
     scopes.push("dynamic.callable.alias.shell".to_string());
+    scopes.push("dynamic.callable.autocd.shell".to_string());
     scopes.push("dynamic.callable.builtin.shell".to_string());
     scopes.push("dynamic.callable.command.shell".to_string());
     scopes.push("dynamic.callable.function.shell".to_string());

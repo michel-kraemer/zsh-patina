@@ -295,6 +295,10 @@ impl Theme {
             if let Some(c) = self.scopes.get(s) {
                 return Some(*c);
             }
+            if s == "dynamic.callable.autocd" {
+                s = "dynamic.callable.command.shell";
+                continue;
+            }
             s = s.rsplit_once('.')?.0;
         }
         None
@@ -399,6 +403,33 @@ mod tests {
     fn load_builtin_without_metadata() {
         let theme = Theme::load(&ThemeSource::Patina).unwrap();
         assert!(theme.resolve("comment").is_some());
+    }
+
+    #[test]
+    fn autocd_falls_back_to_command() {
+        let theme: Theme = toml::from_str(
+            r#"
+                "dynamic.callable.command" = "yellow"
+                "dynamic.callable.autocd" = "blue"
+            "#,
+        )
+        .unwrap();
+        assert_eq!(
+            theme
+                .resolve("dynamic.callable.autocd.shell")
+                .unwrap()
+                .foreground,
+            Some(Color::Blue)
+        );
+
+        let theme: Theme = toml::from_str(r#""dynamic.callable.command" = "yellow""#).unwrap();
+        assert_eq!(
+            theme
+                .resolve("dynamic.callable.autocd.shell")
+                .unwrap()
+                .foreground,
+            Some(Color::Yellow)
+        );
     }
 
     #[test]

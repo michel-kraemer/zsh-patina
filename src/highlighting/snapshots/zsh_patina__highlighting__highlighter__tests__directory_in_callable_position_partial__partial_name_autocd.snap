@@ -4,4 +4,4 @@ expression: "cfg.highlight_with_request(\"myd\",\nHighlightingRequest::default()
 ---
 myd
 
-0  3  `myd`  variable.function + dynamic.callable.command
+0  3  `myd`  variable.function + dynamic.callable.autocd
