@@ -602,6 +602,8 @@ I mostly built the plugin for myself because I wasn't satisfied with existing so
 
 If you like the plugin as much as I do and want to add a feature or found a bug, feel free to contribute. **Issue reports and pull requests are more than welcome!**
 
+Please read the [CONTRIBUTING](CONTRIBUTING.md) guide before submitting an issue or opening a pull request.
+
 ## License
 
 zsh-patina is released under the **MIT license**. See the [LICENSE](LICENSE) file for more information.
