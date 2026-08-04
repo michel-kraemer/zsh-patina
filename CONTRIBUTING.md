@@ -11,7 +11,7 @@ We accept any kind of contribution: bug fixes, new features, documentation impro
 There are only two rules so far:
 
 * Please follow our [AI Usage Policy](#ai-usage-policy) below
-* By submitting a contribution, you agree that your contribution is licensed under [MIT license](LICENSE).
+* By submitting a contribution, you agree that your code is licensed under the [MIT license](LICENSE).
 
 That's all we ask for the time being. As the number of issues and pull requests increases, more rules may be added. So, please make sure to check this document for updates whenever you make a new contribution.
 
