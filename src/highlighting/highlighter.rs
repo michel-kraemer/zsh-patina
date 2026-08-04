@@ -117,6 +117,23 @@ fn mix_styles(base: &SpanStyle, mixin: &SpanStyle) -> SpanStyle {
             base_style: Some(base_style.clone()),
         }),
 
+        (
+            SpanStyle::Static(base_style),
+            SpanStyle::Dynamic(DynamicStyle::Callable {
+                parsed_callable,
+                autocd_style: Some(autocd_style),
+            }),
+        ) => SpanStyle::Dynamic(DynamicStyle::Callable {
+            parsed_callable: parsed_callable.clone(),
+            autocd_style: match mix_styles(
+                &SpanStyle::Static(base_style.clone()),
+                &SpanStyle::Static(autocd_style.clone()),
+            ) {
+                SpanStyle::Static(style) => Some(style),
+                _ => unreachable!(),
+            },
+        }),
+
         (_, SpanStyle::Dynamic(m)) => SpanStyle::Dynamic(m.clone()),
 
         // this should actually be unreachable since base should always only
@@ -716,7 +733,9 @@ pub mod tests {
                     }
 
                     SpanStyle::Dynamic(dynamic_style) => match dynamic_style {
-                        DynamicStyle::Callable { parsed_callable } => {
+                        DynamicStyle::Callable {
+                            parsed_callable, ..
+                        } => {
                             write!(tw, "CALLABLE `{parsed_callable}`").unwrap();
                         }
                         DynamicStyle::Nameddir { parsed_path, .. } => {

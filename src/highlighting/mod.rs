@@ -78,6 +78,8 @@ pub enum DynamicStyle {
     Callable {
         /// The parsed callable name
         parsed_callable: String,
+        /// The style to apply in case of autocd callable
+        autocd_style: Option<StaticStyle>,
     },
 
     /// A path containing a named directory that must be resolved by the client

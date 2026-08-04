@@ -4,4 +4,4 @@ expression: "cfg.highlight_with_request(\"./myd\",\nHighlightingRequest::default
 ---
 ./myd
 
-0  5  `./myd`  variable.function + dynamic.callable.autocd
+0  5  `./myd`  CALLABLE `./myd`

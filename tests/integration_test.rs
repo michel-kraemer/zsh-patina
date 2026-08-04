@@ -752,3 +752,27 @@ async fn highlight_subcommand_help() {
             .contains("unexpected argument"),
     );
 }
+
+/// Commands take precedence over same-named AUTO_CD directories.
+#[tokio::test]
+#[ignore]
+async fn command_takes_precedence_over_autocd() {
+    run_highlight(
+        &["mkdir ls", "setopt autocd"],
+        &[],
+        "ls",
+        &[h(0, 2, [DYNAMIC_CALLABLE_COMMAND])],
+    )
+    .await;
+    run_highlight(
+        &[
+            "mkdir -p /tmp/cdpath/ls",
+            "cdpath=(/tmp/cdpath)",
+            "setopt autocd",
+        ],
+        &[],
+        "ls",
+        &[h(0, 2, [DYNAMIC_CALLABLE_COMMAND])],
+    )
+    .await;
+}
