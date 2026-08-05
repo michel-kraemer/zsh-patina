@@ -304,19 +304,18 @@ _zsh_patina_async_response() {
         _zsh_patina_process_line "$fd" "$line"
     done
 
+    # Apply highlighting after processing all currently available lines.
+    # The generation check ensures we don't apply stale results.
+    if (( _zsh_patina_request_gen == _zsh_patina_generation )) && (( ${#_zsh_patina_new_regions[@]} > 0 )); then
+        region_highlight=( "${region_highlight[@]:#*memo=zsh_patina}" "${_zsh_patina_new_regions[@]}" )
+        zle -R
+    fi
+
     if (( eof )); then
         # flush a trailing partial line, if any
         if [[ -n "$_zsh_patina_buffer" ]]; then
             _zsh_patina_process_line "$fd" "$_zsh_patina_buffer"
             _zsh_patina_buffer=
-        fi
-
-        # verify the generation once more before applying the results
-        if (( _zsh_patina_request_gen == _zsh_patina_generation )); then
-            # performance: set region_highlight once at the end rather than
-            # updating it for every region
-            region_highlight=( "${region_highlight[@]:#*memo=zsh_patina}" "${_zsh_patina_new_regions[@]}" )
-            zle -R
         fi
 
         # close socket connection and unregister the handler
