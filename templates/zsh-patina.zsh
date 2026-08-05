@@ -301,6 +301,8 @@ _zsh_patina_async_response() {
     while [[ "$_zsh_patina_buffer" == *$'\n'* ]]; do
         line=${_zsh_patina_buffer%%$'\n'*}
         _zsh_patina_buffer=${_zsh_patina_buffer#*$'\n'}
+        # Skip empty lines to avoid infinite loop on trailing newlines
+        [[ -z "$line" ]] && continue
         _zsh_patina_process_line "$fd" "$line"
     done
 
