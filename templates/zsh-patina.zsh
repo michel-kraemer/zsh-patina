@@ -144,6 +144,9 @@ _zsh_patina() {
 # buffer from the snapshots set by _zsh_patina because $BUFFER/$PREBUFFER/
 # $CURSOR are not valid in the zle -F callback context.
 _zsh_patina_send_request() {
+    print "DBG $(date +%H:%M:%S.%N) SEND-REQUEST fd=$_zsh_patina_fd" >> /tmp/patina_dbg.log 2>/dev/null
+    print "DBG $(date +%H:%M:%S.%N) SEND-REQUEST fd=$_zsh_patina_fd" >> /tmp/patina_dbg.log 2>/dev/null
+    print "DBG $(date +%H:%M:%S.%N) SEND-REQUEST fd=$_zsh_patina_fd" >> /tmp/patina_dbg.log 2>/dev/null
     # remove tokens we have set earlier - do not clear the whole array as this
     # might reset syntax highlighting from other plugins (e.g. auto suggestions)
     region_highlight=( "${region_highlight[@]:#*memo=zsh_patina}" )
@@ -253,7 +256,13 @@ _zsh_patina_send_request() {
     _zsh_patina_buffer=
     _zsh_patina_new_regions=()
     _zsh_patina_state=regions
+    print "DBG $(date +%H:%M:%S.%N) BEFORE-ZLE-FW fd=$fd" >> /tmp/patina_dbg.log 2>/dev/null
+    print "DBG $(date +%H:%M:%S.%N) REGISTERING-FD fd=$fd" >> /tmp/patina_dbg.log 2>/dev/null
+    print "DBG $(date +%H:%M:%S.%N) REGISTERING-FD fd=$fd" >> /tmp/patina_dbg.log 2>/dev/null
+    print "DBG $(date +%H:%M:%S.%N) REGISTERING fd=$fd" >> /tmp/patina_dbg.log 2>/dev/null
     zle -Fw "$fd" _zsh_patina_async_response
+    print "DBG $(date +%H:%M:%S.%N) ZLE-REGISTERED fd=$?" >> /tmp/patina_dbg.log 2>/dev/null
+    print "DBG $(date +%H:%M:%S.%N) ZLE-FW-REGISTERED fd=$fd" >> /tmp/patina_dbg.log 2>/dev/null
 
     # end=$EPOCHREALTIME
     # elapsed_ms=$(( (end - start) * 1000 ))
@@ -315,6 +324,9 @@ _zsh_patina_process_line() {
 # fd handler invoked by zle's event loop (`zle -F`) when the daemon socket is
 # readable. $1 is the fd, $2 an error condition (e.g. "hup" on EOF).
 _zsh_patina_async_response() {
+    print "DBG $(date +%H:%M:%S.%N) ASYNC-START fd=$1 err=$2" >> /tmp/patina_dbg.log 2>/dev/null
+    print "DBG $(date +%H:%M:%S.%N) ASYNC-ENTER fd=$1 err=$2" >> /tmp/patina_dbg.log 2>/dev/null
+    print "DBG $(date +%H:%M:%S.%N) ASYNC-ENTER fd=$1 err=$2 buf=|${_zsh_patina_buf}|" >> /tmp/patina_dbg.log 2>/dev/null
     print "DBG $(date +%H:%M:%S.%N) ASYNC-ENTER fd=$1 err=$2 buf=|${_zsh_patina_buf}|" >> /tmp/patina_dbg.log 2>/dev/null
     local fd=$1
     local err=$2
@@ -350,6 +362,7 @@ _zsh_patina_async_response() {
             if sysread -i "$fd" -s 65536 chunk 2>/dev/null; then
                 _zsh_patina_buffer+=$chunk
     print "DBG $(date +%H:%M:%S.%N) READ chunk_len=${#chunk}" >> /tmp/patina_dbg.log 2>/dev/null
+    print "DBG $(date +%H:%M:%S.%N) READ chunk_len=${#chunk}" >> /tmp/patina_dbg.log 2>/dev/null
                 zselect -r "$fd" -t 0 2>/dev/null || break
             else
                 eof=1
@@ -357,6 +370,8 @@ _zsh_patina_async_response() {
             fi
         done
         (( eof )) && break
+        print "DBG $(date +%H:%M:%S.%N) INNER-READ-END eof=$eof" >> /tmp/patina_dbg.log 2>/dev/null
+        print "DBG $(date +%H:%M:%S.%N) INNER-BREAK eof=$eof" >> /tmp/patina_dbg.log 2>/dev/null
 
         # Process complete lines (this answers CAL queries).
         while [[ "$_zsh_patina_buffer" == *$'\n'* ]]; do
@@ -364,9 +379,11 @@ _zsh_patina_async_response() {
             _zsh_patina_buffer=${_zsh_patina_buffer#*$'\n'}
             _zsh_patina_process_line "$fd" "$line"
             print "DBG $(date +%H:%M:%S.%N) PROCESSED line=|$line|" >> /tmp/patina_dbg.log 2>/dev/null
+            print "DBG $(date +%H:%M:%S.%N) PROCESSED line=|$line|" >> /tmp/patina_dbg.log 2>/dev/null
+            print "DBG $(date +%H:%M:%S.%N) PROCESSED line=|$line|" >> /tmp/patina_dbg.log 2>/dev/null
         done
 
-            zselect -r "$fd" -t 10 2>/dev/null || break
+            zselect -r "$fd" -t 10 2>/dev/null || { print "DBG $(date +%H:%M:%S.%N) ZSEL-TIMEOUT" >> /tmp/patina_dbg.log 2>/dev/null; break; }
         done
 
     # process any remaining complete lines
@@ -382,6 +399,8 @@ _zsh_patina_async_response() {
     if (( _zsh_patina_request_gen == _zsh_patina_generation )) && [[ "${_zsh_patina_prebuf}|${_zsh_patina_buf}" == "$_zsh_patina_sent_buf" ]] && (( ${#_zsh_patina_new_regions[@]} > 0 )); then
             _zsh_patina_applied_regions=( "${_zsh_patina_new_regions[@]}" )
         region_highlight=( "${region_highlight[@]:#*memo=zsh_patina}" "${_zsh_patina_new_regions[@]}" )
+            print "DBG $(date +%H:%M:%S.%N) APPLY-FIRED nreg=${#_zsh_patina_new_regions[@]}" >> /tmp/patina_dbg.log 2>/dev/null
+            print "DBG $(date +%H:%M:%S.%N) APPLY-FIRED nreg=${#_zsh_patina_new_regions[@]}" >> /tmp/patina_dbg.log 2>/dev/null
             print "DBG $(date +%H:%M:%S.%N) APPLY-FIRED nreg=${#_zsh_patina_new_regions[@]}" >> /tmp/patina_dbg.log 2>/dev/null
             zle -R
     fi
