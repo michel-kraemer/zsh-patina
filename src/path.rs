@@ -98,26 +98,15 @@ pub fn path_type(path: &str, pwd: &str, partial: bool) -> Option<(PathType, bool
 
 /// Check if the given path is an executable file/directory.
 /// * If the path is relative, it is resolved against the provided `pwd`.
-/// * If `autocd` is `true` and the path is a directory, it is considered
-///   executable when it is referenced by its bare name, mirroring Zsh's
-///   `AUTO_CD` option.
-/// * Otherwise, if path is a directory, it is only considered executable if it
-///   ends with a slash or if it starts with one of '/', "./", "../".
+/// * If `autocd` is `true` and the path is a traversable directory, it is
+///   considered executable, mirroring Zsh's `AUTO_CD` option.
+/// * Otherwise, directories are not executable commands.
 pub fn is_path_executable(path: &str, pwd: &str, autocd: bool) -> bool {
     let Some(metadata) = metadata(path, pwd) else {
         return false;
     };
     let is_executable = (metadata.permissions().mode() & 0o111) != 0;
-    if metadata.is_dir() {
-        is_executable
-            && (autocd
-                || path.ends_with('/')
-                || path.starts_with('/')
-                || path.starts_with("./")
-                || path.starts_with("../"))
-    } else {
-        is_executable
-    }
+    is_executable && (!metadata.is_dir() || autocd)
 }
 
 #[cfg(test)]
@@ -278,25 +267,25 @@ mod tests {
     }
 
     #[test]
-    fn is_path_executable_dir_with_slash() {
+    fn is_path_executable_dir_without_autocd() {
         let dir = tempfile::tempdir().unwrap();
         let sub = dir.path().join("mydir");
         fs::create_dir(&sub).unwrap();
 
         let path = sub.to_str().unwrap();
         assert!(path.starts_with('/'));
-        assert!(is_path_executable(path, "/", false));
+        assert!(!is_path_executable(path, "/", false));
 
-        assert!(is_path_executable("../mydir", path, false));
+        assert!(!is_path_executable("../mydir", path, false));
         assert!(!is_path_executable("../mydir2", path, false));
 
         let pwd = dir.path().to_str().unwrap();
         assert!(!is_path_executable("mydir", pwd, false));
-        assert!(is_path_executable("mydir/", pwd, false));
+        assert!(!is_path_executable("mydir/", pwd, false));
         assert!(!is_path_executable("mydir2/", pwd, false));
-        assert!(is_path_executable("./mydir", pwd, false));
+        assert!(!is_path_executable("./mydir", pwd, false));
         assert!(!is_path_executable("./mydir2", pwd, false));
-        assert!(is_path_executable("./mydir/", pwd, false));
+        assert!(!is_path_executable("./mydir/", pwd, false));
         assert!(!is_path_executable("./mydir2/", pwd, false));
     }
 

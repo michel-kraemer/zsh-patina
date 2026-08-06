@@ -1,7 +1,7 @@
 ---
 source: src/highlighting/highlighter.rs
-expression: "cfg.highlight(\"~\")?"
+expression: "cfg.highlight(\"~\")?\n.to_string().replace(cfg.homedir.path().to_str().unwrap(), \"<HOME>\")"
 ---
 ~
 
-0  1  `~`  variable.language.tilde + dynamic.callable.command
+0  1  `~`  CALLABLE `<HOME>`
