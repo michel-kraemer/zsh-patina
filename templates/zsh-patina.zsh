@@ -109,6 +109,7 @@ _zsh_patina() {
     if [[ "$cur_sent" == "$_zsh_patina_last_sent" ]]; then
         if (( ${#_zsh_patina_applied_regions[@]} > 0 )); then
             region_highlight=( "${region_highlight[@]:#*memo=zsh_patina}" "${_zsh_patina_applied_regions[@]}" )
+            print "DBG $(date +%H:%M:%S.%N) REINJECT napp=${#_zsh_patina_applied_regions[@]} rh=${#region_highlight[@]}" >> /tmp/patina_dbg.log 2>/dev/null
         fi
         return
     fi
@@ -120,7 +121,7 @@ _zsh_patina() {
     # can happen when pasting from the clipboard or when positioning the cursor
     # with Alt+Click/Option+Click, for example.
     if (( KEYS_QUEUED_COUNT > 0 )); then
-        return
+            return
     fi
 
     # If a request is still in flight (the daemon is computing the highlight
@@ -132,7 +133,7 @@ _zsh_patina() {
     # the fd is freed, the EOF handler clears _zsh_patina_last_sent so the
     # next hook sends a fresh request from widget context.
     if [[ -n "$_zsh_patina_fd" ]]; then
-        return
+            return
     fi
 
     _zsh_patina_last_sent=$cur_sent
@@ -240,14 +241,20 @@ _zsh_patina_send_request() {
     }
 
     # Hand the socket over to zle's event loop. The response phase runs in
-    # _zsh_patina_async_response whenever the fd becomes readable.
+    # _zsh_patina_async_response whenever the fd becomes readable. The handler
+    # is registered with `zle -Fw` so it runs in widget context: $BUFFER and
+    # friends are valid, `zle -R` from the handler fires line-pre-redraw (so
+    # our re-inject guard and zsh-autocomplete's region_highlight snapshot both
+    # see the regions we just applied), and registering another `zle -F` from
+    # inside the handler is safe (this is exactly how zsh-autocomplete's own
+    # async machinery works).
     _zsh_patina_fd=$fd
     _zsh_patina_request_gen=$_zsh_patina_generation
     _zsh_patina_sent_buf="${_zsh_patina_prebuf}|${_zsh_patina_buf}"
     _zsh_patina_buffer=
     _zsh_patina_new_regions=()
     _zsh_patina_state=regions
-    zle -F "$fd" _zsh_patina_async_response
+    zle -Fw "$fd" _zsh_patina_async_response
 
     # end=$EPOCHREALTIME
     # elapsed_ms=$(( (end - start) * 1000 ))
@@ -261,6 +268,7 @@ _zsh_patina_send_request() {
 _zsh_patina_process_line() {
     local fd=$1
     local line=$2
+    print "DBG $(date +%H:%M:%S.%N) PL state=$_zsh_patina_state line=|$line|" >> /tmp/patina_dbg.log 2>/dev/null
 
     case $_zsh_patina_state in
         regions)
@@ -274,6 +282,7 @@ _zsh_patina_process_line() {
                 _zsh_patina_state=query_header
             else
                 _zsh_patina_new_regions+=("$line memo=zsh_patina")
+                print "DBG $(date +%H:%M:%S.%N) REGION-ADD nreg=${#_zsh_patina_new_regions[@]}" >> /tmp/patina_dbg.log 2>/dev/null
             fi
             ;;
         query_header)
@@ -294,6 +303,7 @@ _zsh_patina_process_line() {
             if [[ "$_zsh_patina_query_cmd" == "CAL" ]]; then
                 _zsh_patina_decode_string "$line"
                 _zsh_patina_resolve_callable "$REPLY" "$_zsh_patina_query_las"
+                print "DBG $(date +%H:%M:%S.%N) CAL-ANS name=|$line| reply=|$REPLY|" >> /tmp/patina_dbg.log 2>/dev/null
                 print -r -u "$fd" -- "$REPLY"
             fi
             # unknown query types only get their body lines drained to keep the
@@ -321,6 +331,7 @@ _zsh_patina_async_response() {
     fi
 
     local chunk eof=0 line
+    print "DBG $(date +%H:%M:%S.%N) CB fd=$fd err=$err sent=|${_zsh_patina_sent_buf}| buf=|${_zsh_patina_buf}|" >> /tmp/patina_dbg.log 2>/dev/null
 
     # Read and process the daemon's response in a single callback dispatch.
     #
@@ -357,11 +368,8 @@ _zsh_patina_async_response() {
             _zsh_patina_process_line "$fd" "$line"
         done
 
-        # Briefly wait for more data (regions after a CAL round-trip, or EOF).
-        # zselect returns 0 if the fd is readable within the timeout, non-zero
-        # on timeout. On timeout we break and let the next dispatch handle it.
-        zselect -r "$fd" -t 10 2>/dev/null || break
-    done
+            zselect -r "$fd" -t 10 2>/dev/null || break
+        done
 
     # process any remaining complete lines
     while [[ "$_zsh_patina_buffer" == *$'\n'* ]]; do
@@ -372,10 +380,13 @@ _zsh_patina_async_response() {
 
     # Apply highlighting after processing all currently available lines.
     # The generation check ensures we don't apply stale results.
+    local _dbg_bm=no; [[ "${_zsh_patina_prebuf}|${_zsh_patina_buf}" == "$_zsh_patina_sent_buf" ]] && _dbg_bm=yes
+    print "DBG $(date +%H:%M:%S.%N) APPLY-CHECK genok=$(( _zsh_patina_request_gen == _zsh_patina_generation )) bufmatch=$_dbg_bm nreg=${#_zsh_patina_new_regions[@]} rh=${#region_highlight[@]} sent=|$_zsh_patina_sent_buf| buf=|${_zsh_patina_buf}|" >> /tmp/patina_dbg.log 2>/dev/null
     if (( _zsh_patina_request_gen == _zsh_patina_generation )) && [[ "${_zsh_patina_prebuf}|${_zsh_patina_buf}" == "$_zsh_patina_sent_buf" ]] && (( ${#_zsh_patina_new_regions[@]} > 0 )); then
+        print "DBG $(date +%H:%M:%S.%N) APPLY-FIRED nreg=${#_zsh_patina_new_regions[@]} rh_before=${#region_highlight[@]}" >> /tmp/patina_dbg.log 2>/dev/null
         _zsh_patina_applied_regions=( "${_zsh_patina_new_regions[@]}" )
         region_highlight=( "${region_highlight[@]:#*memo=zsh_patina}" "${_zsh_patina_new_regions[@]}" )
-        zle -R
+            zle -R
     fi
 
     if (( eof )); then
@@ -393,14 +404,15 @@ _zsh_patina_async_response() {
         _zsh_patina_new_regions=()
         _zsh_patina_state=regions
 
-        # Invalidate the last-sent marker so the next line-pre-redraw hook
-        # sends a fresh request for the current buffer. We must NOT send the
-        # request from here (a zle -F callback): under zsh-autocomplete, a
-        # zle -F handler registered from within a callback is not dispatched
-        # during idle and blocks the entire zle event loop, freezing input.
-        # The next keystroke fires line-pre-redraw from widget context, where
-        # zle -F registration is safe.
-        _zsh_patina_last_sent=
+        # If the buffer changed while this request was in flight, the response
+        # was stale and its regions were not applied. Send a new request for
+        # the current buffer. This handler runs in widget context (registered
+        # via `zle -Fw`), so registering the new fd with `zle -Fw` here is
+        # safe.
+        if [[ "${_zsh_patina_prebuf}|${_zsh_patina_buf}" != "$_zsh_patina_sent_buf" ]]; then
+            _zsh_patina_last_sent=
+            _zsh_patina_send_request
+        fi
     fi
 
     return 0
@@ -426,7 +438,24 @@ if ! zmodload zsh/zselect 2>/dev/null; then
 fi
 
 autoload -U add-zle-hook-widget add-zsh-hook
+# Widget wrapper around _zsh_patina_send_request. Called via `zle
+# _zsh_patina_send_widget` from the EOF branch of _zsh_patina_async_response
+# when the daemon's response was stale (the buffer changed while the request
+# was in flight). Running the send through a widget is required because
+# `zle WIDGET` executes in widget context, where `zle -F` registration is safe.
+# Registering `zle -F` directly from a `zle -F` callback is NOT safe under
+# zsh-autocomplete: the handler is never dispatched during idle and the
+# readable-but-undelivered fd blocks the entire zle event loop, freezing input.
+_zsh_patina_send_widget() {
+    local cur_sent="${_zsh_patina_prebuf}|${_zsh_patina_buf}"
+    # Do not re-send for the buffer that was just highlighted.
+    [[ "$cur_sent" == "$_zsh_patina_last_sent" ]] && return
+    _zsh_patina_last_sent=$cur_sent
+    _zsh_patina_send_request
+}
+
 add-zle-hook-widget line-pre-redraw _zsh_patina
+zle -N _zsh_patina_send_widget
 
 # Add hook for the current working directory but don't call `_zsh_patina_chpwd`
 # right now. We will lazily initialize _ZSH_PATINA_ENCODED_PWD later.
