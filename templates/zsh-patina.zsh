@@ -85,9 +85,27 @@ typeset -g _zsh_patina_query_cmd=
 typeset -gi _zsh_patina_query_lns=0
 typeset -gi _zsh_patina_query_las=1
 typeset -gi _zsh_patina_query_i=0
+typeset -g _zsh_patina_last_sent=
+typeset -ga _zsh_patina_applied_regions=()
 
 _zsh_patina() {
     # start=$EPOCHREALTIME
+
+    # Re-entrancy guard: `zle -R` calls in the response handler redraw the
+    # line and fire this hook again with an unchanged buffer text. The redraw
+    # clears region_highlight, so re-inject the regions we already computed.
+    # We only send a new request to the daemon when the buffer text changed.
+    local cur_sent="${PREBUFFER}|${BUFFER}"
+    if [[ "$cur_sent" == "$_zsh_patina_last_sent" ]]; then
+        if (( ${#_zsh_patina_applied_regions[@]} > 0 )); then
+            region_highlight=( "${region_highlight[@]:#*memo=zsh_patina}" "${_zsh_patina_applied_regions[@]}" )
+        fi
+        return
+    fi
+    _zsh_patina_last_sent=$cur_sent
+
+    # Clear the regions we stored, they are stale for the new buffer.
+    _zsh_patina_applied_regions=()
 
     # Cancel any previous in-flight request: unregister its fd handler, close
     # the socket and invalidate its results by bumping the generation counter.
@@ -102,8 +120,12 @@ _zsh_patina() {
     # Performance: Return immediately if there are bytes pending for input. This
     # can happen when pasting from the clipboard or when positioning the cursor
     # with Alt+Click/Option+Click, for example.
-    (( KEYS_QUEUED_COUNT > 0 )) && return
-    (( PENDING > 0 )) && return
+    if (( KEYS_QUEUED_COUNT > 0 )); then
+        return
+    fi
+    if (( PENDING > 0 )); then
+        return
+    fi
 
     # remove tokens we have set earlier - do not clear the whole array as this
     # might reset syntax highlighting from other plugins (e.g. auto suggestions)
@@ -307,6 +329,7 @@ _zsh_patina_async_response() {
     # Apply highlighting after processing all currently available lines.
     # The generation check ensures we don't apply stale results.
     if (( _zsh_patina_request_gen == _zsh_patina_generation )) && (( ${#_zsh_patina_new_regions[@]} > 0 )); then
+        _zsh_patina_applied_regions=( "${_zsh_patina_new_regions[@]}" )
         region_highlight=( "${region_highlight[@]:#*memo=zsh_patina}" "${_zsh_patina_new_regions[@]}" )
         zle -R
     fi
