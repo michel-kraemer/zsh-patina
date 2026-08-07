@@ -111,15 +111,15 @@ fn zshrc_path() -> Result<PathBuf> {
 fn check_config_file(config_file_path: &Option<PathBuf>) -> (String, MessageType) {
     if let Some(path) = config_file_path {
         (
-            format!("Using configuration file at `{}'.", path.to_string_lossy()),
+            format!("Using configuration file at `{}`.", path.to_string_lossy()),
             MessageType::Info,
         )
     } else {
         (
             format!(
                 "No configuration file found at `$ZSH_PATINA_CONFIG_PATH`, \
-                `$XDG_CONFIG_HOME/zsh-patina/config.toml', or \
-                `{}/.config/zsh-patina/config.toml'. Using default settings.",
+                `$XDG_CONFIG_HOME/zsh-patina/config.toml`, or \
+                `{}/.config/zsh-patina/config.toml`. Using default settings.",
                 dirs::home_dir()
                     .and_then(|p| p.to_str().map(|s| s.to_string()))
                     .unwrap_or_else(|| "~".to_string())
@@ -136,7 +136,7 @@ fn check_zsh_version() -> (String, MessageType) {
         Err(e) => {
             return (
                 format!(
-                    "Unable to evaluate installed Zsh version. Failed to run `zsh --version'\n\n{e:?}"
+                    "Unable to evaluate installed Zsh version. Failed to run `zsh --version`\n\n{e:?}"
                 ),
                 MessageType::Warning,
             );
@@ -147,7 +147,7 @@ fn check_zsh_version() -> (String, MessageType) {
     let Some(version) = output.split_whitespace().nth(1) else {
         return (
             format!(
-                "Unable to evaluate installed Zsh version. Failed to parse `{}'.",
+                "Unable to evaluate installed Zsh version. Failed to parse `{}`.",
                 output.trim()
             ),
             MessageType::Warning,
@@ -202,7 +202,7 @@ fn check_theme(config: &Config) -> (String, MessageType) {
             MessageType::Error,
         ),
         Ok(_) => (
-            format!("Theme `{}' loaded successfully.", config.highlighting.theme),
+            format!("Theme `{}` loaded successfully.", config.highlighting.theme),
             MessageType::Success,
         ),
     }
@@ -213,7 +213,7 @@ fn check_activation_current_shell() -> (String, MessageType) {
     let path = std::env::var_os("_ZSH_PATINA_PATH").unwrap_or_default();
     if path.is_empty() {
         (
-            "The `$_ZSH_PATINA_PATH' environment variable was not found in the \
+            "The `$_ZSH_PATINA_PATH` environment variable was not found in the \
             current shell session. Please make sure zsh-patina is activated in \
             your .zshrc file and restart your current shell."
                 .to_string(),
@@ -256,7 +256,7 @@ fn check_activate_in_zshrc(active_in_current_shell: bool) -> Result<(String, Mes
         Err(e) => {
             return Ok((
                 format!(
-                    "Failed to read `{}'. Unable to check if zsh-patina is \
+                    "Failed to read `{}`. Unable to check if zsh-patina is \
                     activated when the shell is started.\n\n{e}",
                     zshrc_path.to_string_lossy()
                 ),
@@ -286,8 +286,8 @@ fn check_activate_in_zshrc(active_in_current_shell: bool) -> Result<(String, Mes
     if !activate_found {
         return Ok((
             format!(
-                "The string `zsh-patina activate' was not found in your .zshrc \
-                file at `{}'. Please make sure zsh-patina is activated when \
+                "The string `zsh-patina activate` was not found in your .zshrc \
+                file at `{}`. Please make sure zsh-patina is activated when \
                 your shell is started.{add}",
                 zshrc_path.to_string_lossy()
             ),
@@ -299,7 +299,7 @@ fn check_activate_in_zshrc(active_in_current_shell: bool) -> Result<(String, Mes
         Ok((
             format!(
                 "zsh-patina is not activated last in your .zshrc file at \
-                `{}'. Make sure the `zsh-patina activate' call happens at the \
+                `{}`. Make sure the `zsh-patina activate` call happens at the \
                 end of the file.{add}",
                 zshrc_path.to_string_lossy()
             ),
