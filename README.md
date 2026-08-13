@@ -544,7 +544,7 @@ Fastest times are displayed in **bold**.
 
 ## Troubleshooting
 
-If the plugin doesn't work as expected, please first check if you've followed the [install instructions](#how-to-install) correctly. The plugin must be activated in your `.zshrc` file, and this must happen **at the end of the file** (after all other instructions).
+If the plugin doesn't work as expected, please first check if you've followed the [install instructions](#how-to-install) correctly. We generally recommend activating the plugin at the end of your `.zshrc` file (after all other instructions).
 
 You may also run zsh-patina's self-check:
 
@@ -553,6 +553,10 @@ zsh-patina check
 ```
 
 If the self-check doesn't find any errors, it will print `Everything is OK`. Otherwise, you will get hints about what might be wrong.
+
+### Highlighting from another plugin is missing
+
+To start with, zsh-patina preserves the highlighting regions added by other plugins. When regions overlap, Zsh combines their styles, but a later region's foreground or background color overrides an earlier one's. If zsh-patina obscures another plugin's color in such an overlap, activate zsh-patina **before** that plugin, keeping in mind that they all will run in the order they hooked themselves into the ZLE.
 
 ### Plugin has no effect on startup, but works after manual `source`
 
