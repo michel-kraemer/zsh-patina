@@ -1,6 +1,4 @@
 use std::{
-    fs::File,
-    io::{BufRead, BufReader},
     path::{Path, PathBuf},
     process::Command,
 };
@@ -77,33 +75,6 @@ fn print_bullet(message: &str, t: MessageType) {
 
     for l in textwrap::wrap(&message, wrap_options) {
         println!("{l}");
-    }
-}
-
-/// Gets `$ZDOTDIR` either from the environment variable or by spawning a zsh
-/// process. Returns `None` if `$ZDOTDIR` is not set or if there was an error
-/// while trying to get it.
-fn get_zdotdir() -> Result<Option<String>> {
-    if let Some(zdotdir) = std::env::var_os("ZDOTDIR")
-        && let Some(zdotdir) = zdotdir.to_str()
-    {
-        return Ok(Some(zdotdir.to_string()));
-    }
-
-    let output = Command::new("zsh").args(["-c", "echo $ZDOTDIR"]).output()?;
-
-    let val = String::from_utf8(output.stdout)?;
-    let val = val.trim().to_string();
-    Ok(if val.is_empty() { None } else { Some(val) })
-}
-
-/// Returns the path to the user's `.zshrc` file. If `$ZDOTDIR` is set, it returns
-/// `$ZDOTDIR/.zshrc`. Otherwise, it returns `~/.zshrc`.
-fn zshrc_path() -> Result<PathBuf> {
-    if let Some(zdotdir) = get_zdotdir()? {
-        Ok(PathBuf::from(zdotdir).join(".zshrc"))
-    } else {
-        Ok(PathBuf::from(shellexpand::full("~/.zshrc")?.as_ref()))
     }
 }
 
@@ -227,92 +198,6 @@ fn check_activation_current_shell() -> (String, MessageType) {
     }
 }
 
-/// Check if `zsh-patina activate` is called in the zshrc file and that it
-/// happens in the last line
-fn check_activate_in_zshrc(active_in_current_shell: bool) -> Result<(String, MessageType)> {
-    let add = if active_in_current_shell {
-        " Since zsh-patina is active in the current shell session, this might \
-        not be a problem. If everything is working correctly, you can ignore \
-        this warning."
-    } else {
-        ""
-    };
-
-    let zshrc_path = match zshrc_path() {
-        Ok(zshrc_path) => zshrc_path,
-        Err(e) => {
-            return Ok((
-                format!(
-                    "Failed to resolve path to .zshrc. Unable to check if \
-                    zsh-patina is activated when the shell is started.\n\n{e}"
-                ),
-                MessageType::Warning,
-            ));
-        }
-    };
-
-    let f = match File::open(&zshrc_path) {
-        Ok(f) => f,
-        Err(e) => {
-            return Ok((
-                format!(
-                    "Failed to read `{}'. Unable to check if zsh-patina is \
-                    activated when the shell is started.\n\n{e}",
-                    zshrc_path.to_string_lossy()
-                ),
-                MessageType::Warning,
-            ));
-        }
-    };
-
-    let reader = BufReader::new(f);
-    let mut activate_found = false;
-    let mut more_lines = false;
-    for l in reader.lines() {
-        let l = l?;
-        if l.is_empty() || l.trim().starts_with('#') {
-            continue;
-        } else {
-            more_lines = true;
-        }
-        if l.contains("zsh-patina activate")
-            || (l.contains("zinit") && l.contains("michel-kraemer/zsh-patina"))
-        {
-            activate_found = true;
-            more_lines = false;
-        }
-    }
-
-    if !activate_found {
-        return Ok((
-            format!(
-                "The string `zsh-patina activate' was not found in your .zshrc \
-                file at `{}'. Please make sure zsh-patina is activated when \
-                your shell is started.{add}",
-                zshrc_path.to_string_lossy()
-            ),
-            MessageType::Warning,
-        ));
-    }
-
-    if more_lines {
-        Ok((
-            format!(
-                "zsh-patina is not activated last in your .zshrc file at \
-                `{}'. Make sure the `zsh-patina activate' call happens at the \
-                end of the file.{add}",
-                zshrc_path.to_string_lossy()
-            ),
-            MessageType::Warning,
-        ))
-    } else {
-        Ok((
-            "zsh-patina is activated correctly in your .zshrc file.".to_string(),
-            MessageType::Success,
-        ))
-    }
-}
-
 /// Check if the daemon is running
 fn check_daemon(runtime_dir: &Path) -> Result<(String, MessageType)> {
     Ok(match is_daemon_running(runtime_dir)? {
@@ -360,15 +245,6 @@ pub fn check(
     print_bullet(&msg, t);
 
     let (msg, t) = check_activation_current_shell();
-    match t {
-        MessageType::Error => has_errors = true,
-        MessageType::Warning => has_warnings = true,
-        _ => {}
-    }
-    print_bullet(&msg, t);
-    let active_in_current_shell = t == MessageType::Success;
-
-    let (msg, t) = check_activate_in_zshrc(active_in_current_shell)?;
     match t {
         MessageType::Error => has_errors = true,
         MessageType::Warning => has_warnings = true,
