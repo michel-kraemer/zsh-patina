@@ -1197,6 +1197,7 @@ where
     Ok(())
 }
 
+/// Resolve named directories to absolute paths by asking the client.
 fn resolve_nameddirs<R, W>(
     names: &[&str],
     reader: &mut R,

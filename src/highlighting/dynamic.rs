@@ -52,6 +52,8 @@ pub struct DynamicHighlightingOptions<'a> {
     home_dir: &'a str,
     theme: &'a Theme,
     highlight_partial_paths: bool,
+    // TODO: this should always be true starting from protocol v3, stop passing
+    // it around once v1 and v2 are decommissioned.
     resolve_nameddirs: bool,
 }
 
@@ -194,14 +196,17 @@ impl DynamicTokenGroup {
 
             fn push_string(&mut self) -> Result<()> {
                 if !self.s.is_empty() && !self.is_poison {
-                    // resolve tilde only if the whole string is a tilde or if it starts
-                    // with '~/', because '~foobar', for example, should not be resolved
                     let nameddir = if !self.resolve_tilde {
                         None
                     } else if self.s == "~" || self.s.starts_with("~/") {
+                        // statically resolve a leading tilde as standalone path
+                        // segment to the user's home directory
                         self.s.replace_range(0..1, self.home_dir);
                         None
                     } else {
+                        // other occurrences of leading tildes, such as in
+                        // '~foobar', presumably refer to named directories and
+                        // require dynamic resolution
                         named_directory(&self.s).map(str::to_owned)
                     };
                     self.result
@@ -384,6 +389,8 @@ pub(super) fn classify_callable(
             .or_else(|| resolve_static_style(CALLABLE, options.theme))
             .map(SpanStyle::Static)
     } else if options.autocd {
+        // only perform highlighting of partial paths if it is enabled and if
+        // the cursor touches the prefix
         let partial = options.highlight_partial_paths
             && options
                 .cursor
@@ -412,6 +419,8 @@ pub(super) fn classify_argument(
     range: &Range<usize>,
     options: &DynamicHighlightingOptions,
 ) -> Option<SpanStyle> {
+    // only perform highlighting of partial paths if it is enabled and if the
+    // cursor touches the prefix
     let partial = options.highlight_partial_paths
         && options
             .cursor

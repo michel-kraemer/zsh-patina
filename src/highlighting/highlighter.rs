@@ -195,7 +195,6 @@ where
     pub fn with_pwd<'b, O>(&self, pwd: O) -> HighlightingRequest<'b, P>
     where
         O: Into<Option<&'b str>>,
-        'a: 'b,
     {
         HighlightingRequest {
             pwd: pwd.into(),
@@ -221,7 +220,8 @@ where
         }
     }
 
-    pub(crate) fn with_nameddirs(&self, enabled: bool) -> Self {
+    /// Enable or disable support for named directories resolution
+    pub fn with_nameddirs(&self, enabled: bool) -> Self {
         Self {
             resolve_nameddirs: enabled,
             ..*self
@@ -352,6 +352,8 @@ impl Highlighter {
         &self.callable_choices
     }
 
+    /// Classify a resolved dynamic path and combine the resulting style with
+    /// the static style captured before named-directory resolution.
     pub fn classify_dynamic<P>(
         &self,
         path: String,
@@ -698,11 +700,11 @@ pub mod tests {
                         }
                     }
                     SpanStyle::Dynamic(dynamic_style) => match dynamic_style {
-                        DynamicStyle::Nameddir { parsed_path, .. } => {
-                            write!(tw, "NAMEDDIR `{parsed_path}`").unwrap();
-                        }
                         DynamicStyle::Callable { parsed_callable } => {
                             write!(tw, "CALLABLE `{parsed_callable}`").unwrap();
+                        }
+                        DynamicStyle::Nameddir { parsed_path, .. } => {
+                            write!(tw, "NAMEDDIR `{parsed_path}`").unwrap();
                         }
                     },
                 }

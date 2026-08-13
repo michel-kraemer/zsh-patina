@@ -69,13 +69,20 @@ pub struct StaticStyle {
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum DynamicStyle {
+    /// A callable whose type must be resolved by the client
     Callable {
+        /// The parsed callable name
         parsed_callable: String,
     },
+    /// A path containing a named directory that must be resolved by the client
     Nameddir {
+        /// The named-directory name, without the leading tilde
         name: String,
+        /// The complete parsed path containing the named directory
         parsed_path: String,
+        /// Whether the path belongs to a callable or an argument expression
         dynamic_type: DynamicType,
+        /// The static grammar style to combine with the resolved path style
         base_style: Option<StaticStyle>,
     },
 }
