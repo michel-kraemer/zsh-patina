@@ -1,4 +1,4 @@
-= zsh-patina -- Client/Daemon Communication Protocol v2
+= zsh-patina -- Client/Daemon Communication Protocol v3
 :toc: left
 :toc-title: Contents
 :sectnums:
@@ -7,7 +7,7 @@
 
 == Introduction
 
-zsh-patina provides interactive syntax highlighting for the Zsh line editor (ZLE). On each keypress, a Zsh function (the _client_) sends the current editing buffer to a persistent Rust daemon over a Unix domain socket. The daemon performs syntax analysis and returns a list of highlight spans. This document specifies version 2 of the communication protocol between the zsh-patina client and the daemon.
+zsh-patina provides interactive syntax highlighting for the Zsh line editor (ZLE). On each keypress, a Zsh function (the _client_) sends the current editing buffer to a persistent Rust daemon over a Unix domain socket. The daemon performs syntax analysis and returns a list of highlight spans. This document specifies version 3 of the communication protocol between the zsh-patina client and the daemon.
 
 == Conventions
 
@@ -40,7 +40,7 @@ The ABNF syntax used in this document is defined in RFC 5234.
 [[versioning]]
 == Protocol Version Number
 
-The version number carried in the `VER` header field (see <<request-metadata>>) identifies the major revision of this protocol. The current version is `2`.
+The version number carried in the `VER` header field (see <<request-metadata>>) identifies the major revision of this protocol. The current version is `3`.
 
 The version number is a major version only. New fields, commands, or response lines MAY be added to this specification without incrementing the version number, provided the addition is backwards-compatible. An addition is considered backwards-compatible if a sender transmitting the new information to a receiver that does not implement it causes no degradation of existing functionality--that is, the receiver silently ignores the unknown element. Similarly, the sender transmitting the new information MUST NOT be affected by the receiver ignoring it.
 
@@ -338,6 +338,13 @@ The client MUST respond with one LF-terminated answer line per body line, in ord
 |`a<body>` |Alias. The character `a` is immediately followed by the alias expansion body (no separator). An empty body (`a` followed immediately by LF) is valid and represents an alias expanding to the empty string. The body MUST be percent-encoded per <<encoding-values>>.
 |===
 
+[[named-directory-query]]
+====== Named Directory Query (`NMD`)
+
+The daemon sends a `?CMD=NMD` query to ask the client to resolve named directories in the current shell environment. Each body line is one named-directory name without the leading `~`.
+
+The client MUST respond with one LF-terminated answer line for each query body line. The first answer resolves the first queried name, the second answer resolves the second queried name, and so on. A non-empty answer is the resolved absolute path, percent-encoded per <<encoding-values>>. An empty answer means the named directory was not found.
+
 [[cmd-hlo]]
 === Hello (`CMD=HLO`)
 
@@ -353,7 +360,7 @@ where `<version>` is the daemon's application version string (e.g., `1.7.0`).
 
 == Version Negotiation
 
-The client MUST include `VER=2` in every request. If the daemon receives an unsupported `VER` value, it MUST close the connection immediately without sending any response. The client MUST ignore empty responses.
+The client MUST include `VER=3` in every request. If the daemon receives an unsupported `VER` value, it MUST close the connection immediately without sending any response. The client MUST ignore empty responses.
 
 == Error Handling
 

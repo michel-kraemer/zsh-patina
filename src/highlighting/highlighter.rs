@@ -19,6 +19,7 @@ use crate::{
     highlighting::{
         dynamic::{
             DynamicHighlightingOptions, DynamicScopes, DynamicTokenGroupBuilder, DynamicType,
+            classify_argument, classify_callable,
         },
         historyexpansion::HistoryExpanded,
         syntax::load_syntax_set,
@@ -101,6 +102,21 @@ fn mix_styles(base: &SpanStyle, mixin: &SpanStyle) -> SpanStyle {
             underline: if m.underline { true } else { b.underline },
         }),
 
+        (
+            SpanStyle::Static(base_style),
+            SpanStyle::Dynamic(DynamicStyle::Nameddir {
+                name,
+                parsed_path,
+                dynamic_type,
+                ..
+            }),
+        ) => SpanStyle::Dynamic(DynamicStyle::Nameddir {
+            name: name.clone(),
+            parsed_path: parsed_path.clone(),
+            dynamic_type: *dynamic_type,
+            base_style: Some(base_style.clone()),
+        }),
+
         (_, SpanStyle::Dynamic(m)) => SpanStyle::Dynamic(m.clone()),
 
         // this should actually be unreachable since base should always only
@@ -159,6 +175,7 @@ where
     pwd: Option<&'a str>,
     history_expansions_enabled: bool,
     autocd_enabled: bool,
+    resolve_nameddirs: bool,
     predicate: P,
 }
 
@@ -203,6 +220,14 @@ where
         }
     }
 
+    /// Enable or disable support for named directories resolution
+    pub fn with_nameddirs(&self, enabled: bool) -> Self {
+        Self {
+            resolve_nameddirs: enabled,
+            ..*self
+        }
+    }
+
     /// Set the predicate function that determines which spans should be
     /// highlighted The predicate function takes a character index range and
     /// returns `true` if the span within that range should be highlighted, and
@@ -216,6 +241,7 @@ where
             pwd: self.pwd,
             history_expansions_enabled: self.history_expansions_enabled,
             autocd_enabled: self.autocd_enabled,
+            resolve_nameddirs: self.resolve_nameddirs,
             predicate,
         }
     }
@@ -228,6 +254,7 @@ impl Default for HighlightingRequest<'_, fn(&Range<usize>) -> bool> {
             pwd: None,
             history_expansions_enabled: true,
             autocd_enabled: false,
+            resolve_nameddirs: false,
             predicate: |_: &Range<usize>| true,
         }
     }
@@ -325,6 +352,42 @@ impl Highlighter {
         &self.callable_choices
     }
 
+    /// Classify a resolved dynamic path and combine the resulting style with
+    /// the static style captured before named-directory resolution.
+    pub fn classify_dynamic<P>(
+        &self,
+        path: String,
+        range: &Range<usize>,
+        dynamic_type: DynamicType,
+        base_style: Option<&StaticStyle>,
+        request: &HighlightingRequest<P>,
+    ) -> Option<SpanStyle>
+    where
+        P: Fn(&Range<usize>) -> bool + Copy,
+    {
+        let options = DynamicHighlightingOptions::new(
+            request.cursor,
+            request.pwd?,
+            request.autocd_enabled,
+            &self.home_dir,
+            &self.theme,
+            self.dynamic_arguments_type == DynamicConfigType::Partial,
+            request.resolve_nameddirs,
+        );
+        let style = match dynamic_type {
+            DynamicType::Callable => classify_callable(path, range, &options),
+            DynamicType::Arguments => classify_argument(&path, range, &options),
+            DynamicType::Unknown => None,
+        };
+        match (base_style, style) {
+            (Some(base_style), Some(style)) => {
+                Some(mix_styles(&SpanStyle::Static(base_style.clone()), &style))
+            }
+            (Some(base_style), None) => Some(SpanStyle::Static(base_style.clone())),
+            (None, style) => style,
+        }
+    }
+
     fn should_highlight_dynamic(&self, dynamic_type: &DynamicType) -> bool {
         match dynamic_type {
             DynamicType::Unknown => true,
@@ -356,6 +419,7 @@ impl Highlighter {
                 &self.home_dir,
                 &self.theme,
                 self.dynamic_arguments_type == DynamicConfigType::Partial,
+                request.resolve_nameddirs,
             )
         });
 
@@ -638,6 +702,9 @@ pub mod tests {
                     SpanStyle::Dynamic(dynamic_style) => match dynamic_style {
                         DynamicStyle::Callable { parsed_callable } => {
                             write!(tw, "CALLABLE `{parsed_callable}`").unwrap();
+                        }
+                        DynamicStyle::Nameddir { parsed_path, .. } => {
+                            write!(tw, "NAMEDDIR `{parsed_path}`").unwrap();
                         }
                     },
                 }

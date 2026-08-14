@@ -335,14 +335,15 @@ fn handle_connection(stream: UnixStream, highlighter: Arc<Highlighter>) -> Resul
 
     let version = first_line.strip_prefix("VER=").unwrap_or("1");
     match version {
-        "2" => handle_connection_v2(reader, writer, &highlighter),
+        "3" => handle_connection_v2(reader, writer, &highlighter, true),
+        "2" => handle_connection_v2(reader, writer, &highlighter, false),
         "1" => handle_connection_v1(reader, writer, first_line, highlighter),
         _ => {
             // Return immediately. This will close the connection with an empty
             // response.
             log::error!(
                 "Client protocol version is {version:?}. Expected protocol \
-                version is \"1\" or \"2\"."
+                version is \"1\", \"2\", or \"3\"."
             );
             Ok(())
         }
@@ -671,6 +672,7 @@ fn handle_connection_v1<R: BufRead, W: Write>(
                         ))
                     }
                 }
+                DynamicStyle::Nameddir { .. } => None,
             },
         };
 
@@ -723,6 +725,7 @@ fn handle_connection_v2<R: BufRead, W: Write>(
     mut reader: R,
     writer: W,
     highlighter: &Highlighter,
+    supports_nameddirs: bool,
 ) -> Result<()> {
     let mut cmd = Command::Highlight;
     let mut body_line_count = 0;
@@ -771,9 +774,14 @@ fn handle_connection_v2<R: BufRead, W: Write>(
 
     match cmd {
         Command::Hello => handle_hello(writer),
-        Command::Highlight => {
-            handle_highlight(header_lines, body_lines, reader, writer, highlighter)
-        }
+        Command::Highlight => handle_highlight(
+            header_lines,
+            body_lines,
+            reader,
+            writer,
+            highlighter,
+            supports_nameddirs,
+        ),
     }
 }
 
@@ -795,6 +803,7 @@ fn handle_highlight<R, W>(
     mut reader: R,
     mut writer: W,
     highlighter: &Highlighter,
+    supports_nameddirs: bool,
 ) -> Result<()>
 where
     R: BufRead,
@@ -1012,6 +1021,7 @@ where
         .with_cursor(pre_buffer_total_len + cursor)
         .with_pwd(pwd.as_deref())
         .with_autocd(autocd_enabled)
+        .with_nameddirs(supports_nameddirs)
         .with_history_expansions(history_expansions_enabled)
         .with_predicate(|range| {
             // skip spans in the pre-buffer
@@ -1026,7 +1036,58 @@ where
             // skip spans outside the current terminal window
             start < max && end > min
         });
-    let result = highlighter.highlight(&lines, &request)?;
+    let mut result = highlighter.highlight(&lines, &request)?;
+
+    // collect unique nameddirs that need to be resolved
+    let nameddirs_to_resolve = result
+        .iter()
+        .filter_map(|span| match &span.style {
+            SpanStyle::Dynamic(DynamicStyle::Nameddir { name, .. }) => Some(name.as_str()),
+            _ => None,
+        })
+        .collect::<FxHashSet<_>>();
+    // resolve nameddirs to their absolute paths
+    let resolved_nameddirs = if supports_nameddirs && !nameddirs_to_resolve.is_empty() {
+        resolve_nameddirs(
+            &nameddirs_to_resolve.into_iter().collect::<Vec<_>>(),
+            &mut reader,
+            &mut writer,
+        )?
+    } else {
+        FxHashMap::default()
+    };
+
+    // re-classify Nameddir-style Spans with their intended final style
+    result.retain_mut(|span| {
+        let SpanStyle::Dynamic(DynamicStyle::Nameddir {
+            name,
+            parsed_path,
+            dynamic_type,
+            base_style,
+        }) = &span.style
+        else {
+            return true;
+        };
+
+        let mut path = parsed_path.clone();
+        if let Some(directory) = resolved_nameddirs
+            .get(name)
+            .filter(|directory| !directory.is_empty())
+        {
+            path.replace_range(0..name.len() + 1, directory);
+        }
+        let Some(style) = highlighter.classify_dynamic(
+            path,
+            &(span.start..span.end),
+            *dynamic_type,
+            base_style.as_ref(),
+            &request,
+        ) else {
+            return false;
+        };
+        span.style = style;
+        true
+    });
 
     // merge consecutive spans with the same style
     let mut merged: Vec<Span> = Vec::new();
@@ -1088,6 +1149,7 @@ where
                         .filter(|s| !s.is_empty())
                         .map(|style| format!("{} {} {}\n", s.start, s.end, style))
                 }),
+            SpanStyle::Dynamic(DynamicStyle::Nameddir { .. }) => None,
         };
 
         if let Some(message) = message {
@@ -1133,6 +1195,36 @@ where
     )?;
 
     Ok(())
+}
+
+/// Resolve named directories to absolute paths by asking the client.
+fn resolve_nameddirs<R, W>(
+    names: &[&str],
+    reader: &mut R,
+    writer: &mut W,
+) -> Result<FxHashMap<String, String>>
+where
+    R: BufRead,
+    W: Write,
+{
+    writer
+        .write_all(format!("?CMD=NMD\nLNS={}\n\n", names.len()).as_bytes())
+        .context("Unable to send NMD query")?;
+    for name in names {
+        writeln!(writer, "{}", encode_string(name)).context("Unable to send NMD query body")?;
+    }
+    writer.flush().context("Unable to flush NMD query")?;
+
+    let mut result = FxHashMap::default();
+    for name in names {
+        let mut answer = String::new();
+        reader
+            .read_line(&mut answer)
+            .context("Unable to read NMD answer")?;
+        let answer = decode_string(answer.trim_ascii_end());
+        result.insert((*name).to_owned(), answer);
+    }
+    Ok(result)
 }
 
 /// Resolve a list of callables to their CallableTypes by asking the client. If
@@ -1259,7 +1351,7 @@ pub fn activate(runtime_dir: &Path, config: &Config) -> Result<()> {
                 .unwrap()
                 .trim_end_matches('/')
                 .to_string(),
-            version: "2",
+            version: "3",
         };
 
         let mut s = stdout().lock();
@@ -1277,7 +1369,7 @@ pub fn activate(runtime_dir: &Path, config: &Config) -> Result<()> {
         stream.set_read_timeout(Some(timeout))?;
         stream.set_write_timeout(Some(timeout))?;
 
-        stream.write_all(b"VER=2\nCMD=HLO\n\n")?;
+        stream.write_all(b"VER=3\nCMD=HLO\n\n")?;
 
         let mut response = String::new();
         let mut reader = BufReader::new(&stream);
