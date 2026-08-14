@@ -167,10 +167,7 @@ impl<'a> HighlighterBuilder<'a> {
 }
 
 /// Options for the calling [`Highlighter::highlight`]
-pub struct HighlightingRequest<'a, P>
-where
-    P: Fn(&Range<usize>) -> bool + Copy,
-{
+pub struct HighlightingRequest<'a, P> {
     cursor: Option<usize>,
     pwd: Option<&'a str>,
     history_expansions_enabled: bool,
@@ -179,12 +176,12 @@ where
     predicate: P,
 }
 
-impl<'a, P> HighlightingRequest<'a, P>
-where
-    P: Fn(&Range<usize>) -> bool + Copy,
-{
+impl<'a, P> HighlightingRequest<'a, P> {
     /// Set the cursor position in the command (character index)
-    pub fn with_cursor(&self, cursor: usize) -> Self {
+    pub fn with_cursor(&self, cursor: usize) -> Self
+    where
+        P: Copy,
+    {
         Self {
             cursor: Some(cursor),
             ..*self
@@ -195,6 +192,7 @@ where
     pub fn with_pwd<'b, O>(&self, pwd: O) -> HighlightingRequest<'b, P>
     where
         O: Into<Option<&'b str>>,
+        P: Copy,
     {
         HighlightingRequest {
             pwd: pwd.into(),
@@ -203,7 +201,10 @@ where
     }
 
     /// Enable or disable highlighting of history expansions
-    pub fn with_history_expansions(&self, enabled: bool) -> Self {
+    pub fn with_history_expansions(&self, enabled: bool) -> Self
+    where
+        P: Copy,
+    {
         Self {
             history_expansions_enabled: enabled,
             ..*self
@@ -213,7 +214,10 @@ where
     /// Enable or disable support for the AUTO_CD option (i.e. that a bare
     /// directory in callable position is highlighted as a command if it is
     /// executable)
-    pub fn with_autocd(&self, enabled: bool) -> Self {
+    pub fn with_autocd(&self, enabled: bool) -> Self
+    where
+        P: Copy,
+    {
         Self {
             autocd_enabled: enabled,
             ..*self
@@ -221,7 +225,10 @@ where
     }
 
     /// Enable or disable support for named directories resolution
-    pub fn with_nameddirs(&self, enabled: bool) -> Self {
+    pub fn with_nameddirs(&self, enabled: bool) -> Self
+    where
+        P: Copy,
+    {
         Self {
             resolve_nameddirs: enabled,
             ..*self
@@ -234,7 +241,7 @@ where
     /// `false` otherwise.
     pub fn with_predicate<Q>(&self, predicate: Q) -> HighlightingRequest<'a, Q>
     where
-        Q: Fn(&Range<usize>) -> bool + Copy,
+        Q: Fn(&Range<usize>) -> bool,
     {
         HighlightingRequest {
             cursor: self.cursor,
@@ -361,10 +368,7 @@ impl Highlighter {
         dynamic_type: DynamicType,
         base_style: Option<&StaticStyle>,
         request: &HighlightingRequest<P>,
-    ) -> Option<SpanStyle>
-    where
-        P: Fn(&Range<usize>) -> bool + Copy,
-    {
+    ) -> Option<SpanStyle> {
         let options = DynamicHighlightingOptions::new(
             request.cursor,
             request.pwd?,
@@ -400,7 +404,7 @@ impl Highlighter {
 
     pub fn highlight<P>(&self, command: &str, request: &HighlightingRequest<P>) -> Result<Vec<Span>>
     where
-        P: Fn(&Range<usize>) -> bool + Copy,
+        P: Fn(&Range<usize>) -> bool,
     {
         let start = Instant::now();
 
@@ -737,7 +741,7 @@ pub mod tests {
             request: HighlightingRequest<P>,
         ) -> Result<AssertableSpans>
         where
-            P: Fn(&Range<usize>) -> bool + Copy,
+            P: Fn(&Range<usize>) -> bool,
         {
             Ok(AssertableSpans {
                 command: command.to_string(),
