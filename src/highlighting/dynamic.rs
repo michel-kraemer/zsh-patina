@@ -79,6 +79,20 @@ impl<'a> DynamicHighlightingOptions<'a> {
     }
 }
 
+/// A single string parsed from the input line by [`DynamicTokenGroup::parse`]
+#[derive(Debug)]
+struct ParsedToken {
+    /// The unescaped text content of the token
+    text: String,
+
+    /// The token's character range within the original line
+    range: Range<usize>,
+
+    /// The resolved named-directory name, if the token starts with a `~user`
+    /// reference
+    named_directory: Option<String>,
+}
+
 #[derive(Debug)]
 pub struct DynamicTokenGroup {
     pub dynamic_type: DynamicType,
@@ -102,25 +116,25 @@ impl DynamicTokenGroup {
         let mut result = Vec::new();
 
         let parsed = self.parse(line, options.home_dir)?;
-        for (p, range, nameddir) in parsed.into_iter().take(1) {
-            log::trace!("Dynamically highlighting callable: {p}");
+        for token in parsed.into_iter().take(1) {
+            log::trace!("Dynamically highlighting callable: {}", token.text);
             let span_style = if options.resolve_nameddirs
-                && let Some(name) = nameddir
+                && let Some(name) = token.named_directory
             {
                 Some(SpanStyle::Dynamic(DynamicStyle::Nameddir {
                     name,
-                    parsed_path: p,
+                    parsed_path: token.text,
                     dynamic_type: DynamicType::Callable,
                     base_style: None,
                 }))
             } else {
-                classify_callable(p, &range, options)
+                classify_callable(token.text, &token.range, options)
             };
 
             if let Some(span_style) = span_style {
                 result.push(Span {
-                    start: range.start,
-                    end: range.end,
+                    start: token.range.start,
+                    end: token.range.end,
                     style: span_style,
                 });
             }
@@ -137,25 +151,25 @@ impl DynamicTokenGroup {
         let mut result = Vec::new();
 
         let parsed = self.parse(line, options.home_dir)?;
-        for (p, range, nameddir) in parsed {
-            log::trace!("Dynamically highlighting argument: {p}");
+        for token in parsed {
+            log::trace!("Dynamically highlighting argument: {}", token.text);
             let style = if options.resolve_nameddirs
-                && let Some(name) = nameddir
+                && let Some(name) = token.named_directory
             {
                 Some(SpanStyle::Dynamic(DynamicStyle::Nameddir {
                     name,
-                    parsed_path: p,
+                    parsed_path: token.text,
                     dynamic_type: DynamicType::Arguments,
                     base_style: None,
                 }))
             } else {
-                classify_argument(&p, &range, options)
+                classify_argument(&token.text, &token.range, options)
             };
 
             if let Some(style) = style {
                 result.push(Span {
-                    start: range.start,
-                    end: range.end,
+                    start: token.range.start,
+                    end: token.range.end,
                     style,
                 });
             }
@@ -164,11 +178,7 @@ impl DynamicTokenGroup {
         Ok(result)
     }
 
-    fn parse(
-        &self,
-        line: &str,
-        home_dir: &str,
-    ) -> Result<Vec<(String, Range<usize>, Option<String>)>> {
+    fn parse(&self, line: &str, home_dir: &str) -> Result<Vec<ParsedToken>> {
         if self.tokens.is_empty() {
             return Ok(Vec::new());
         }
@@ -181,7 +191,7 @@ impl DynamicTokenGroup {
             utf8_buf: Vec<u8>,
             resolve_tilde: bool,
             is_poison: bool,
-            result: Vec<(String, Range<usize>, Option<String>)>,
+            result: Vec<ParsedToken>,
         }
 
         impl State<'_> {
@@ -212,8 +222,11 @@ impl DynamicTokenGroup {
                         named_directory(&self.s).map(str::to_owned)
                     };
 
-                    self.result
-                        .push((std::mem::take(&mut self.s), self.start..self.end, nameddir));
+                    self.result.push(ParsedToken {
+                        text: std::mem::take(&mut self.s),
+                        range: self.start..self.end,
+                        named_directory: nameddir,
+                    });
                 } else {
                     self.s = String::new();
                 }
