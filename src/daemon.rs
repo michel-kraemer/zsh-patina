@@ -338,8 +338,8 @@ fn handle_connection(stream: UnixStream, highlighter: Arc<Highlighter>) -> Resul
 
     let version = first_line.strip_prefix("VER=").unwrap_or("1");
     match version {
-        "3" => handle_connection_v2(reader, writer, &highlighter, true),
-        "2" => handle_connection_v2(reader, writer, &highlighter, false),
+        "3" => handle_connection_v3(reader, writer, &highlighter),
+        "2" => handle_connection_v2(reader, writer, &highlighter),
         "1" => handle_connection_v1(reader, writer, first_line, highlighter),
         _ => {
             // Return immediately. This will close the connection with an empty
@@ -727,7 +727,27 @@ fn handle_connection_v1<R: BufRead, W: Write>(
     Ok(())
 }
 
+#[deprecated(
+    since = "1.10.0",
+    note = "Protocol version 2 will be removed in one of the next releases"
+)]
 fn handle_connection_v2<R: BufRead, W: Write>(
+    reader: R,
+    writer: W,
+    highlighter: &Highlighter,
+) -> Result<()> {
+    handle_connection_v3_with_compatibility(reader, writer, highlighter, false)
+}
+
+fn handle_connection_v3<R: BufRead, W: Write>(
+    reader: R,
+    writer: W,
+    highlighter: &Highlighter,
+) -> Result<()> {
+    handle_connection_v3_with_compatibility(reader, writer, highlighter, true)
+}
+
+fn handle_connection_v3_with_compatibility<R: BufRead, W: Write>(
     mut reader: R,
     writer: W,
     highlighter: &Highlighter,
