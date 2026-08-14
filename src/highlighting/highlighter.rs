@@ -374,11 +374,13 @@ impl Highlighter {
             self.dynamic_arguments_type == DynamicConfigType::Partial,
             request.resolve_nameddirs,
         );
+
         let style = match dynamic_type {
             DynamicType::Callable => classify_callable(path, range, &options),
             DynamicType::Arguments => classify_argument(&path, range, &options),
             DynamicType::Unknown => None,
         };
+
         match (base_style, style) {
             (Some(base_style), Some(style)) => {
                 Some(mix_styles(&SpanStyle::Static(base_style.clone()), &style))
@@ -699,6 +701,7 @@ pub mod tests {
                             .unwrap();
                         }
                     }
+
                     SpanStyle::Dynamic(dynamic_style) => match dynamic_style {
                         DynamicStyle::Callable { parsed_callable } => {
                             write!(tw, "CALLABLE `{parsed_callable}`").unwrap();

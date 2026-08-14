@@ -116,6 +116,7 @@ impl DynamicTokenGroup {
             } else {
                 classify_callable(p, &range, options)
             };
+
             if let Some(span_style) = span_style {
                 result.push(Span {
                     start: range.start,
@@ -150,6 +151,7 @@ impl DynamicTokenGroup {
             } else {
                 classify_argument(&p, &range, options)
             };
+
             if let Some(style) = style {
                 result.push(Span {
                     start: range.start,
@@ -209,6 +211,7 @@ impl DynamicTokenGroup {
                         // require dynamic resolution
                         named_directory(&self.s).map(str::to_owned)
                     };
+
                     self.result
                         .push((std::mem::take(&mut self.s), self.start..self.end, nameddir));
                 } else {
@@ -396,6 +399,7 @@ pub(super) fn classify_callable(
                 .cursor
                 .map(|cursor| (range.start..=range.end).contains(&cursor))
                 .unwrap_or_default();
+
         match path_type(&path, options.pwd, partial) {
             Some((PathType::Directory, _)) => {
                 log::trace!("Callable `{path}' is a directory (autocd).");
@@ -403,6 +407,7 @@ pub(super) fn classify_callable(
                     .or_else(|| resolve_static_style(CALLABLE, options.theme))
                     .map(SpanStyle::Static)
             }
+
             _ => Some(SpanStyle::Dynamic(DynamicStyle::Callable {
                 parsed_callable: path,
             })),

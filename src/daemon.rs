@@ -1046,6 +1046,7 @@ where
             _ => None,
         })
         .collect::<FxHashSet<_>>();
+
     // resolve nameddirs to their absolute paths
     let resolved_nameddirs = if supports_nameddirs && !nameddirs_to_resolve.is_empty() {
         resolve_nameddirs(
@@ -1057,7 +1058,7 @@ where
         FxHashMap::default()
     };
 
-    // re-classify Nameddir-style Spans with their intended final style
+    // re-classify nameddir-style spans with their intended final style
     result.retain_mut(|span| {
         let SpanStyle::Dynamic(DynamicStyle::Nameddir {
             name,
@@ -1076,6 +1077,7 @@ where
         {
             path.replace_range(0..name.len() + 1, directory);
         }
+
         let Some(style) = highlighter.classify_dynamic(
             path,
             &(span.start..span.end),
@@ -1085,7 +1087,9 @@ where
         ) else {
             return false;
         };
+
         span.style = style;
+
         true
     });
 
