@@ -1,0 +1,23 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "format!(\"{callable}\\n\\n{file_arg}\\n\\n{cd_arg}\")"
+---
+zsh-patina --version
+
+0   10  `zsh-patina`  CALLABLE `zsh-patina`
+10  13  ` --`         punctuation.definition.parameter
+13  20  `version`     variable.parameter.option
+
+
+ls zsh-patina
+
+0  2   `ls`          CALLABLE `ls`
+2  3   ` `           meta.function-call.arguments
+3  13  `zsh-patina`  meta.function-call.arguments + dynamic.path.file.complete
+
+
+cd zsh-patina
+
+0  2   `cd`          CALLABLE `cd`
+2  3   ` `           meta.function-call.arguments
+3  13  `zsh-patina`  meta.function-call.arguments + dynamic.path.directory.complete

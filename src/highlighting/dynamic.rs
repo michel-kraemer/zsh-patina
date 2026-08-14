@@ -425,7 +425,9 @@ pub(super) fn classify_callable(
                 .cursor
                 .map(|cursor| (range.start..=range.end).contains(&cursor))
                 .unwrap_or_default();
-        match path_type(&path, options.pwd, Some(options.cdpath), partial) {
+        // prefer working directory before falling back to cdpath entries
+        let search_dirs = std::iter::once(options.pwd).chain(options.cdpath.iter().copied());
+        match path_type(&path, search_dirs, true, partial) {
             Some((PathType::Directory, _)) => {
                 log::trace!("Callable `{path}' is a directory (autocd).");
                 resolve_static_style(DYNAMIC_CALLABLE_COMMAND, options.theme)
@@ -450,11 +452,10 @@ pub(super) fn classify_argument(
     options: &DynamicHighlightingOptions,
     is_cd_like: bool,
 ) -> Option<SpanStyle> {
-    let cdpath = if is_cd_like && !path.starts_with("./") && !path.starts_with("../") {
-        Some(options.cdpath)
-    } else {
-        None
-    };
+    // explicit relative paths bypass cdpath, as they do in Zsh
+    let use_cdpath = is_cd_like && !path.starts_with("./") && !path.starts_with("../");
+    let search_dirs =
+        std::iter::once(options.pwd).chain(options.cdpath.iter().copied().filter(|_| use_cdpath));
     // only perform highlighting of partial paths if it is enabled and if the
     // cursor touches the prefix
     let partial = options.highlight_partial_paths
@@ -462,7 +463,7 @@ pub(super) fn classify_argument(
             .cursor
             .map(|cursor| (range.start..=range.end).contains(&cursor))
             .unwrap_or_default();
-    let (path_type, matched_partially) = path_type(path, options.pwd, cdpath, partial)?;
+    let (path_type, matched_partially) = path_type(path, search_dirs, is_cd_like, partial)?;
 
     log::trace!("Argument `{path}' is {path_type:?}.");
     let dynamic_scope = match (path_type, matched_partially) {

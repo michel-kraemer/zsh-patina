@@ -202,6 +202,7 @@ impl<'a, P> HighlightingRequest<'a, P> {
         }
     }
 
+    /// Set the newline-separated directories to search for cd-like commands
     pub fn with_cdpath<'b>(&self, cdpath: &'b str) -> HighlightingRequest<'b, P>
     where
         P: Copy,
@@ -430,6 +431,7 @@ impl Highlighter {
 
         let mut dynamic_builder = DynamicTokenGroupBuilder::new(self.dynamic_scopes);
         let mut mixins = Vec::new();
+        // cd, chdir and pushd use directory-only path lookups for their arguments
         let mut is_cd_like = false;
 
         let cdpath = request.cdpath.lines().collect::<Vec<_>>();
@@ -1158,6 +1160,42 @@ pub mod tests {
         );
         let cp = cfg.highlighter.highlight("cp dest", &request)?;
         assert!(!cp.iter().any(|span| span.start == 3 && span.end == 7));
+
+        fs::write(PathBuf::from(&cfg.pwd).join("file"), "content")?;
+        let file = cfg.highlighter.highlight("cd file", &request)?;
+        assert!(!file.iter().any(|span| span.start == 3 && span.end == 7));
+        let relative_file = cfg.highlighter.highlight("cd ./file", &request)?;
+        assert!(
+            !relative_file
+                .iter()
+                .any(|span| span.start == 3 && span.end == 9)
+        );
+
+        Ok(())
+    }
+
+    /// Test that a single token can be highlighted correctly as either a
+    /// callable, a directory, or a file, accordingo to the context in which it
+    /// is interpreted.
+    #[test]
+    fn distinguish_cwd_file_from_cdpath_directory() -> Result<()> {
+        let cfg = test_cfg()?;
+        let projects = cfg.tempdir.path().join("projects");
+        let pwd = projects.join("zsh-patina/target/debug");
+        fs::create_dir_all(&pwd)?;
+        let exec = pwd.join("zsh-patina");
+        fs::write(&exec, "#!/bin/sh")?;
+        fs::set_permissions(&exec, Permissions::from_mode(0o755))?;
+        let request = || {
+            HighlightingRequest::default()
+                .with_pwd(pwd.to_str().unwrap())
+                .with_cdpath(projects.to_str().unwrap())
+        };
+
+        let callable = cfg.highlight_with_request("zsh-patina --version", request())?;
+        let file_arg = cfg.highlight_with_request("ls zsh-patina", request())?;
+        let cd_arg = cfg.highlight_with_request("cd zsh-patina", request())?;
+        assert_snapshot!(format!("{callable}\n\n{file_arg}\n\n{cd_arg}"));
 
         Ok(())
     }
