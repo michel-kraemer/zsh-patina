@@ -50,7 +50,10 @@ struct ActivateTemplate {
     version: &'static str,
 }
 
-#[deprecated = "This function is only needed for backwards compatibility. It will be removed in a future release."]
+#[deprecated(
+    since = "1.9.0",
+    note = "This function is only needed for backwards compatibility. It will be removed in a future release."
+)]
 fn pid_path(runtime_dir: &Path) -> PathBuf {
     runtime_dir.join("daemon.pid")
 }
@@ -350,7 +353,10 @@ fn handle_connection(stream: UnixStream, highlighter: Arc<Highlighter>) -> Resul
     }
 }
 
-#[deprecated = "Protocol version 1 will be removed in one of the next releases"]
+#[deprecated(
+    since = "1.8.0",
+    note = "Protocol version 1 will be removed in one of the next releases"
+)]
 #[allow(deprecated)]
 fn handle_connection_v1<R: BufRead, W: Write>(
     mut reader: R,
@@ -1616,7 +1622,10 @@ fn start_daemon_internal(
     Ok((Role::Daemon, false))
 }
 
-#[deprecated = "This function is only needed for backwards compatibility. It will be removed in a future release."]
+#[deprecated(
+    since = "1.9.0",
+    note = "This function is only needed for backwards compatibility. It will be removed in a future release."
+)]
 #[allow(deprecated)]
 fn stop_daemon_legacy(runtime_dir: &Path) -> bool {
     let pid_file = pid_path(runtime_dir);
@@ -1688,7 +1697,10 @@ pub fn stop_daemon(runtime_dir: &Path) -> Result<()> {
     }
 }
 
-#[deprecated = "This function is only needed for backwards compatibility. It will be removed in a future release."]
+#[deprecated(
+    since = "1.9.0",
+    note = "This function is only needed for backwards compatibility. It will be removed in a future release."
+)]
 #[allow(deprecated)]
 fn is_daemon_running_legacy(runtime_dir: &Path) -> Option<u32> {
     let pid_file = pid_path(runtime_dir);
