@@ -5,6 +5,12 @@
 
 if (( ${+commands[zsh-patina]} )); then
     eval "$(zsh-patina activate)"
+
+    # Load completions but only if they haven't been registered yet, i.e. if
+    # they haven't already been installed into the site-functions directory
+    if (( ! $+functions[_zsh-patina] )); then
+        eval "$(zsh-patina completion)"
+    fi
 else
     print -u2 "zsh-patina binary not found in PATH. Please install it first:"
     print -u2 "https://github.com/michel-kraemer/zsh-patina#how-to-install"

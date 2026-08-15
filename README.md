@@ -267,7 +267,7 @@ zsh-patina runs on Windows via [MSYS2](https://www.msys2.org/) or [Cygwin](https
 
    ```shell
    git clone https://github.com/michel-kraemer/zsh-patina \
-      ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-patina
+       ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-patina
    ```
 
 3. Add `zsh-patina` to the `plugins` array in your `.zshrc` file:
@@ -287,7 +287,7 @@ zsh-patina runs on Windows via [MSYS2](https://www.msys2.org/) or [Cygwin](https
 Just add the following two lines to your `.zshrc` file:
 
 ```shell
-zinit ice as"program" from"gh-r" pick"zsh-patina-*/zsh-patina" atload'eval "$(zsh-patina activate)"'
+zinit ice as"program" from"gh-r" pick"zsh-patina-*/zsh-patina" atload'eval "$(zsh-patina activate)" && eval "$(zsh-patina completion)"'
 zinit light michel-kraemer/zsh-patina
 ```
 
@@ -566,7 +566,7 @@ extends = "nord"
 
 ## Completions (optional)
 
-> Shell completions are installed automatically by the [`.deb` package](#deb-package-for-debianubuntu), by [Homebrew](#homebrew-for-macos), and by the [AUR package](#aur-for-arch-linux).
+> Shell completions are installed automatically by the [`.deb` package](#deb-package-for-debianubuntu), by [Homebrew](#homebrew-for-macos), and by the [AUR package](#aur-for-arch-linux). If you installed zsh-patina with a [Zsh plugin manager](#install-with-a-zsh-plugin-manager), completions are also activated automatically.
 
 If you like, you can generate shell completions for zsh-patina with the following command:
 
