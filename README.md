@@ -28,7 +28,6 @@ Besides normal static highlighting, zsh-patina is able to dynamically detect whe
   * [Antigen](#antigen)
   * [oh-my-zsh](#oh-my-zsh)
   * [Zinit](#zinit)
-
 * [Configuration](#configuration)
 * [Theming](#theming)
 * [Completions (optional)](#completions-optional)
