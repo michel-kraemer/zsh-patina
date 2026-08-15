@@ -1,0 +1,10 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight_with_request(\"ls ~named/test.txt\",\nHighlightingRequest::default().with_pwd(cfg.pwd.as_str()).with_nameddirs(true),)?"
+---
+ls ~named/test.txt
+
+0  2   `ls`              CALLABLE `ls`
+2  3   ` `               meta.function-call.arguments
+3  4   `~`               NAMEDDIR `~named/test.txt`
+4  18  `named/test.txt`  NAMEDDIR `~named/test.txt`

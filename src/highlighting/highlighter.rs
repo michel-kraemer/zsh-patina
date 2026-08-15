@@ -1225,6 +1225,33 @@ pub mod tests {
         Ok(())
     }
 
+    /// Test if named directories are deferred for resolution by the client
+    #[test]
+    fn named_directory() -> Result<()> {
+        let cfg = test_cfg()?;
+
+        assert_snapshot!(
+            "named_directory__argument",
+            cfg.highlight_with_request(
+                "ls ~named/test.txt",
+                HighlightingRequest::default()
+                    .with_pwd(cfg.pwd.as_str())
+                    .with_nameddirs(true),
+            )?
+        );
+        assert_snapshot!(
+            "named_directory__callable",
+            cfg.highlight_with_request(
+                "~named/test.sh",
+                HighlightingRequest::default()
+                    .with_pwd(cfg.pwd.as_str())
+                    .with_nameddirs(true),
+            )?
+        );
+
+        Ok(())
+    }
+
     #[test]
     fn path_followed_by_parameter() -> Result<()> {
         let cfg = test_cfg()?;
