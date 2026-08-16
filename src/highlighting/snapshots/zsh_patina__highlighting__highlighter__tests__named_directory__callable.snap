@@ -1,0 +1,8 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight_with_request(\"~named/test.sh\",\nHighlightingRequest::default().with_pwd(cfg.pwd.as_str()).with_nameddirs(true),)?"
+---
+~named/test.sh
+
+0  1   `~`              NAMEDDIR `~named/test.sh`
+1  14  `named/test.sh`  NAMEDDIR `~named/test.sh`
