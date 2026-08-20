@@ -17,13 +17,18 @@ Besides normal static highlighting, zsh-patina is able to dynamically detect whe
 * [How to install](#how-to-install)
   * [Homebrew (for macOS)](#homebrew-for-macos)
   * [Cargo (for Rust developers)](#cargo-for-rust-developers)
-  * [Zinit (for Zinit users)](#zinit-for-zinit-users)
   * [`.deb` package (for Debian/Ubuntu)](#deb-package-for-debianubuntu)
   * [AUR (for Arch Linux)](#aur-for-arch-linux)
   * [Nixpkgs (for Nix users)](#nixpkgs-for-nix-users)
   * [Scoop (for Windows)](#scoop-for-windows)
   * [Pre-compiled binaries (for everyone)](#pre-compiled-binaries-for-everyone)
   * [Build from source (for the brave ones)](#build-from-source-for-the-brave-ones)
+* [Install with a Zsh plugin manager](#install-with-a-zsh-plugin-manager)
+  * [Antidote](#antidote)
+  * [Antigen](#antigen)
+  * [oh-my-zsh](#oh-my-zsh)
+  * [Zinit](#zinit)
+
 * [Configuration](#configuration)
 * [Theming](#theming)
 * [Completions (optional)](#completions-optional)
@@ -74,15 +79,6 @@ Besides normal static highlighting, zsh-patina is able to dynamically detect whe
    ```shell
    exec zsh
    ```
-
-### Zinit (for Zinit users)
-
-Just add the following two lines to your `.zshrc` file:
-
-```shell
-zinit ice as"program" from"gh-r" pick"zsh-patina-*/zsh-patina" atload'eval "$(zsh-patina activate)"'
-zinit light michel-kraemer/zsh-patina
-```
 
 ### `.deb` package (for Debian/Ubuntu)
 
@@ -228,6 +224,72 @@ zsh-patina runs on Windows via [MSYS2](https://www.msys2.org/) or [Cygwin](https
    ```shell
    exec zsh
    ```
+
+## Install with a Zsh plugin manager
+
+### Antidote
+
+1. Install zsh-patina using your favorite package manager or by downloading a pre-compiled binary as [described above](#how-to-install).
+
+2. Add the following line to your `${ZDOTDIR:-$HOME}/.zsh_plugins.txt` file:
+
+   ```
+   michel-kraemer/zsh-patina
+   ```
+
+3. Restart your terminal, or run:
+
+   ```shell
+   exec zsh
+   ```
+
+### Antigen
+
+1. Install zsh-patina using your favorite package manager or by downloading a pre-compiled binary as [described above](#how-to-install).
+
+2. Add the following line to your `.zshrc` file:
+
+   ```shell
+   antigen bundle michel-kraemer/zsh-patina
+   ```
+
+3. Restart your terminal, or run:
+
+   ```shell
+   exec zsh
+   ```
+
+### oh-my-zsh
+
+1. Install zsh-patina using your favorite package manager or by downloading a pre-compiled binary as [described above](#how-to-install).
+
+2. Clone this repository into your custom plugins directory:
+
+   ```shell
+   git clone https://github.com/michel-kraemer/zsh-patina \
+       ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-patina
+   ```
+
+3. Add `zsh-patina` to the `plugins` array in your `.zshrc` file:
+
+   ```shell
+   plugins=(... zsh-patina)
+   ```
+
+4. Restart your terminal, or run:
+
+   ```shell
+   exec zsh
+   ```
+
+### Zinit
+
+Just add the following two lines to your `.zshrc` file:
+
+```shell
+zinit ice as"program" from"gh-r" pick"zsh-patina-*/zsh-patina" atload'eval "$(zsh-patina activate)" && eval "$(zsh-patina completion)"'
+zinit light michel-kraemer/zsh-patina
+```
 
 ## Configuration
 
@@ -504,7 +566,7 @@ extends = "nord"
 
 ## Completions (optional)
 
-> Shell completions are installed automatically by the [`.deb` package](#deb-package-for-debianubuntu), by [Homebrew](#homebrew-for-macos), and by the [AUR package](#aur-for-arch-linux).
+> Shell completions are installed automatically by the [`.deb` package](#deb-package-for-debianubuntu), by [Homebrew](#homebrew-for-macos), and by the [AUR package](#aur-for-arch-linux). If you installed zsh-patina with a [Zsh plugin manager](#install-with-a-zsh-plugin-manager), completions are also activated automatically.
 
 If you like, you can generate shell completions for zsh-patina with the following command:
 
