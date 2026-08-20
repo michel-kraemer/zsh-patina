@@ -11,7 +11,183 @@
 export _ZSH_PATINA_PATH="<{zsh_patina_path}>"
 
 zsh-patina() {
-    "$_ZSH_PATINA_PATH" "$@"
+    # handle `highlight` subcommand
+    if [[ $1 = "highlight" ]]; then
+        _zsh_patina_highlight_subcommand "${@:2}" || return 1
+    else
+        "$_ZSH_PATINA_PATH" "$@"
+    fi
+}
+
+_zsh_patina_highlight_subcommand() {
+    local -a positional=()
+    local has_option=0
+    local seen_dashdash=0
+    local input_file
+    local contents
+
+    for a in "$@"; do
+        if (( seen_dashdash )); then
+            # everything after `--` is a positional argument
+            positional+=("$a")
+        elif [[ "$a" == "--" ]]; then
+            seen_dashdash=1
+        elif [[ "$a" == -* ]]; then
+            has_option=1
+        else
+            positional+=("$a")
+        fi
+    done
+
+    if (( has_option || ${#positional[@]} > 1 )); then
+        "$_ZSH_PATINA_PATH" highlight "$@" || return 1
+    else
+        # read from file or from stdin
+        if (( ${#positional[@]} == 1 )); then
+            input_file="${positional[1]}"
+            if ! { [[ -r "$input_file" ]] && contents=$(<"$input_file") }; then
+                print -u2 -- "\e[31;1mzsh-patina:\e[0m Failed to read file: '$input_file'"
+                return 1
+            fi
+        else
+            contents=$(cat)
+        fi
+
+        # perform the highlighting
+        _zsh_patina_highlight_string "$contents"
+        _zsh_patina_highlighting_to_formatted_string "$contents" "${reply[@]}"
+        print -rP -- "$REPLY"
+    fi
+}
+
+# Takes a command line as first argument and creates highlighting instructions
+# for `$region_highlight` within the current shell session. Assumes that the
+# cursor is at the end of the command line.
+#
+# Example:
+#
+#     _zsh_patina_highlight_string "echo hello"
+#
+# This sets `$reply` to:
+#
+#     ("0 4 fg=cyan memo=zsh_patina")
+#
+# This function is part of the `highlight` subcommand
+_zsh_patina_highlight_string() {
+    emulate -L zsh
+
+    local -ah region_highlight=()
+    local -h PREBUFFER=""
+    local -h BUFFER="$1"
+    local -h CURSOR=${#BUFFER}
+
+    # pretend our terminal is really large
+    local -h COLUMNS=2147483647
+    local -h LINES=2147483647
+
+    _zsh_patina
+
+    reply=("${region_highlight[@]}")
+}
+
+# escape a string so it can be printed verbatim using `print -P`
+_zsh_patina_escape_highlighting_segment() {
+    local input="$1"
+    input="${input//\\/\\\\}" # \  -> \\
+    input="${input//\`/\\\`}" # `  -> \`
+    input="${input//\$/\\\$}" # $  -> \$
+    input="${input//\%/%%}"   # %  -> %%
+    REPLY="$input"
+}
+
+# Takes a command line as first argument and highlighting instructions from
+# `$region_highlight` as subsequent arguments. Escapes the command line and then
+# formats it using prompt expansion sequences.
+#
+# Example:
+#
+#     _zsh_patina_highlighting_to_formatted_string "echo hello" "0 4 fg=cyan"
+#
+# This sets `$REPLY` to:
+#
+#     %F{cyan}echo%f hello
+#
+# Note: You may print the stylized command line with `print -rP`:
+#
+#     print -rP -- $REPLY
+#
+# This function is part of the `highlight` subcommand
+_zsh_patina_highlighting_to_formatted_string() {
+    emulate -L zsh
+
+    local -a parts subparts
+    local token start end result style fgset bgset boldset underlineset
+    local last=1
+
+    local input="$1"
+    (( $# > 0 )) && shift
+
+    for style in "$@"; do
+        parts=("${(s: :)style}")
+        (( ${#parts} > 1 )) || continue
+
+        start=$(( parts[1] + 1 ))
+        end=$(( parts[2] ))
+
+        # append any unformatted substring
+        if (( $start > $last )); then
+            _zsh_patina_escape_highlighting_segment "${input[$last,$start - 1]}"
+            result+="$REPLY"
+        fi
+        last=$(( end + 1 ))
+
+        # generate formatting sequences
+        fgset=0
+        bgset=0
+        boldset=0
+        underlineset=0
+        for token in "${parts[@]}"; do
+            case "$token" in
+                fg=*)
+                    subparts=("${(s:=:)token}")
+                    result+="%F{$subparts[2]}"
+                    fgset=1
+                    ;;
+
+                bg=*)
+                    subparts=("${(s:=:)token}")
+                    result+="%K{$subparts[2]}"
+                    bgset=1
+                    ;;
+
+                bold)
+                    result+="%B"
+                    boldset=1
+                    ;;
+
+                underline)
+                    result+="%U"
+                    underlineset=1
+                    ;;
+            esac
+        done
+
+        # append formatted substrings and reset formatting
+        _zsh_patina_escape_highlighting_segment "${input[$start,$end]}"
+        result+="$REPLY"
+        (( $underlineset )) && result+="%u"
+        (( $boldset )) && result+="%b"
+        (( $bgset )) && result+="%k"
+        (( $fgset )) && result+="%f"
+    done
+
+    # append unformatted remainder
+    if (( ${#input} >= $last )); then
+        _zsh_patina_escape_highlighting_segment "${input[$last,${#input}]}"
+        result+="$REPLY"
+    fi
+
+    REPLY="$result"
 }
 
 _zsh_patina_resolve_callable() {
