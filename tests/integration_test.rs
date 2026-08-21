@@ -216,7 +216,7 @@ async fn run_highlight(setup_pre: &[&str], setup_post: &[&str], buffer: &str, ex
 
     // Trigger highlighting repeatedly in a loop until the daemon has fully
     // started and $region_highlight is actually filled
-    let highlight_loop = "CURSOR=${#BUFFER}; for i in {1..300}; do _zsh_patina; [[ ${#region_highlight[@]} -gt 0 ]] && break; sleep 0.1; done;";
+    let highlight_loop = "CURSOR=${#BUFFER}; for i in {1..50}; do _zsh_patina; [[ ${#region_highlight[@]} -gt 0 ]] && break; sleep 0.1; done;";
     let zsh_script = format!(
         r#"{before_activate}
         eval "$(zsh-patina activate)"
@@ -258,20 +258,26 @@ async fn run_highlight_subcommand(
         format!("{}; ", setup_pre.join("; "))
     };
 
-    // Wait for the daemon to come up by polling until `zsh-patina status`
-    // succeeds. Without this, the `highlight` subcommand will render the
-    // unhighlighted input (see the command's documentation).
-    let wait_daemon =
-        "for i in {1..300}; do zsh-patina status >/dev/null 2>&1 && break; sleep 0.1; done;";
-
     let zsh_script = format!(
         r#"{before_activate}
         eval "$(zsh-patina activate)"
-        {wait_daemon}
         export TERM=xterm-256color  # make sure the command's output is colored
-        zsh-patina highlight {} <<'EOF'
+        for i in {{1..50}}; do
+            output=$(zsh-patina highlight {} <<'EOF' 2>&1
 {stdin}
-EOF"#,
+EOF
+            )
+            exit_code=$?
+            if (( exit_code != 0 )); then
+                print -rP -- "$output"
+                return "$exit_code"
+            fi
+            if [[ "$output" == *$'\x1B'* || "$output" == *"Usage"* ]]; then
+                break
+            fi
+            sleep 0.1
+        done
+        print -rP -- "$output""#,
         args.join(" ")
     );
 
