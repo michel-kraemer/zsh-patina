@@ -45,7 +45,7 @@ _zsh_patina_highlight_subcommand() {
         # read from file or from stdin
         if (( ${#positional[@]} == 1 )); then
             input_file="${positional[1]}"
-            if ! { [[ -r "$input_file" ]] && contents=$(<"$input_file") }; then
+            if ! { [[ -r "$input_file" ]] && [[ -f "$input_file" ]] && contents=$(<"$input_file") }; then
                 print -u2 -- "\e[31;1mzsh-patina:\e[0m Failed to read file: '$input_file'"
                 return 1
             fi
