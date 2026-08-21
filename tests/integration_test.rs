@@ -21,6 +21,7 @@ use testcontainers::{
     runners::{AsyncBuilder, AsyncRunner},
 };
 use tokio::fs;
+use tokio::sync::OnceCell;
 
 const DYNAMIC_CALLABLE_ALIAS: &str = "dynamic.callable.alias.shell";
 const DYNAMIC_CALLABLE_BUILTIN: &str = "dynamic.callable.builtin.shell";
@@ -44,6 +45,7 @@ static TEST_THEME: LazyLock<toml::Table> = LazyLock::new(|| {
         .parse()
         .expect("test_theme.toml must be valid TOML")
 });
+static IMAGE: OnceCell<GenericImage> = OnceCell::const_new();
 
 /// Look up scopes in the test theme and return a region_highlight entry for the
 /// given range, combining their foreground and background styles if needed.
@@ -143,7 +145,11 @@ fn xterm_256color<const N: usize>(command_line: &str, spans: [(usize, usize, &st
 }
 
 /// Common setup code required by every test in this module
-async fn setup() -> GenericImage {
+async fn setup() -> &'static GenericImage {
+    IMAGE.get_or_init(build_image).await
+}
+
+async fn build_image() -> GenericImage {
     let _ = env_logger::try_init();
 
     if std::env::var_os("USE_PREBUILT_IMAGE").is_none() {
@@ -189,13 +195,7 @@ async fn setup() -> GenericImage {
 /// activate`, respectively. This method will somewhat emulate human user
 /// behavior, in entering most of the buffer first, then "typing out" its last
 /// character afterwards.
-async fn run_highlight(
-    image: &GenericImage,
-    setup_pre: &[&str],
-    setup_post: &[&str],
-    buffer: &str,
-    expected: &[String],
-) {
+async fn run_highlight(setup_pre: &[&str], setup_post: &[&str], buffer: &str, expected: &[String]) {
     let before_activate = if setup_pre.is_empty() {
         String::new()
     } else {
@@ -227,7 +227,7 @@ async fn run_highlight(
         printf '%s\n' "${{region_highlight[@]}}""#
     );
 
-    let (stdout_bytes, exit_code) = run_container(zsh_script, image).await;
+    let (stdout_bytes, exit_code) = run_container(zsh_script).await;
 
     let stdout = std::str::from_utf8(&stdout_bytes)
         .expect("stdout is not valid UTF-8")
@@ -248,7 +248,6 @@ async fn run_highlight(
 /// Runs the `highlight` subcommand in a container using the given arguments and
 /// stdin. Return stdout and the subcommand's exit code.
 async fn run_highlight_subcommand(
-    image: &GenericImage,
     setup_pre: &[&str],
     args: &[&str],
     stdin: &str,
@@ -276,19 +275,18 @@ EOF"#,
         args.join(" ")
     );
 
-    run_container(zsh_script, image).await
+    run_container(zsh_script).await
 }
 
 /// Runs the `highlight` subcommand in a container using the given arguments and
 /// stdin. Compares stdout with the given expected bytes.
 async fn assert_highlight_subcommand(
-    image: &GenericImage,
     setup_pre: &[&str],
     args: &[&str],
     stdin: &str,
     expected: &[u8],
 ) {
-    let (stdout_bytes, exit_code) = run_highlight_subcommand(image, setup_pre, args, stdin).await;
+    let (stdout_bytes, exit_code) = run_highlight_subcommand(setup_pre, args, stdin).await;
 
     if stdout_bytes != expected {
         // print stdout in human-readable form for better debugging
@@ -311,7 +309,9 @@ async fn assert_highlight_subcommand(
 
 /// Runs a given zsh script in a Docker image. Mounts a zsh-patina configuration
 /// and the test theme into the container.
-async fn run_container(zsh_script: String, image: &GenericImage) -> (Vec<u8>, i64) {
+async fn run_container(zsh_script: String) -> (Vec<u8>, i64) {
+    let image = setup().await;
+
     let config = "[highlighting]\ntheme = \"file:/root/.config/zsh-patina/test_theme.toml\"";
     let config_file = NamedTempFile::new().expect("Unable to create temporary config file");
     fs::write(&config_file, config)
@@ -352,9 +352,7 @@ async fn run_container(zsh_script: String, image: &GenericImage) -> (Vec<u8>, i6
 #[tokio::test]
 #[ignore]
 async fn ls_with_option() {
-    let image = setup().await;
     run_highlight(
-        &image,
         &[],
         &[],
         "ls -l",
@@ -371,9 +369,7 @@ async fn ls_with_option() {
 #[tokio::test]
 #[ignore]
 async fn named_directory() {
-    let image = setup().await;
     run_highlight(
-        &image,
         &[
             "mkdir -p /tmp/named",
             "touch /tmp/named/test.txt",
@@ -393,7 +389,6 @@ async fn named_directory() {
     .await;
 
     run_highlight(
-        &image,
         &[
             "mkdir -p /tmp/named",
             "printf '#!/bin/sh\n' > /tmp/named/test.sh",
@@ -410,7 +405,6 @@ async fn named_directory() {
     .await;
 
     run_highlight(
-        &image,
         &[],
         &[],
         "ls ~missing/test.txt",
@@ -428,11 +422,8 @@ async fn named_directory() {
 #[tokio::test]
 #[ignore]
 async fn resolve_alias() {
-    let image = setup().await;
-
     // simple alias
     run_highlight(
-        &image,
         &["alias ll='ls -l'"],
         &[],
         "ll -a",
@@ -446,7 +437,6 @@ async fn resolve_alias() {
 
     // alias with a subshell
     run_highlight(
-        &image,
         &["alias ll='(ls -l)'"],
         &[],
         "ll -a",
@@ -460,7 +450,6 @@ async fn resolve_alias() {
 
     // alias referencing another alias
     run_highlight(
-        &image,
         &["alias lla='ll -a'", "alias ll='ls -l'"],
         &[],
         "lla && ll",
@@ -474,7 +463,6 @@ async fn resolve_alias() {
 
     // alias referencing a command that does not exist
     run_highlight(
-        &image,
         &["alias fb=foobar"],
         &[],
         "fb",
@@ -484,7 +472,6 @@ async fn resolve_alias() {
 
     // alias referencing two commands
     run_highlight(
-        &image,
         &["alias foobar='ls -l && echo OK'"],
         &[],
         "foobar",
@@ -494,7 +481,6 @@ async fn resolve_alias() {
 
     // alias referencing two commands, but the second one does not exist
     run_highlight(
-        &image,
         &["alias foobar='ls -l && missing OK'"],
         &[],
         "foobar",
@@ -504,7 +490,6 @@ async fn resolve_alias() {
 
     // cycle: alias referencing another alias referencing the first one again
     run_highlight(
-        &image,
         &[
             "alias fb='foobar --option'",
             "alias foobar='fb --another-option'",
@@ -517,7 +502,6 @@ async fn resolve_alias() {
 
     // self-referencing alias (not a cycle!)
     run_highlight(
-        &image,
         &["alias grep='grep --color'"],
         &[],
         "grep",
@@ -528,7 +512,6 @@ async fn resolve_alias() {
     // valid: grep points to the alias g, and g then points to the command grep
     // invalid: g points to the alias grep, and grep then points to the missing command g
     run_highlight(
-        &image,
         &["alias grep='g --color'", "alias g='grep'"],
         &[],
         "grep && g",
@@ -543,7 +526,6 @@ async fn resolve_alias() {
     // valid: the alias grep points to the command grep
     // valid: g points to the alias grep, which points to the command grep
     run_highlight(
-        &image,
         &["alias grep='grep --color'", "alias g='grep'"],
         &[],
         "grep && g",
@@ -561,10 +543,7 @@ async fn resolve_alias() {
 #[tokio::test]
 #[ignore]
 async fn command_created_after_activation_in_existing_path_entry() {
-    let image = setup().await;
-
     run_highlight(
-        &image,
         &["mkdir -p /tmp/bin", "export PATH=/tmp/bin:$PATH"],
         &[
             "printf '#!/bin/sh\n' > /tmp/bin/freshcmd",
@@ -580,10 +559,7 @@ async fn command_created_after_activation_in_existing_path_entry() {
 #[tokio::test]
 #[ignore]
 async fn highlight_subcommand_simple_command() {
-    let image = setup().await;
-
     assert_highlight_subcommand(
-        &image,
         &[],
         &[],
         "time ls",
@@ -599,10 +575,7 @@ async fn highlight_subcommand_simple_command() {
 #[tokio::test]
 #[ignore]
 async fn highlight_subcommand_command_with_dir() {
-    let image = setup().await;
-
     assert_highlight_subcommand(
-        &image,
         &[],
         &[],
         "ls /test",
@@ -614,7 +587,6 @@ async fn highlight_subcommand_command_with_dir() {
     .await;
 
     assert_highlight_subcommand(
-        &image,
         &["mkdir /test"],
         &[],
         "ls /test",
@@ -635,10 +607,7 @@ async fn highlight_subcommand_command_with_dir() {
 #[tokio::test]
 #[ignore]
 async fn highlight_subcommand_from_file() {
-    let image = setup().await;
-
     assert_highlight_subcommand(
-        &image,
         &["echo 'echo \"Hello world\"' > /tmp/command-line.zsh"],
         &["/tmp/command-line.zsh"],
         "",
@@ -656,7 +625,6 @@ async fn highlight_subcommand_from_file() {
     .await;
 
     assert_highlight_subcommand(
-        &image,
         &["echo 'echo OK' > -h"],
         &["--", "-h"],
         "",
@@ -672,10 +640,7 @@ async fn highlight_subcommand_from_file() {
 #[tokio::test]
 #[ignore]
 async fn highlight_subcommand_nonexistent_input_file() {
-    let image = setup().await;
-
-    let (stdout, exit_code) =
-        run_highlight_subcommand(&image, &[], &["/tmp/command-line.zsh"], "").await;
+    let (stdout, exit_code) = run_highlight_subcommand(&[], &["/tmp/command-line.zsh"], "").await;
     assert_eq!(exit_code, 1);
     assert_eq!(
         std::str::from_utf8(&stdout).unwrap(),
@@ -687,10 +652,7 @@ async fn highlight_subcommand_nonexistent_input_file() {
 #[tokio::test]
 #[ignore]
 async fn highlight_subcommand_input_is_dir() {
-    let image = setup().await;
-
-    let (stdout, exit_code) =
-        run_highlight_subcommand(&image, &["mkdir /temp"], &["/temp"], "").await;
+    let (stdout, exit_code) = run_highlight_subcommand(&["mkdir /temp"], &["/temp"], "").await;
     assert_eq!(exit_code, 1);
     assert_eq!(
         std::str::from_utf8(&stdout).unwrap(),
@@ -702,28 +664,25 @@ async fn highlight_subcommand_input_is_dir() {
 #[tokio::test]
 #[ignore]
 async fn highlight_subcommand_help() {
-    let image = setup().await;
-
-    let (stdout, exit_code) = run_highlight_subcommand(&image, &[], &["-h"], "").await;
+    let (stdout, exit_code) = run_highlight_subcommand(&[], &["-h"], "").await;
     assert_eq!(exit_code, 0);
     assert!(std::str::from_utf8(&stdout).unwrap().contains("Usage:"));
 
-    let (stdout, exit_code) = run_highlight_subcommand(&image, &[], &["--help"], "").await;
-    assert_eq!(exit_code, 0);
-    assert!(std::str::from_utf8(&stdout).unwrap().contains("Usage:"));
-
-    // show help even if there is a file given
-    let (stdout, exit_code) = run_highlight_subcommand(&image, &[], &["-h", "file.txt"], "").await;
+    let (stdout, exit_code) = run_highlight_subcommand(&[], &["--help"], "").await;
     assert_eq!(exit_code, 0);
     assert!(std::str::from_utf8(&stdout).unwrap().contains("Usage:"));
 
     // show help even if there is a file given
-    let (stdout, exit_code) =
-        run_highlight_subcommand(&image, &[], &["-h", "--", "file.txt"], "").await;
+    let (stdout, exit_code) = run_highlight_subcommand(&[], &["-h", "file.txt"], "").await;
     assert_eq!(exit_code, 0);
     assert!(std::str::from_utf8(&stdout).unwrap().contains("Usage:"));
 
-    let (stdout, exit_code) = run_highlight_subcommand(&image, &[], &["-a"], "").await;
+    // show help even if there is a file given
+    let (stdout, exit_code) = run_highlight_subcommand(&[], &["-h", "--", "file.txt"], "").await;
+    assert_eq!(exit_code, 0);
+    assert!(std::str::from_utf8(&stdout).unwrap().contains("Usage:"));
+
+    let (stdout, exit_code) = run_highlight_subcommand(&[], &["-a"], "").await;
     assert_eq!(exit_code, 1);
     assert!(
         std::str::from_utf8(&stdout)
@@ -731,7 +690,7 @@ async fn highlight_subcommand_help() {
             .contains("unexpected argument"),
     );
 
-    let (stdout, exit_code) = run_highlight_subcommand(&image, &[], &["file1", "file2"], "").await;
+    let (stdout, exit_code) = run_highlight_subcommand(&[], &["file1", "file2"], "").await;
     assert_eq!(exit_code, 1);
     assert!(
         std::str::from_utf8(&stdout)
@@ -739,8 +698,7 @@ async fn highlight_subcommand_help() {
             .contains("unexpected argument"),
     );
 
-    let (stdout, exit_code) =
-        run_highlight_subcommand(&image, &[], &["file1", "--", "file2"], "").await;
+    let (stdout, exit_code) = run_highlight_subcommand(&[], &["file1", "--", "file2"], "").await;
     assert_eq!(exit_code, 1);
     assert!(
         std::str::from_utf8(&stdout)
