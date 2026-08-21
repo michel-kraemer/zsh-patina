@@ -120,7 +120,7 @@ _zsh_patina_escape_highlighting_segment() {
 _zsh_patina_highlighting_to_formatted_string() {
     emulate -L zsh
 
-    local -a parts subparts
+    local -a parts subparts pair
     local token start end result style fgset bgset boldset underlineset
     local last=1
 
@@ -141,22 +141,25 @@ _zsh_patina_highlighting_to_formatted_string() {
         fi
         last=$(( end + 1 ))
 
+        # get formatting instructions
+        subparts=("${(s:,:)parts[3]}")
+
         # generate formatting sequences
         fgset=0
         bgset=0
         boldset=0
         underlineset=0
-        for token in "${parts[@]}"; do
+        for token in "${subparts[@]}"; do
             case "$token" in
                 fg=*)
-                    subparts=("${(s:=:)token}")
-                    result+="%F{$subparts[2]}"
+                    pair=("${(s:=:)token}")
+                    result+="%F{$pair[2]}"
                     fgset=1
                     ;;
 
                 bg=*)
-                    subparts=("${(s:=:)token}")
-                    result+="%K{$subparts[2]}"
+                    pair=("${(s:=:)token}")
+                    result+="%K{$pair[2]}"
                     bgset=1
                     ;;
 
