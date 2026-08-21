@@ -14,18 +14,27 @@ use pretty_assertions::assert_eq;
 use tempfile::NamedTempFile;
 use testcontainers::{
     GenericBuildableImage, GenericImage, ImageExt,
-    core::{BuildImageOptions, Mount, WaitFor, wait::ExitWaitStrategy},
+    core::{
+        BuildImageOptions, Mount, WaitFor, logs::consumer::logging_consumer::LoggingConsumer,
+        wait::ExitWaitStrategy,
+    },
     runners::{AsyncBuilder, AsyncRunner},
 };
 use tokio::fs;
 
 const DYNAMIC_CALLABLE_ALIAS: &str = "dynamic.callable.alias.shell";
+const DYNAMIC_CALLABLE_BUILTIN: &str = "dynamic.callable.builtin.shell";
 const DYNAMIC_CALLABLE_COMMAND: &str = "dynamic.callable.command.shell";
 const DYNAMIC_CALLABLE_MISSING: &str = "dynamic.callable.missing.shell";
+const DYNAMIC_PATH_DIRECTORY_COMPLETE: &str = "dynamic.path.directory.complete.shell";
 const DYNAMIC_PATH_FILE_COMPLETE: &str = "dynamic.path.file.complete.shell";
 const ARGUMENTS: &str = "meta.function-call.arguments.shell";
+const KEYWORD_TIME: &str = "keyword.control.flow.time.shell";
 const OPERATOR_LOGICAL_AND: &str = "keyword.operator.logical.and.shell";
+const STRING_QUOTED_DOUBLE: &str = "string.quoted.double.shell";
 const PUNCTUATION_PARAMETER: &str = "punctuation.definition.parameter.shell";
+const PUNCTUATION_STRING_BEGIN: &str = "punctuation.definition.string.begin.shell";
+const PUNCTUATION_STRING_END: &str = "punctuation.definition.string.end.shell";
 const PARAMETER: &str = "variable.parameter.option.shell";
 const FUNCTION: &str = "variable.function.shell";
 const TILDE: &str = "variable.language.tilde.shell";
@@ -57,6 +66,80 @@ fn h<const N: usize>(start: usize, end: usize, scopes: [&str; N]) -> String {
         })
         .join(",");
     format!("{start} {end} {styles}")
+}
+
+/// Format a command line with the given spans applying xterm 256 color codes
+/// (using short forms where possible)
+fn xterm_256color<const N: usize>(command_line: &str, spans: [(usize, usize, &str); N]) -> Vec<u8> {
+    #[derive(PartialEq, Eq, PartialOrd, Ord)]
+    #[repr(u8)]
+    enum Event {
+        EndBg = 0,
+        EndFg = 1,
+        StartFg(i64) = 2,
+        StartBg(i64) = 3,
+    }
+
+    let mut events = Vec::new();
+    for (start, end, scope) in spans {
+        let value = TEST_THEME
+            .get(scope)
+            .unwrap_or_else(|| panic!("scope '{scope}' not found in test_theme.toml"));
+        match value {
+            toml::Value::Integer(n) => {
+                events.push((start, Event::StartFg(*n)));
+                events.push((end, Event::EndFg));
+            }
+            toml::Value::Table(t) => {
+                let n = t["background"]
+                    .as_integer()
+                    .expect("background must be an integer");
+                events.push((start, Event::StartBg(n)));
+                events.push((end, Event::EndBg));
+            }
+            _ => panic!("unexpected TOML value type for scope '{scope}'"),
+        }
+    }
+
+    // sort by index, then close all end events first (bg before fg) and then
+    // open all start events (fg before bg)
+    events.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+
+    let bytes = command_line.as_bytes();
+    let mut result = Vec::new();
+    let mut pos = 0;
+
+    for (i, e) in events {
+        while pos < i {
+            result.push(bytes[pos]);
+            pos += 1;
+        }
+
+        match e {
+            Event::EndBg => result.extend(b"\x1B[49m"),
+            Event::EndFg => result.extend(b"\x1B[39m"),
+            Event::StartFg(n) => {
+                let f = match n {
+                    0..=7 => format!("\x1B[3{}m", n),      // normal colors
+                    8..=15 => format!("\x1B[9{}m", n - 8), // bright colors
+                    _ => format!("\x1B[38;5;{n}m"),        // 256-color form
+                };
+                result.extend(f.as_bytes());
+            }
+            Event::StartBg(n) => {
+                let f = match n {
+                    0..=7 => format!("\x1B[4{}m", n),       // normal colors
+                    8..=15 => format!("\x1B[10{}m", n - 8), // bright colors
+                    _ => format!("\x1B[48;5;{n}m"),         // 256-color form
+                };
+                result.extend(f.as_bytes());
+            }
+        }
+    }
+
+    result.extend(&bytes[pos..]);
+
+    result
 }
 
 /// Common setup code required by every test in this module
@@ -130,9 +213,10 @@ async fn run_highlight(
         .next_back()
         .map(|(idx, _)| &buffer[..idx])
         .unwrap_or("");
+
     // Trigger highlighting repeatedly in a loop until the daemon has fully
     // started and $region_highlight is actually filled
-    let highlight_loop = "CURSOR=${#BUFFER}; for i in {1..50}; do _zsh_patina; [[ ${#region_highlight[@]} -gt 0 ]] && break; sleep 0.1; done;";
+    let highlight_loop = "CURSOR=${#BUFFER}; for i in {1..300}; do _zsh_patina; [[ ${#region_highlight[@]} -gt 0 ]] && break; sleep 0.1; done;";
     let zsh_script = format!(
         r#"{before_activate}
         eval "$(zsh-patina activate)"
@@ -143,6 +227,91 @@ async fn run_highlight(
         printf '%s\n' "${{region_highlight[@]}}""#
     );
 
+    let (stdout_bytes, exit_code) = run_container(zsh_script, image).await;
+
+    let stdout = std::str::from_utf8(&stdout_bytes)
+        .expect("stdout is not valid UTF-8")
+        .to_string();
+
+    let lines = stdout
+        .lines()
+        .map(|l| {
+            l.strip_suffix(" memo=zsh_patina")
+                .expect("region_highlight entry must end with ` memo=zsh_patina'")
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(lines, expected);
+    assert_eq!(exit_code, 0);
+}
+
+/// Runs the `highlight` subcommand in a container using the given arguments and
+/// stdin. Return stdout and the subcommand's exit code.
+async fn run_highlight_subcommand(
+    image: &GenericImage,
+    setup_pre: &[&str],
+    args: &[&str],
+    stdin: &str,
+) -> (Vec<u8>, i64) {
+    let before_activate = if setup_pre.is_empty() {
+        String::new()
+    } else {
+        format!("{}; ", setup_pre.join("; "))
+    };
+
+    // Wait for the daemon to come up by polling until `zsh-patina status`
+    // succeeds. Without this, the `highlight` subcommand will render the
+    // unhighlighted input (see the command's documentation).
+    let wait_daemon =
+        "for i in {1..300}; do zsh-patina status >/dev/null 2>&1 && break; sleep 0.1; done;";
+
+    let zsh_script = format!(
+        r#"{before_activate}
+        eval "$(zsh-patina activate)"
+        {wait_daemon}
+        export TERM=xterm-256color  # make sure the command's output is colored
+        zsh-patina highlight {} <<'EOF'
+{stdin}
+EOF"#,
+        args.join(" ")
+    );
+
+    run_container(zsh_script, image).await
+}
+
+/// Runs the `highlight` subcommand in a container using the given arguments and
+/// stdin. Compares stdout with the given expected bytes.
+async fn assert_highlight_subcommand(
+    image: &GenericImage,
+    setup_pre: &[&str],
+    args: &[&str],
+    stdin: &str,
+    expected: &[u8],
+) {
+    let (stdout_bytes, exit_code) = run_highlight_subcommand(image, setup_pre, args, stdin).await;
+
+    if stdout_bytes != expected {
+        // print stdout in human-readable form for better debugging
+        eprintln!(
+            "stdout: {}",
+            stdout_bytes
+                .iter()
+                .map(|&b| if b >= 32 {
+                    (b as char).to_string()
+                } else {
+                    format!("\\x{b:0>2x}")
+                })
+                .collect::<Vec<_>>()
+                .join("")
+        );
+    }
+    assert_eq!(stdout_bytes, expected);
+    assert_eq!(exit_code, 0);
+}
+
+/// Runs a given zsh script in a Docker image. Mounts a zsh-patina configuration
+/// and the test theme into the container.
+async fn run_container(zsh_script: String, image: &GenericImage) -> (Vec<u8>, i64) {
     let config = "[highlighting]\ntheme = \"file:/root/.config/zsh-patina/test_theme.toml\"";
     let config_file = NamedTempFile::new().expect("Unable to create temporary config file");
     fs::write(&config_file, config)
@@ -161,25 +330,22 @@ async fn run_highlight(
             "/root/.config/zsh-patina/test_theme.toml",
         ))
         .with_cmd(["unbuffer", "zsh", "-c", &zsh_script])
+        .with_log_consumer(LoggingConsumer::new())
         .start()
         .await
         .expect("failed to start container");
 
-    let stdout_bytes = container
+    let stdout = container
         .stdout_to_vec()
         .await
         .expect("failed to read stdout");
-    let stdout = std::str::from_utf8(&stdout_bytes).expect("stdout is not valid UTF-8");
+    let exit_code = container
+        .exit_code()
+        .await
+        .expect("failed to read exit code")
+        .unwrap();
 
-    let lines = stdout
-        .lines()
-        .map(|l| {
-            l.strip_suffix(" memo=zsh_patina")
-                .expect("region_highlight entry must end with ` memo=zsh_patina'")
-        })
-        .collect::<Vec<_>>();
-
-    assert_eq!(lines, expected);
+    (stdout, exit_code)
 }
 
 /// Test if a simple `ls -l` command is highlighted correctly
@@ -408,4 +574,177 @@ async fn command_created_after_activation_in_existing_path_entry() {
         &[h(0, 8, [DYNAMIC_CALLABLE_COMMAND])],
     )
     .await;
+}
+
+/// Use the `highlight` subcommand to highlight a simple command
+#[tokio::test]
+#[ignore]
+async fn highlight_subcommand_simple_command() {
+    let image = setup().await;
+
+    assert_highlight_subcommand(
+        &image,
+        &[],
+        &[],
+        "time ls",
+        &xterm_256color(
+            "time ls\n",
+            [(0, 4, KEYWORD_TIME), (5, 7, DYNAMIC_CALLABLE_COMMAND)],
+        ),
+    )
+    .await;
+}
+
+/// Use the `highlight` subcommand to highlight a command with a directory
+#[tokio::test]
+#[ignore]
+async fn highlight_subcommand_command_with_dir() {
+    let image = setup().await;
+
+    assert_highlight_subcommand(
+        &image,
+        &[],
+        &[],
+        "ls /test",
+        &xterm_256color(
+            "ls /test\n",
+            [(0, 2, DYNAMIC_CALLABLE_COMMAND), (2, 8, ARGUMENTS)],
+        ),
+    )
+    .await;
+
+    assert_highlight_subcommand(
+        &image,
+        &["mkdir /test"],
+        &[],
+        "ls /test",
+        &xterm_256color(
+            "ls /test\n",
+            [
+                (0, 2, DYNAMIC_CALLABLE_COMMAND),
+                (2, 3, ARGUMENTS),
+                (3, 8, ARGUMENTS),
+                (3, 8, DYNAMIC_PATH_DIRECTORY_COMPLETE),
+            ],
+        ),
+    )
+    .await;
+}
+
+/// Use the `highlight` subcommand and highlight a command line from a file
+#[tokio::test]
+#[ignore]
+async fn highlight_subcommand_from_file() {
+    let image = setup().await;
+
+    assert_highlight_subcommand(
+        &image,
+        &["echo 'echo \"Hello world\"' > /tmp/command-line.zsh"],
+        &["/tmp/command-line.zsh"],
+        "",
+        &xterm_256color(
+            "echo \"Hello world\"\n",
+            [
+                (0, 4, DYNAMIC_CALLABLE_BUILTIN),
+                (4, 5, ARGUMENTS),
+                (5, 6, PUNCTUATION_STRING_BEGIN),
+                (6, 17, STRING_QUOTED_DOUBLE),
+                (17, 18, PUNCTUATION_STRING_END),
+            ],
+        ),
+    )
+    .await;
+
+    assert_highlight_subcommand(
+        &image,
+        &["echo 'echo OK' > -h"],
+        &["--", "-h"],
+        "",
+        &xterm_256color(
+            "echo OK\n",
+            [(0, 4, DYNAMIC_CALLABLE_BUILTIN), (4, 7, ARGUMENTS)],
+        ),
+    )
+    .await;
+}
+
+/// Test that the `highlight` subcommand fails if an input file does not exist
+#[tokio::test]
+#[ignore]
+async fn highlight_subcommand_nonexistent_input_file() {
+    let image = setup().await;
+
+    let (stdout, exit_code) =
+        run_highlight_subcommand(&image, &[], &["/tmp/command-line.zsh"], "").await;
+    assert_eq!(exit_code, 1);
+    assert_eq!(
+        std::str::from_utf8(&stdout).unwrap(),
+        "\x1B[31;1mzsh-patina:\x1B[0m Failed to read file: '/tmp/command-line.zsh'\n",
+    );
+}
+
+/// Test that the `highlight` subcommand fails if the input file is a directory
+#[tokio::test]
+#[ignore]
+async fn highlight_subcommand_input_is_dir() {
+    let image = setup().await;
+
+    let (stdout, exit_code) =
+        run_highlight_subcommand(&image, &["mkdir /temp"], &["/temp"], "").await;
+    assert_eq!(exit_code, 1);
+    assert_eq!(
+        std::str::from_utf8(&stdout).unwrap(),
+        "\x1B[31;1mzsh-patina:\x1B[0m Failed to read file: '/temp'\n",
+    );
+}
+
+/// Test that the `highlight` subcommand shows the help
+#[tokio::test]
+#[ignore]
+async fn highlight_subcommand_help() {
+    let image = setup().await;
+
+    let (stdout, exit_code) = run_highlight_subcommand(&image, &[], &["-h"], "").await;
+    assert_eq!(exit_code, 0);
+    assert!(std::str::from_utf8(&stdout).unwrap().contains("Usage:"));
+
+    let (stdout, exit_code) = run_highlight_subcommand(&image, &[], &["--help"], "").await;
+    assert_eq!(exit_code, 0);
+    assert!(std::str::from_utf8(&stdout).unwrap().contains("Usage:"));
+
+    // show help even if there is a file given
+    let (stdout, exit_code) = run_highlight_subcommand(&image, &[], &["-h", "file.txt"], "").await;
+    assert_eq!(exit_code, 0);
+    assert!(std::str::from_utf8(&stdout).unwrap().contains("Usage:"));
+
+    // show help even if there is a file given
+    let (stdout, exit_code) =
+        run_highlight_subcommand(&image, &[], &["-h", "--", "file.txt"], "").await;
+    assert_eq!(exit_code, 0);
+    assert!(std::str::from_utf8(&stdout).unwrap().contains("Usage:"));
+
+    let (stdout, exit_code) = run_highlight_subcommand(&image, &[], &["-a"], "").await;
+    assert_eq!(exit_code, 1);
+    assert!(
+        std::str::from_utf8(&stdout)
+            .unwrap()
+            .contains("unexpected argument"),
+    );
+
+    let (stdout, exit_code) = run_highlight_subcommand(&image, &[], &["file1", "file2"], "").await;
+    assert_eq!(exit_code, 1);
+    assert!(
+        std::str::from_utf8(&stdout)
+            .unwrap()
+            .contains("unexpected argument"),
+    );
+
+    let (stdout, exit_code) =
+        run_highlight_subcommand(&image, &[], &["file1", "--", "file2"], "").await;
+    assert_eq!(exit_code, 1);
+    assert!(
+        std::str::from_utf8(&stdout)
+            .unwrap()
+            .contains("unexpected argument"),
+    );
 }

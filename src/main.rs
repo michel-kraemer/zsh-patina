@@ -9,7 +9,9 @@ use figment::{
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use crate::{
-    commands::{check, completion, init_check_logger, list_scopes, list_themes, tokenize},
+    commands::{
+        check, completion, highlight, init_check_logger, list_scopes, list_themes, tokenize,
+    },
     config::{Config, config_file_path, runtime_dir},
     daemon::{activate, start_daemon, status_daemon, stop_daemon},
 };
@@ -89,11 +91,24 @@ enum Command {
     /// Check user configuration and custom theme (if applicable) for errors
     Check,
 
-    /// Tokenize a command (from a file or from stdin) and print the identified
-    /// tokens
+    /// Highlight a command line (from a file or from stdin) and print it
+    ///
+    /// This command is only available in a shell session where zsh-patina is
+    /// activated.
+    ///
+    /// Note that the command prints the plain input string without highlights
+    /// if the daemon is not running.
+    Highlight {
+        /// The input file whose contents to highlight. If this argument is not
+        /// provided, the command line will be read from stdin.
+        input_file: Option<String>,
+    },
+
+    /// Tokenize a command line (from a file or from stdin) and print the
+    /// identified tokens
     Tokenize {
-        /// The input file to tokenize. If this parameter is not provided, the
-        /// command will be read from stdin.
+        /// The input file to tokenize. If this argument is not provided, the
+        /// command line will be read from stdin.
         input_file: Option<String>,
     },
 
@@ -180,6 +195,7 @@ fn run() -> Result<()> {
         }
         Command::Status => status_daemon(&runtime_dir),
         Command::Check => check(&config, &config_file_path, &runtime_dir),
+        Command::Highlight { .. } => highlight(),
         Command::Tokenize { input_file } => tokenize(&config, &input_file),
         Command::ListScopes => list_scopes(),
         Command::ListThemes => list_themes(&config),
