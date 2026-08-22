@@ -47,7 +47,7 @@ Besides normal static highlighting, zsh-patina is able to dynamically detect whe
    brew install zsh-patina
    ```
 
-2. Initialize the plugin at the end of your `.zshrc` file:
+2. Activate the plugin at the end of your `.zshrc` file:
 
    ```shell
    echo "eval \"\$($(brew --prefix)/bin/zsh-patina activate)\"" >> ~/.zshrc
@@ -67,7 +67,7 @@ Besides normal static highlighting, zsh-patina is able to dynamically detect whe
    cargo install --locked zsh-patina
    ```
 
-2. Initialize the plugin at the end of your `.zshrc` file:
+2. Activate the plugin at the end of your `.zshrc` file:
 
    ```shell
    echo 'eval "$(~/.cargo/bin/zsh-patina activate)"' >> ~/.zshrc
@@ -89,7 +89,7 @@ Besides normal static highlighting, zsh-patina is able to dynamically detect whe
    sudo dpkg -i zsh-patina_1.9.0_amd64.deb
    ```
 
-3. Initialize the plugin at the end of your `.zshrc` file:
+3. Activate the plugin at the end of your `.zshrc` file:
 
    ```shell
    echo 'eval "$(zsh-patina activate)"' >> ~/.zshrc
@@ -111,7 +111,7 @@ Besides normal static highlighting, zsh-patina is able to dynamically detect whe
     paru -S zsh-patina-git
     ```
 
-2. Initialize the plugin at the end of your `.zshrc` file:
+2. Activate the plugin at the end of your `.zshrc` file:
 
    ```shell
    echo 'eval "$(zsh-patina activate)"' >> ~/.zshrc
@@ -160,7 +160,7 @@ zsh-patina runs on Windows via [MSYS2](https://www.msys2.org/) or [Cygwin](https
 
    zsh-patina is automatically added to your PATH upon install.
 
-2. Initialize the plugin at the end of your `.zshrc` file:
+2. Activate the plugin at the end of your `.zshrc` file:
 
    ```shell
    echo 'eval "$(zsh-patina activate)"' >> ~/.zshrc
@@ -183,7 +183,7 @@ zsh-patina runs on Windows via [MSYS2](https://www.msys2.org/) or [Cygwin](https
    tar xfz zsh-patina-v1.9.0-aarch64-apple-darwin.tar.gz -C ~/.zsh-patina --strip-components 1
    ```
 
-3. Initialize the plugin at the end of your `.zshrc` file:
+3. Activate the plugin at the end of your `.zshrc` file:
 
    ```shell
    echo 'eval "$(~/.zsh-patina/zsh-patina activate)"' >> ~/.zshrc
@@ -212,7 +212,7 @@ zsh-patina runs on Windows via [MSYS2](https://www.msys2.org/) or [Cygwin](https
    cargo build --release
    ```
 
-3. Initialize the plugin at the end of your `.zshrc` file:
+3. Activate the plugin at the end of your `.zshrc` file:
 
    ```shell
    echo 'eval "$(~/.zsh-patina/target/release/zsh-patina activate)"' >> ~/.zshrc
@@ -228,7 +228,7 @@ zsh-patina runs on Windows via [MSYS2](https://www.msys2.org/) or [Cygwin](https
 
 ### Antidote
 
-1. Install zsh-patina using your favorite package manager or by downloading a pre-compiled binary as [described above](#how-to-install).
+1. Install zsh-patina using your favorite package manager or by downloading a pre-compiled binary as [described above](#how-to-install), but ignore the instructions about activating the plugin in your `.zshrc`.
 
 2. Add the following line to your `${ZDOTDIR:-$HOME}/.zsh_plugins.txt` file:
 
@@ -244,7 +244,7 @@ zsh-patina runs on Windows via [MSYS2](https://www.msys2.org/) or [Cygwin](https
 
 ### Antigen
 
-1. Install zsh-patina using your favorite package manager or by downloading a pre-compiled binary as [described above](#how-to-install).
+1. Install zsh-patina using your favorite package manager or by downloading a pre-compiled binary as [described above](#how-to-install), but ignore the instructions about activating the plugin in your `.zshrc`.
 
 2. Add the following line to your `.zshrc` file:
 
@@ -260,12 +260,12 @@ zsh-patina runs on Windows via [MSYS2](https://www.msys2.org/) or [Cygwin](https
 
 ### oh-my-zsh
 
-1. Install zsh-patina using your favorite package manager or by downloading a pre-compiled binary as [described above](#how-to-install).
+1. Install zsh-patina using your favorite package manager or by downloading a pre-compiled binary as [described above](#how-to-install), but ignore the instructions about activating the plugin in your `.zshrc`.
 
 2. Clone this repository into your custom plugins directory:
 
    ```shell
-   git clone https://github.com/michel-kraemer/zsh-patina \
+   git clone --depth=1 https://github.com/michel-kraemer/zsh-patina \
        ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-patina
    ```
 
