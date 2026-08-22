@@ -25,7 +25,6 @@ Besides normal static highlighting, zsh-patina is able to dynamically detect whe
   * [Build from source (for the brave ones)](#build-from-source-for-the-brave-ones)
 * [Install with a Zsh plugin manager](#install-with-a-zsh-plugin-manager)
   * [Antidote](#antidote)
-  * [Antigen](#antigen)
   * [oh-my-zsh](#oh-my-zsh)
   * [Zinit](#zinit)
 * [Configuration](#configuration)
@@ -234,22 +233,6 @@ zsh-patina runs on Windows via [MSYS2](https://www.msys2.org/) or [Cygwin](https
 
    ```
    michel-kraemer/zsh-patina
-   ```
-
-3. Restart your terminal, or run:
-
-   ```shell
-   exec zsh
-   ```
-
-### Antigen
-
-1. Install zsh-patina using your favorite package manager or by downloading a pre-compiled binary as [described above](#how-to-install), but ignore the instructions about activating the plugin in your `.zshrc`.
-
-2. Add the following line to your `.zshrc` file:
-
-   ```shell
-   antigen bundle michel-kraemer/zsh-patina
    ```
 
 3. Restart your terminal, or run:
