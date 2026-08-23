@@ -2,6 +2,29 @@
 
 _Note: This project follows [Semantic Versioning]._
 
+## [1.10.0] - 2026-08-23
+
+**New features**
+
+- Highlight named directories (contributed by @ccjmne 🎊)
+- Add `zsh-patina highlight` subcommand (thanks to @iamkroot for this very useful feature request 👍). The subcommand can be used to highlight a command line from an input file or stdin ad-hoc within the current shell session.
+- Deprecate flake.nix (contributed by @Lubsch 🎉). The package is now available in nixpkgs-26.05 and nixpkgs-unstable.
+- Remove check for `zsh-patina activate` invoked last in the `.zshrc` (contributed by @ccjmne 😎). Placing zsh-patina at the end of the file is now just a recommendation mentioned in the [troubleshooting section][troubleshooting] of the [README].
+- Add install instructions for various plugin managers and add `zsh-patina.plugin.zsh` (thanks to @jasonm23 for the idea 💡)
+- Bump up client/daemon protocol to v3
+
+**Bug fixes**
+
+- Do not highlight directories as executable unless `autocd` is enabled (contributed by @ccjmne 🥳)
+- Fix file descriptor leak that could happen when pressing Ctrl+C during a long-running operation
+- Prevent daemon from keeping inherited file descriptors open (thanks to @taciturnaxolotl for the input 💬)
+
+**Maintenance**
+
+- Add [CONTRIBUTING] guide
+- Update dependencies
+- Update GitHub action dependencies
+
 ## [1.9.0] - 2026-07-18
 
 **New features**
@@ -202,6 +225,7 @@ _Note: This project follows [Semantic Versioning]._
 
 _First release._
 
+[1.10.0]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.10.0
 [1.9.0]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.9.0
 [1.8.0]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.8.0
 [1.7.0]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.7.0
@@ -217,13 +241,16 @@ _First release._
 [#10]: https://github.com/michel-kraemer/zsh-patina/issues/10
 [Catppuccin]: https://catppuccin.com/
 [configuration]: https://github.com/michel-kraemer/zsh-patina#configuration
+[CONTRIBUTING]: https://github.com/michel-kraemer/zsh-patina/blob/main/CONTRIBUTING.md
 [custom precommands]: https://github.com/michel-kraemer/zsh-patina#custom-precommands
 [Cygwin]: https://cygwin.com/
 [fsh-default-theme]: https://github.com/zdharma-continuum/fast-syntax-highlighting/blob/master/themes/default.ini
 [homebrew-core]: https://github.com/Homebrew/homebrew-core
 [MSYS2]: https://www.msys2.org/
 [Nord]: https://www.nordtheme.com/
+[README]: https://github.com/michel-kraemer/zsh-patina#readme
 [Semantic Versioning]: https://semver.org/
 [solarized]: https://ethanschoonover.com/solarized/
 [tokyo-night-vscode-theme]: https://github.com/enkia/tokyo-night-vscode-theme
+[troubleshooting]: https://github.com/michel-kraemer/zsh-patina#troubleshooting
 [zsh-history-substring-search]: https://github.com/zsh-users/zsh-history-substring-search

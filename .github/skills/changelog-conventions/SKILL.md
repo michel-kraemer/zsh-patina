@@ -58,3 +58,5 @@ gh release edit <tag> --repo michel-kraemer/zsh-patina --notes-file <file>
 ```
 
 Contributor credits use the format `(contributed by @username <emoji>)`, where the emoji is a fun or party-related one to praise the contributor (e.g. 🎉 🥳 🎊 🙌). The choice of emoji is informal and intentionally varied.
+
+For people who suggested an idea, reported an issue, or otherwise contributed without writing code (e.g. a feature request or bug report), use the variant `(thanks to @username for ... <emoji>)`, where `...` briefly describes what they did (e.g. `for this very useful feature request`, `for the idea`, `for the input`, `for the bug report`). This keeps non-code contributions distinguishable from code contributions while still crediting them in the same inline style.
