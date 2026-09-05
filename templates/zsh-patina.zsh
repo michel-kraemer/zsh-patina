@@ -336,6 +336,11 @@ _zsh_patina() {
                 header="${header}YKA=1"$'\n'"YKS=$YANK_START"$'\n'"YKE=$YANK_END"$'\n'"YKH=$REPLY"$'\n'
             fi
 
+            if (( ${#cdpath[@]} )); then
+                _zsh_patina_encode_string "${(F)${cdpath[@]:A}}"
+                header="${header}CDP=$REPLY"$'\n'
+            fi
+
             if [[ -o autocd ]]; then
                 header="${header}ACD=1"$'\n'
             fi

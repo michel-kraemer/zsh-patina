@@ -48,6 +48,7 @@ pub enum DynamicType {
 pub struct DynamicHighlightingOptions<'a> {
     cursor: Option<usize>,
     pwd: &'a str,
+    cdpath: &'a [&'a str],
     autocd: bool,
     home_dir: &'a str,
     theme: &'a Theme,
@@ -61,6 +62,7 @@ impl<'a> DynamicHighlightingOptions<'a> {
     pub fn new(
         cursor: Option<usize>,
         pwd: &'a str,
+        cdpath: &'a [&'a str],
         autocd: bool,
         home_dir: &'a str,
         theme: &'a Theme,
@@ -70,6 +72,7 @@ impl<'a> DynamicHighlightingOptions<'a> {
         Self {
             cursor,
             pwd,
+            cdpath,
             autocd,
             home_dir,
             theme,
@@ -100,11 +103,16 @@ pub struct DynamicTokenGroup {
 }
 
 impl DynamicTokenGroup {
-    pub fn highlight(&self, line: &str, options: &DynamicHighlightingOptions) -> Result<Vec<Span>> {
+    pub fn highlight(
+        &self,
+        line: &str,
+        options: &DynamicHighlightingOptions,
+        is_cd_like: &mut bool,
+    ) -> Result<Vec<Span>> {
         match self.dynamic_type {
             DynamicType::Unknown => Ok(Vec::new()), // nothing to do
-            DynamicType::Callable => self.highlight_callable(line, options),
-            DynamicType::Arguments => self.highlight_arguments(line, options),
+            DynamicType::Callable => self.highlight_callable(line, options, is_cd_like),
+            DynamicType::Arguments => self.highlight_arguments(line, options, *is_cd_like),
         }
     }
 
@@ -112,10 +120,14 @@ impl DynamicTokenGroup {
         &self,
         line: &str,
         options: &DynamicHighlightingOptions,
+        is_cd_like: &mut bool,
     ) -> Result<Vec<Span>> {
         let mut result = Vec::new();
 
         let parsed = self.parse(line, options.home_dir)?;
+        *is_cd_like = parsed
+            .first()
+            .is_some_and(|token| matches!(token.text.as_str(), "cd" | "chdir" | "pushd"));
         for token in parsed.into_iter().take(1) {
             log::trace!("Dynamically highlighting callable: {}", token.text);
             let span_style = if options.resolve_nameddirs
@@ -147,6 +159,7 @@ impl DynamicTokenGroup {
         &self,
         line: &str,
         options: &DynamicHighlightingOptions,
+        is_cd_like: bool,
     ) -> Result<Vec<Span>> {
         let mut result = Vec::new();
 
@@ -163,7 +176,7 @@ impl DynamicTokenGroup {
                     base_style: None,
                 }))
             } else {
-                classify_argument(&token.text, &token.range, options)
+                classify_argument(&token.text, &token.range, options, is_cd_like)
             };
 
             if let Some(style) = style {
@@ -412,8 +425,9 @@ pub(super) fn classify_callable(
                 .cursor
                 .map(|cursor| (range.start..=range.end).contains(&cursor))
                 .unwrap_or_default();
-
-        match path_type(&path, options.pwd, partial) {
+        // prefer working directory before falling back to cdpath entries
+        let search_dirs = std::iter::once(options.pwd).chain(options.cdpath.iter().copied());
+        match path_type(&path, search_dirs, true, partial) {
             Some((PathType::Directory, _)) => {
                 log::trace!("Callable `{path}' is a directory (autocd).");
                 resolve_static_style(DYNAMIC_CALLABLE_COMMAND, options.theme)
@@ -436,7 +450,12 @@ pub(super) fn classify_argument(
     path: &str,
     range: &Range<usize>,
     options: &DynamicHighlightingOptions,
+    is_cd_like: bool,
 ) -> Option<SpanStyle> {
+    // explicit relative paths bypass cdpath, as they do in Zsh
+    let use_cdpath = is_cd_like && !path.starts_with("./") && !path.starts_with("../");
+    let search_dirs =
+        std::iter::once(options.pwd).chain(options.cdpath.iter().copied().filter(|_| use_cdpath));
     // only perform highlighting of partial paths if it is enabled and if the
     // cursor touches the prefix
     let partial = options.highlight_partial_paths
@@ -444,7 +463,7 @@ pub(super) fn classify_argument(
             .cursor
             .map(|cursor| (range.start..=range.end).contains(&cursor))
             .unwrap_or_default();
-    let (path_type, matched_partially) = path_type(path, options.pwd, partial)?;
+    let (path_type, matched_partially) = path_type(path, search_dirs, is_cd_like, partial)?;
 
     log::trace!("Argument `{path}' is {path_type:?}.");
     let dynamic_scope = match (path_type, matched_partially) {
