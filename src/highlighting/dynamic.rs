@@ -425,8 +425,14 @@ pub(super) fn classify_callable(
                 .cursor
                 .map(|cursor| (range.start..=range.end).contains(&cursor))
                 .unwrap_or_default();
-        // prefer working directory before falling back to cdpath entries
+
+        // Prefer working directory before falling back to cdpath entries. Note
+        // that Zsh allows you to put `.` into `cdpath` in which case, other
+        // directories can take precedence. However, since we only need to check
+        // for the presence of the directory in any (!) path to highlight it,
+        // without needing to identify the actual path, this is fine.
         let search_dirs = std::iter::once(options.pwd).chain(options.cdpath.iter().copied());
+
         match path_type(&path, search_dirs, true, partial) {
             Some((PathType::Directory, _)) => {
                 log::trace!("Callable `{path}' is a directory (autocd).");
@@ -454,8 +460,15 @@ pub(super) fn classify_argument(
 ) -> Option<SpanStyle> {
     // explicit relative paths bypass cdpath, as they do in Zsh
     let use_cdpath = is_cd_like && !path.starts_with("./") && !path.starts_with("../");
+
+    // Prefer working directory before falling back to cdpath entries. Note that
+    // Zsh allows you to put `.` into `cdpath` in which case, other directories
+    // can take precedence. However, since we only need to check for the
+    // presence of the directory in any (!) path to highlight it, without
+    // needing to identify the actual path, this is fine.
     let search_dirs =
         std::iter::once(options.pwd).chain(options.cdpath.iter().copied().filter(|_| use_cdpath));
+
     // only perform highlighting of partial paths if it is enabled and if the
     // cursor touches the prefix
     let partial = options.highlight_partial_paths
@@ -463,6 +476,7 @@ pub(super) fn classify_argument(
             .cursor
             .map(|cursor| (range.start..=range.end).contains(&cursor))
             .unwrap_or_default();
+
     let (path_type, matched_partially) = path_type(path, search_dirs, is_cd_like, partial)?;
 
     log::trace!("Argument `{path}' is {path_type:?}.");
@@ -472,6 +486,7 @@ pub(super) fn classify_argument(
         (PathType::Directory, true) => DYNAMIC_PATH_DIRECTORY_PARTIAL,
         (PathType::Directory, false) => DYNAMIC_PATH_DIRECTORY_COMPLETE,
     };
+
     resolve_static_style(dynamic_scope, options.theme).map(SpanStyle::Static)
 }
 

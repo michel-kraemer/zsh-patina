@@ -431,6 +431,7 @@ impl Highlighter {
 
         let mut dynamic_builder = DynamicTokenGroupBuilder::new(self.dynamic_scopes);
         let mut mixins = Vec::new();
+
         // cd, chdir and pushd use directory-only path lookups for their arguments
         let mut is_cd_like = false;
 
@@ -1148,22 +1149,28 @@ pub mod tests {
 
         let cd = cfg.highlighter.highlight("cd dest", &request)?;
         assert!(cd.iter().any(|span| span.start == 3 && span.end == 7));
+
         let quoted = cfg.highlighter.highlight(r#""cd" dest"#, &request)?;
         assert!(quoted.iter().any(|span| span.start == 5 && span.end == 9));
+
         let escaped = cfg.highlighter.highlight(r"\cd dest", &request)?;
         assert!(escaped.iter().any(|span| span.start == 4 && span.end == 8));
+
         let end_of_options = cfg.highlighter.highlight("cd -- dest", &request)?;
         assert!(
             end_of_options
                 .iter()
                 .any(|span| span.start == 6 && span.end == 10)
         );
+
         let cp = cfg.highlighter.highlight("cp dest", &request)?;
         assert!(!cp.iter().any(|span| span.start == 3 && span.end == 7));
 
         fs::write(PathBuf::from(&cfg.pwd).join("file"), "content")?;
+
         let file = cfg.highlighter.highlight("cd file", &request)?;
         assert!(!file.iter().any(|span| span.start == 3 && span.end == 7));
+
         let relative_file = cfg.highlighter.highlight("cd ./file", &request)?;
         assert!(
             !relative_file
