@@ -1049,7 +1049,12 @@ where
     let request = HighlightingRequest::default()
         .with_cursor(pre_buffer_total_len + cursor)
         .with_pwd(pwd.as_deref())
-        .with_cdpath(cdpath.as_deref().unwrap_or_default())
+        .with_cdpath(
+            cdpath
+                .as_ref()
+                .map(|p| p.lines().collect::<Vec<_>>())
+                .unwrap_or_default(),
+        )
         .with_autocd(autocd_enabled)
         .with_nameddirs(supports_nameddirs)
         .with_history_expansions(history_expansions_enabled)
