@@ -1172,7 +1172,7 @@ pub mod tests {
     }
 
     /// Test that a single token can be highlighted correctly as either a
-    /// callable, a directory, or a file, accordingo to the context in which it
+    /// callable, a directory, or a file, according to the context in which it
     /// is interpreted.
     #[test]
     fn distinguish_cwd_file_from_cdpath_directory() -> Result<()> {
@@ -1189,10 +1189,18 @@ pub mod tests {
                 .with_cdpath(vec![projects.to_str().unwrap()])
         };
 
-        let callable = cfg.highlight_with_request("zsh-patina --version", request())?;
-        let file_arg = cfg.highlight_with_request("ls zsh-patina", request())?;
-        let cd_arg = cfg.highlight_with_request("cd zsh-patina", request())?;
-        assert_snapshot!(format!("{callable}\n\n{file_arg}\n\n{cd_arg}"));
+        assert_snapshot!(
+            "distinguish_cwd_file_from_cdpath_directory__callable",
+            cfg.highlight_with_request("zsh-patina --version", request())?
+        );
+        assert_snapshot!(
+            "distinguish_cwd_file_from_cdpath_directory__file_arg",
+            cfg.highlight_with_request("ls zsh-patina", request())?
+        );
+        assert_snapshot!(
+            "distinguish_cwd_file_from_cdpath_directory__cd_arg",
+            cfg.highlight_with_request("cd zsh-patina", request())?
+        );
 
         Ok(())
     }
