@@ -56,15 +56,13 @@ fn find_by_prefix(prefix: &str, pwd: &str, directory_only: bool) -> Option<(Meta
             .file_name()
             .as_encoded_bytes()
             .starts_with(name.as_encoded_bytes())
+            && let Ok(metadata) = entry.metadata()
+            && (!directory_only || metadata.is_dir())
         {
-            if let Ok(metadata) = entry.metadata()
-                && (!directory_only || metadata.is_dir())
-            {
-                return Some((
-                    metadata,
-                    entry.file_name().as_encoded_bytes() != name.as_encoded_bytes(),
-                ));
-            }
+            return Some((
+                metadata,
+                entry.file_name().as_encoded_bytes() != name.as_encoded_bytes(),
+            ));
         }
     }
 
