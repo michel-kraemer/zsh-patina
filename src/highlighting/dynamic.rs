@@ -100,19 +100,15 @@ struct ParsedToken {
 pub struct DynamicTokenGroup {
     pub dynamic_type: DynamicType,
     pub tokens: Vec<DynamicToken>,
+    is_cd_like: bool,
 }
 
 impl DynamicTokenGroup {
-    pub fn highlight(
-        &self,
-        line: &str,
-        options: &DynamicHighlightingOptions,
-        is_cd_like: &mut bool,
-    ) -> Result<Vec<Span>> {
+    pub fn highlight(&self, line: &str, options: &DynamicHighlightingOptions) -> Result<Vec<Span>> {
         match self.dynamic_type {
             DynamicType::Unknown => Ok(Vec::new()), // nothing to do
-            DynamicType::Callable => self.highlight_callable(line, options, is_cd_like),
-            DynamicType::Arguments => self.highlight_arguments(line, options, *is_cd_like),
+            DynamicType::Callable => self.highlight_callable(line, options),
+            DynamicType::Arguments => self.highlight_arguments(line, options),
         }
     }
 
@@ -120,14 +116,10 @@ impl DynamicTokenGroup {
         &self,
         line: &str,
         options: &DynamicHighlightingOptions,
-        is_cd_like: &mut bool,
     ) -> Result<Vec<Span>> {
         let mut result = Vec::new();
 
         let parsed = self.parse(line, options.home_dir)?;
-        *is_cd_like = parsed
-            .first()
-            .is_some_and(|token| matches!(token.text.as_str(), "cd" | "chdir" | "pushd"));
         for token in parsed.into_iter().take(1) {
             log::trace!("Dynamically highlighting callable: {}", token.text);
             let span_style = if options.resolve_nameddirs
@@ -159,7 +151,6 @@ impl DynamicTokenGroup {
         &self,
         line: &str,
         options: &DynamicHighlightingOptions,
-        is_cd_like: bool,
     ) -> Result<Vec<Span>> {
         let mut result = Vec::new();
 
@@ -176,7 +167,7 @@ impl DynamicTokenGroup {
                     base_style: None,
                 }))
             } else {
-                classify_argument(&token.text, &token.range, options, is_cd_like)
+                classify_argument(&token.text, &token.range, options, self.is_cd_like)
             };
 
             if let Some(style) = style {
@@ -494,7 +485,10 @@ pub(super) fn classify_argument(
 pub struct DynamicScopes {
     arguments_scope: Scope,
     callable_scope: Scope,
+    cdlike_scope: Scope,
     character_escape_scope: Scope,
+    expansion_command_backticks: Scope,
+    expansion_command_parens: Scope,
     string_quoted_begin_scope: Scope,
     string_quoted_end_scope: Scope,
     string_quoted_single_scope: Scope,
@@ -509,7 +503,10 @@ impl DynamicScopes {
     pub fn new() -> Self {
         let arguments_scope = Scope::new(ARGUMENTS).unwrap();
         let callable_scope = Scope::new(CALLABLE).unwrap();
+        let cdlike_scope = Scope::new(CDLIKE).unwrap();
         let character_escape_scope = Scope::new(CHARACTER_ESCAPE).unwrap();
+        let expansion_command_backticks = Scope::new(EXPANSION_COMMAND_BACKTICKS).unwrap();
+        let expansion_command_parens = Scope::new(EXPANSION_COMMAND_PARENS).unwrap();
         let string_quoted_begin_scope = Scope::new(STRING_QUOTED_BEGIN).unwrap();
         let string_quoted_end_scope = Scope::new(STRING_QUOTED_END).unwrap();
         let string_quoted_single_scope = Scope::new(STRING_QUOTED_SINGLE).unwrap();
@@ -521,7 +518,10 @@ impl DynamicScopes {
         Self {
             arguments_scope,
             callable_scope,
+            cdlike_scope,
             character_escape_scope,
+            expansion_command_backticks,
+            expansion_command_parens,
             string_quoted_begin_scope,
             string_quoted_end_scope,
             string_quoted_single_scope,
@@ -560,6 +560,26 @@ impl DynamicTokenGroupBuilder {
             group_stash: Vec::new(),
             character_escape_buf: Vec::new(),
         }
+    }
+
+    // Check if the command that is currently being parsed is cd-like (cd,
+    // chdir, pushd). The function traverses the stack from top to bottom and
+    // looks for a cdlike scope belonging to the current command.
+    fn is_cd_like(&self) -> bool {
+        for s in self.stack.iter().rev() {
+            if *s == self.scopes.expansion_command_backticks
+                || *s == self.scopes.expansion_command_parens
+            {
+                // We are inside a command expansion and haven't found a cdlike
+                // scope yet. Ignore anything below this item in the stack as it
+                // might belong to another command.
+                break;
+            }
+            if *s == self.scopes.cdlike_scope {
+                return true;
+            }
+        }
+        false
     }
 
     fn on_pop(&mut self, i: usize, result: &mut Vec<DynamicTokenGroup>) {
@@ -607,6 +627,7 @@ impl DynamicTokenGroupBuilder {
             result.push(DynamicTokenGroup {
                 dynamic_type: g.dynamic_type,
                 tokens: g.tokens,
+                is_cd_like: self.is_cd_like(),
             });
         }
     }
@@ -773,6 +794,7 @@ impl DynamicTokenGroupBuilder {
             result.push(DynamicTokenGroup {
                 dynamic_type: DynamicType::Unknown,
                 tokens: self.character_escape_buf,
+                is_cd_like: false,
             });
         }
 

@@ -423,9 +423,6 @@ impl Highlighter {
         let mut dynamic_builder = DynamicTokenGroupBuilder::new(self.dynamic_scopes);
         let mut mixins = Vec::new();
 
-        // cd, chdir and pushd use directory-only path lookups for their arguments
-        let mut is_cd_like = false;
-
         let dynamic_highlighting_options = request.pwd.map(|pwd| {
             DynamicHighlightingOptions::new(
                 request.cursor,
@@ -496,8 +493,7 @@ impl Highlighter {
             {
                 for g in dynamic_builder.build(&ops, byte_offset) {
                     let dynamic_type = g.dynamic_type;
-                    if let Ok(group_spans) =
-                        g.highlight(command, dynamic_highlighting_options, &mut is_cd_like)
+                    if let Ok(group_spans) = g.highlight(command, dynamic_highlighting_options)
                         && self.should_highlight_dynamic(&dynamic_type)
                     {
                         mixins.extend(group_spans);
@@ -515,8 +511,7 @@ impl Highlighter {
         {
             for g in dynamic_builder.finish(byte_offset) {
                 let dynamic_type = g.dynamic_type;
-                if let Ok(group_spans) =
-                    g.highlight(command, dynamic_highlighting_options, &mut is_cd_like)
+                if let Ok(group_spans) = g.highlight(command, dynamic_highlighting_options)
                     && self.should_highlight_dynamic(&dynamic_type)
                 {
                     mixins.extend(group_spans);
@@ -1140,12 +1135,6 @@ pub mod tests {
         let cd = cfg.highlighter.highlight("cd dest", &request)?;
         assert!(cd.iter().any(|span| span.start == 3 && span.end == 7));
 
-        let quoted = cfg.highlighter.highlight(r#""cd" dest"#, &request)?;
-        assert!(quoted.iter().any(|span| span.start == 5 && span.end == 9));
-
-        let escaped = cfg.highlighter.highlight(r"\cd dest", &request)?;
-        assert!(escaped.iter().any(|span| span.start == 4 && span.end == 8));
-
         let end_of_options = cfg.highlighter.highlight("cd -- dest", &request)?;
         assert!(
             end_of_options
@@ -1200,6 +1189,10 @@ pub mod tests {
         assert_snapshot!(
             "distinguish_cwd_file_from_cdpath_directory__cd_arg",
             cfg.highlight_with_request("cd zsh-patina", request())?
+        );
+        assert_snapshot!(
+            "distinguish_cwd_file_from_cdpath_directory__expansion_command",
+            cfg.highlight_with_request("ls $(cd zsh-patina; pwd; cd ..) zsh-patina", request())?
         );
 
         Ok(())

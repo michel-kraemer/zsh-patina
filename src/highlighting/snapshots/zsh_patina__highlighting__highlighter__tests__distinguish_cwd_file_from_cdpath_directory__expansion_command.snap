@@ -1,0 +1,24 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight_with_request(\"ls $(cd zsh-patina; pwd; cd ..) zsh-patina\",\nrequest())?"
+---
+ls $(cd zsh-patina; pwd; cd ..) zsh-patina
+
+0   2   `ls`          CALLABLE `ls`
+2   3   ` `           meta.function-call.arguments
+3   4   `$`           punctuation.definition.variable
+4   5   `(`           punctuation.section.parens.begin
+5   7   `cd`          CALLABLE `cd`
+7   8   ` `           meta.function-call.arguments
+8   18  `zsh-patina`  meta.function-call.arguments + dynamic.path.directory.complete
+18  19  `;`           keyword.operator.logical.continue
+19  20  ` `           meta.group.expansion.command.parens
+20  23  `pwd`         CALLABLE `pwd`
+23  24  `;`           keyword.operator.logical.continue
+24  25  ` `           meta.group.expansion.command.parens
+25  27  `cd`          CALLABLE `cd`
+27  28  ` `           meta.function-call.arguments
+28  30  `..`          meta.function-call.arguments + dynamic.path.directory.complete
+30  31  `)`           punctuation.section.parens.end
+31  32  ` `           meta.function-call.arguments
+32  42  `zsh-patina`  meta.function-call.arguments + dynamic.path.file.complete
