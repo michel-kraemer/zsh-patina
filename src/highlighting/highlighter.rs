@@ -170,6 +170,7 @@ impl<'a> HighlighterBuilder<'a> {
 pub struct HighlightingRequest<'a, P> {
     cursor: Option<usize>,
     pwd: Option<&'a str>,
+    cdpath: Vec<&'a str>,
     history_expansions_enabled: bool,
     autocd_enabled: bool,
     resolve_nameddirs: bool,
@@ -178,74 +179,77 @@ pub struct HighlightingRequest<'a, P> {
 
 impl<'a, P> HighlightingRequest<'a, P> {
     /// Set the cursor position in the command (character index)
-    pub fn with_cursor(&self, cursor: usize) -> Self
+    pub fn with_cursor(mut self, cursor: usize) -> Self
     where
         P: Copy,
     {
-        Self {
-            cursor: Some(cursor),
-            ..*self
-        }
+        self.cursor = Some(cursor);
+        self
     }
 
     /// Set the current working directory
-    pub fn with_pwd<'b, O>(&self, pwd: O) -> HighlightingRequest<'b, P>
+    pub fn with_pwd<'b, O>(self, pwd: O) -> HighlightingRequest<'b, P>
     where
         O: Into<Option<&'b str>>,
         P: Copy,
+        'a: 'b,
     {
         HighlightingRequest {
             pwd: pwd.into(),
-            ..*self
+            ..self
         }
     }
 
+    /// Set the newline-separated directories to search for cd-like commands
+    pub fn with_cdpath<'b>(self, cdpath: Vec<&'b str>) -> HighlightingRequest<'b, P>
+    where
+        P: Copy,
+        'a: 'b,
+    {
+        HighlightingRequest { cdpath, ..self }
+    }
+
     /// Enable or disable highlighting of history expansions
-    pub fn with_history_expansions(&self, enabled: bool) -> Self
+    pub fn with_history_expansions(mut self, enabled: bool) -> Self
     where
         P: Copy,
     {
-        Self {
-            history_expansions_enabled: enabled,
-            ..*self
-        }
+        self.history_expansions_enabled = enabled;
+        self
     }
 
     /// Enable or disable support for the AUTO_CD option (i.e. that a bare
     /// directory in callable position is highlighted as a command if it is
     /// executable)
-    pub fn with_autocd(&self, enabled: bool) -> Self
+    pub fn with_autocd(mut self, enabled: bool) -> Self
     where
         P: Copy,
     {
-        Self {
-            autocd_enabled: enabled,
-            ..*self
-        }
+        self.autocd_enabled = enabled;
+        self
     }
 
     /// Enable or disable support for named directories resolution
-    pub fn with_nameddirs(&self, enabled: bool) -> Self
+    pub fn with_nameddirs(mut self, enabled: bool) -> Self
     where
         P: Copy,
     {
-        Self {
-            resolve_nameddirs: enabled,
-            ..*self
-        }
+        self.resolve_nameddirs = enabled;
+        self
     }
 
     /// Set the predicate function that determines which spans should be
     /// highlighted The predicate function takes a character index range and
     /// returns `true` if the span within that range should be highlighted, and
     /// `false` otherwise.
-    pub fn with_predicate<Q>(&self, predicate: Q) -> HighlightingRequest<'a, Q>
+    pub fn with_predicate<Q>(self, predicate: Q) -> HighlightingRequest<'a, Q>
     where
         Q: Fn(&Range<usize>) -> bool,
     {
         HighlightingRequest {
             cursor: self.cursor,
             pwd: self.pwd,
+            cdpath: self.cdpath,
             history_expansions_enabled: self.history_expansions_enabled,
             autocd_enabled: self.autocd_enabled,
             resolve_nameddirs: self.resolve_nameddirs,
@@ -259,6 +263,7 @@ impl Default for HighlightingRequest<'_, fn(&Range<usize>) -> bool> {
         Self {
             cursor: None,
             pwd: None,
+            cdpath: Vec::new(),
             history_expansions_enabled: true,
             autocd_enabled: false,
             resolve_nameddirs: false,
@@ -372,6 +377,7 @@ impl Highlighter {
         let options = DynamicHighlightingOptions::new(
             request.cursor,
             request.pwd?,
+            &request.cdpath,
             request.autocd_enabled,
             &self.home_dir,
             &self.theme,
@@ -381,7 +387,7 @@ impl Highlighter {
 
         let style = match dynamic_type {
             DynamicType::Callable => classify_callable(path, range, &options),
-            DynamicType::Arguments => classify_argument(&path, range, &options),
+            DynamicType::Arguments => classify_argument(&path, range, &options, false),
             DynamicType::Unknown => None,
         };
 
@@ -421,6 +427,7 @@ impl Highlighter {
             DynamicHighlightingOptions::new(
                 request.cursor,
                 pwd,
+                &request.cdpath,
                 request.autocd_enabled,
                 &self.home_dir,
                 &self.theme,
@@ -485,8 +492,9 @@ impl Highlighter {
                 && let Some(dynamic_highlighting_options) = &dynamic_highlighting_options
             {
                 for g in dynamic_builder.build(&ops, byte_offset) {
-                    if self.should_highlight_dynamic(&g.dynamic_type)
-                        && let Ok(group_spans) = g.highlight(command, dynamic_highlighting_options)
+                    let dynamic_type = g.dynamic_type;
+                    if let Ok(group_spans) = g.highlight(command, dynamic_highlighting_options)
+                        && self.should_highlight_dynamic(&dynamic_type)
                     {
                         mixins.extend(group_spans);
                     }
@@ -502,8 +510,9 @@ impl Highlighter {
             && let Some(dynamic_highlighting_options) = &dynamic_highlighting_options
         {
             for g in dynamic_builder.finish(byte_offset) {
-                if self.should_highlight_dynamic(&g.dynamic_type)
-                    && let Ok(group_spans) = g.highlight(command, dynamic_highlighting_options)
+                let dynamic_type = g.dynamic_type;
+                if let Ok(group_spans) = g.highlight(command, dynamic_highlighting_options)
+                    && self.should_highlight_dynamic(&dynamic_type)
                 {
                     mixins.extend(group_spans);
                 }
@@ -938,6 +947,8 @@ pub mod tests {
     fn directory_in_callable_position_autocd() -> Result<()> {
         let cfg = test_cfg()?;
         cfg.create_dir("mydir")?;
+        let cdpath = tempfile::tempdir()?;
+        fs::create_dir(cdpath.path().join("cdpathdir"))?;
 
         // will be highlighted as a command
         assert_snapshot!(
@@ -958,6 +969,18 @@ pub mod tests {
                 HighlightingRequest::default()
                     .with_autocd(true)
                     .with_pwd(cfg.pwd.as_str()),
+            )?
+        );
+
+        // will be highlighted as a command through cdpath
+        assert_snapshot!(
+            "directory_in_callable_position_autocd__cdpath_name",
+            cfg.highlight_with_request(
+                "cdpathdir",
+                HighlightingRequest::default()
+                    .with_autocd(true)
+                    .with_pwd(cfg.pwd.as_str())
+                    .with_cdpath(vec![cdpath.path().to_str().unwrap()]),
             )?
         );
 
@@ -1095,6 +1118,81 @@ pub mod tests {
         assert_snapshot!(
             "argument_is_directory__simple",
             cfg.highlight("cp test.txt dest")?
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn cdpath_only_applies_to_cd_commands() -> Result<()> {
+        let cfg = test_cfg()?;
+        let cdpath = tempfile::tempdir()?;
+        fs::create_dir(cdpath.path().join("dest"))?;
+        let request = HighlightingRequest::default()
+            .with_pwd(cfg.pwd.as_str())
+            .with_cdpath(vec![cdpath.path().to_str().unwrap()]);
+
+        let cd = cfg.highlighter.highlight("cd dest", &request)?;
+        assert!(cd.iter().any(|span| span.start == 3 && span.end == 7));
+
+        let end_of_options = cfg.highlighter.highlight("cd -- dest", &request)?;
+        assert!(
+            end_of_options
+                .iter()
+                .any(|span| span.start == 6 && span.end == 10)
+        );
+
+        let cp = cfg.highlighter.highlight("cp dest", &request)?;
+        assert!(!cp.iter().any(|span| span.start == 3 && span.end == 7));
+
+        fs::write(PathBuf::from(&cfg.pwd).join("file"), "content")?;
+
+        let file = cfg.highlighter.highlight("cd file", &request)?;
+        assert!(!file.iter().any(|span| span.start == 3 && span.end == 7));
+
+        let relative_file = cfg.highlighter.highlight("cd ./file", &request)?;
+        assert!(
+            !relative_file
+                .iter()
+                .any(|span| span.start == 3 && span.end == 9)
+        );
+
+        Ok(())
+    }
+
+    /// Test that a single token can be highlighted correctly as either a
+    /// callable, a directory, or a file, according to the context in which it
+    /// is interpreted.
+    #[test]
+    fn distinguish_cwd_file_from_cdpath_directory() -> Result<()> {
+        let cfg = test_cfg()?;
+        let projects = cfg.tempdir.path().join("projects");
+        let pwd = projects.join("zsh-patina/target/debug");
+        fs::create_dir_all(&pwd)?;
+        let exec = pwd.join("zsh-patina");
+        fs::write(&exec, "#!/bin/sh")?;
+        fs::set_permissions(&exec, Permissions::from_mode(0o755))?;
+        let request = || {
+            HighlightingRequest::default()
+                .with_pwd(pwd.to_str().unwrap())
+                .with_cdpath(vec![projects.to_str().unwrap()])
+        };
+
+        assert_snapshot!(
+            "distinguish_cwd_file_from_cdpath_directory__callable",
+            cfg.highlight_with_request("zsh-patina --version", request())?
+        );
+        assert_snapshot!(
+            "distinguish_cwd_file_from_cdpath_directory__file_arg",
+            cfg.highlight_with_request("ls zsh-patina", request())?
+        );
+        assert_snapshot!(
+            "distinguish_cwd_file_from_cdpath_directory__cd_arg",
+            cfg.highlight_with_request("cd zsh-patina", request())?
+        );
+        assert_snapshot!(
+            "distinguish_cwd_file_from_cdpath_directory__expansion_command",
+            cfg.highlight_with_request("ls $(cd zsh-patina; pwd; cd ..) zsh-patina", request())?
         );
 
         Ok(())

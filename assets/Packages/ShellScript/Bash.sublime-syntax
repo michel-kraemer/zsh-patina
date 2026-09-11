@@ -1075,6 +1075,11 @@ contexts:
               pop: true
             - include: expansion-and-string
 
+  cmd-cdlike:
+    - meta_scope: meta.group.cdlike.shell
+    - match: ""
+      pop: true
+
   cmd:
     - include: cmd-common
     - match: \(
@@ -1108,6 +1113,8 @@ contexts:
           scope: punctuation.definition.compound.braces.end.shell
           set: [cmd-post, cmd-args]
         - include: main
+    - match: (?=(cd|chdir|pushd)(?={{is_start_of_arguments}}|{{is_end_of_interpolation}}))
+      set: [cmd-post, cmd-cdlike, cmd-args, cmd-name]
     - match: (?=\S)
       set: [cmd-post, cmd-args, cmd-name]
 
@@ -1144,6 +1151,8 @@ contexts:
           scope: punctuation.definition.compound.braces.end.shell
           set: [cmd-post, cmd-args-bt]
         - include: main-bt
+    - match: (?=(cd|chdir|pushd)(?={{is_start_of_arguments}}|{{is_end_of_interpolation}}))
+      set: [cmd-post, cmd-cdlike, cmd-args-bt, cmd-name-bt]
     - match: (?=\S)
       set: [cmd-post, cmd-args-bt, cmd-name-bt]
 

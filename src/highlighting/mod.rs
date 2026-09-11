@@ -22,8 +22,12 @@ const DYNAMIC_CALLABLE_COMMAND: &str = "dynamic.callable.command.shell";
 const DYNAMIC_CALLABLE_FUNCTION: &str = "dynamic.callable.function.shell";
 const DYNAMIC_CALLABLE_MISSING: &str = "dynamic.callable.missing.shell";
 
-const EXPANSION_HISTORY: &str = "meta.group.expansion.history.shell";
+const CDLIKE: &str = "meta.group.cdlike.shell";
 const FUNCTION_CALL: &str = "meta.function-call.shell";
+
+const EXPANSION_COMMAND_BACKTICKS: &str = "meta.group.expansion.command.backticks.shell";
+const EXPANSION_COMMAND_PARENS: &str = "meta.group.expansion.command.parens.shell";
+const EXPANSION_HISTORY: &str = "meta.group.expansion.history.shell";
 
 const CHARACTER_ESCAPE: &str = "constant.character.escape.shell";
 const PARAMETER_OPTION: &str = "variable.parameter.option.shell";

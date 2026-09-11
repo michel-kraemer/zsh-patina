@@ -1,0 +1,9 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight_with_request(\"cd zsh-patina\", request())?"
+---
+cd zsh-patina
+
+0  2   `cd`          CALLABLE `cd`
+2  3   ` `           meta.function-call.arguments
+3  13  `zsh-patina`  meta.function-call.arguments + dynamic.path.directory.complete

@@ -175,6 +175,11 @@ The highlight command is the primary operation, issued on every keypress. It sub
 |none
 |Current working directory, percent-encoded if it contains LF or `%`. If absent, dynamic highlighting of files and directories is disabled.
 
+|`CDP`
+|string
+|empty
+|Newline-separated `cdpath` entries in shell search order, with LF and `%` percent-encoded as part of the complete field value. Used when resolving paths for `cd`-like commands as well as bare directories when AUTO_CD is enabled.
+
 |`ACD`
 |uint
 |0

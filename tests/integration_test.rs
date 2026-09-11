@@ -424,6 +424,46 @@ async fn named_directory() {
     .await;
 }
 
+/// Test if cdpath directories are sent to the daemon and take precedence over
+/// same-named files in the working directory for cd-like commands.
+#[tokio::test]
+#[ignore]
+async fn cdpath_directory() {
+    // test with one directory
+    run_highlight(
+        &[
+            "mkdir -p /tmp/work /tmp/projects/topsecret",
+            "touch /tmp/work/topsecret",
+            "cd /tmp/work",
+            "cdpath=(/tmp/projects)",
+        ],
+        &[],
+        "cd topsecret",
+        &[
+            h(0, 2, [DYNAMIC_CALLABLE_BUILTIN]),
+            h(2, 3, [ARGUMENTS]),
+            h(3, 12, [ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE]),
+        ],
+    )
+    .await;
+
+    // test with multiple directories
+    run_highlight(
+        &[
+            "mkdir -p /tmp/sheep/elvis /tmp/bears/max /tmp/bears/pax /tmp/moose/hansson",
+            "cdpath=(/tmp/moose /tmp/sheep /tmp/bears)",
+        ],
+        &[],
+        "cd elvis",
+        &[
+            h(0, 2, [DYNAMIC_CALLABLE_BUILTIN]),
+            h(2, 3, [ARGUMENTS]),
+            h(3, 8, [ARGUMENTS, DYNAMIC_PATH_DIRECTORY_COMPLETE]),
+        ],
+    )
+    .await;
+}
+
 /// Test if aliases are resolved correctly
 #[tokio::test]
 #[ignore]

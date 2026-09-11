@@ -48,6 +48,7 @@ pub enum DynamicType {
 pub struct DynamicHighlightingOptions<'a> {
     cursor: Option<usize>,
     pwd: &'a str,
+    cdpath: &'a [&'a str],
     autocd: bool,
     home_dir: &'a str,
     theme: &'a Theme,
@@ -61,6 +62,7 @@ impl<'a> DynamicHighlightingOptions<'a> {
     pub fn new(
         cursor: Option<usize>,
         pwd: &'a str,
+        cdpath: &'a [&'a str],
         autocd: bool,
         home_dir: &'a str,
         theme: &'a Theme,
@@ -70,6 +72,7 @@ impl<'a> DynamicHighlightingOptions<'a> {
         Self {
             cursor,
             pwd,
+            cdpath,
             autocd,
             home_dir,
             theme,
@@ -97,6 +100,7 @@ struct ParsedToken {
 pub struct DynamicTokenGroup {
     pub dynamic_type: DynamicType,
     pub tokens: Vec<DynamicToken>,
+    is_cd_like: bool,
 }
 
 impl DynamicTokenGroup {
@@ -163,7 +167,7 @@ impl DynamicTokenGroup {
                     base_style: None,
                 }))
             } else {
-                classify_argument(&token.text, &token.range, options)
+                classify_argument(&token.text, &token.range, options, self.is_cd_like)
             };
 
             if let Some(style) = style {
@@ -413,7 +417,14 @@ pub(super) fn classify_callable(
                 .map(|cursor| (range.start..=range.end).contains(&cursor))
                 .unwrap_or_default();
 
-        match path_type(&path, options.pwd, partial) {
+        // Prefer working directory before falling back to cdpath entries. Note
+        // that Zsh allows you to put `.` into `cdpath` in which case, other
+        // directories can take precedence. However, since we only need to check
+        // for the presence of the directory in any (!) path to highlight it,
+        // without needing to identify the actual path, this is fine.
+        let search_dirs = std::iter::once(options.pwd).chain(options.cdpath.iter().copied());
+
+        match path_type(&path, search_dirs, true, partial) {
             Some((PathType::Directory, _)) => {
                 log::trace!("Callable `{path}' is a directory (autocd).");
                 resolve_static_style(DYNAMIC_CALLABLE_COMMAND, options.theme)
@@ -436,7 +447,19 @@ pub(super) fn classify_argument(
     path: &str,
     range: &Range<usize>,
     options: &DynamicHighlightingOptions,
+    is_cd_like: bool,
 ) -> Option<SpanStyle> {
+    // explicit relative paths bypass cdpath, as they do in Zsh
+    let use_cdpath = is_cd_like && !path.starts_with("./") && !path.starts_with("../");
+
+    // Prefer working directory before falling back to cdpath entries. Note that
+    // Zsh allows you to put `.` into `cdpath` in which case, other directories
+    // can take precedence. However, since we only need to check for the
+    // presence of the directory in any (!) path to highlight it, without
+    // needing to identify the actual path, this is fine.
+    let search_dirs =
+        std::iter::once(options.pwd).chain(options.cdpath.iter().copied().filter(|_| use_cdpath));
+
     // only perform highlighting of partial paths if it is enabled and if the
     // cursor touches the prefix
     let partial = options.highlight_partial_paths
@@ -444,7 +467,8 @@ pub(super) fn classify_argument(
             .cursor
             .map(|cursor| (range.start..=range.end).contains(&cursor))
             .unwrap_or_default();
-    let (path_type, matched_partially) = path_type(path, options.pwd, partial)?;
+
+    let (path_type, matched_partially) = path_type(path, search_dirs, is_cd_like, partial)?;
 
     log::trace!("Argument `{path}' is {path_type:?}.");
     let dynamic_scope = match (path_type, matched_partially) {
@@ -453,6 +477,7 @@ pub(super) fn classify_argument(
         (PathType::Directory, true) => DYNAMIC_PATH_DIRECTORY_PARTIAL,
         (PathType::Directory, false) => DYNAMIC_PATH_DIRECTORY_COMPLETE,
     };
+
     resolve_static_style(dynamic_scope, options.theme).map(SpanStyle::Static)
 }
 
@@ -460,7 +485,10 @@ pub(super) fn classify_argument(
 pub struct DynamicScopes {
     arguments_scope: Scope,
     callable_scope: Scope,
+    cdlike_scope: Scope,
     character_escape_scope: Scope,
+    expansion_command_backticks: Scope,
+    expansion_command_parens: Scope,
     string_quoted_begin_scope: Scope,
     string_quoted_end_scope: Scope,
     string_quoted_single_scope: Scope,
@@ -475,7 +503,10 @@ impl DynamicScopes {
     pub fn new() -> Self {
         let arguments_scope = Scope::new(ARGUMENTS).unwrap();
         let callable_scope = Scope::new(CALLABLE).unwrap();
+        let cdlike_scope = Scope::new(CDLIKE).unwrap();
         let character_escape_scope = Scope::new(CHARACTER_ESCAPE).unwrap();
+        let expansion_command_backticks = Scope::new(EXPANSION_COMMAND_BACKTICKS).unwrap();
+        let expansion_command_parens = Scope::new(EXPANSION_COMMAND_PARENS).unwrap();
         let string_quoted_begin_scope = Scope::new(STRING_QUOTED_BEGIN).unwrap();
         let string_quoted_end_scope = Scope::new(STRING_QUOTED_END).unwrap();
         let string_quoted_single_scope = Scope::new(STRING_QUOTED_SINGLE).unwrap();
@@ -487,7 +518,10 @@ impl DynamicScopes {
         Self {
             arguments_scope,
             callable_scope,
+            cdlike_scope,
             character_escape_scope,
+            expansion_command_backticks,
+            expansion_command_parens,
             string_quoted_begin_scope,
             string_quoted_end_scope,
             string_quoted_single_scope,
@@ -526,6 +560,26 @@ impl DynamicTokenGroupBuilder {
             group_stash: Vec::new(),
             character_escape_buf: Vec::new(),
         }
+    }
+
+    // Check if the command that is currently being parsed is cd-like (cd,
+    // chdir, pushd). The function traverses the stack from top to bottom and
+    // looks for a cdlike scope belonging to the current command.
+    fn is_cd_like(&self) -> bool {
+        for s in self.stack.iter().rev() {
+            if *s == self.scopes.expansion_command_backticks
+                || *s == self.scopes.expansion_command_parens
+            {
+                // We are inside a command expansion and haven't found a cdlike
+                // scope yet. Ignore anything below this item in the stack as it
+                // might belong to another command.
+                break;
+            }
+            if *s == self.scopes.cdlike_scope {
+                return true;
+            }
+        }
+        false
     }
 
     fn on_pop(&mut self, i: usize, result: &mut Vec<DynamicTokenGroup>) {
@@ -573,6 +627,7 @@ impl DynamicTokenGroupBuilder {
             result.push(DynamicTokenGroup {
                 dynamic_type: g.dynamic_type,
                 tokens: g.tokens,
+                is_cd_like: self.is_cd_like(),
             });
         }
     }
@@ -739,6 +794,7 @@ impl DynamicTokenGroupBuilder {
             result.push(DynamicTokenGroup {
                 dynamic_type: DynamicType::Unknown,
                 tokens: self.character_escape_buf,
+                is_cd_like: false,
             });
         }
 
