@@ -245,16 +245,13 @@ fn consume_until_non_escaped(chars: &[(usize, char)], mut i: usize, until: char)
 /// word designator if successful, or None if there is no valid word designator
 /// at index i.
 fn consume_word_designator(chars: &[(usize, char)], mut i: usize) -> Option<usize> {
-    // Consume leading colon. If the colon is missing, the next character must
-    // not be a digit. In other words, the colon is optional if the word
-    // designator starts with one of '^', '$', '%', '-', '*'
+    // Event parsing has already consumed digits belonging to an event number,
+    // so a remaining digit is an unambiguous word designator.
     if chars[i].1 == ':' {
         i += 1;
         if i == chars.len() {
             return Some(i);
         }
-    } else if chars[i].1.is_ascii_digit() {
-        return None;
     }
 
     // consume range start
@@ -842,6 +839,9 @@ mod tests {
 
     #[test]
     fn both_designators() {
+        assert_expanded("ls -l !!1", &[vec![(6, 9)]]);
+        assert_expanded("ls -l !#1:t", &[vec![(6, 11)]]);
+        assert_expanded("ls -l !?cp?1:t", &[vec![(6, 14)]]);
         assert_expanded("ls -l !cp:2", &[vec![(6, 11)]]);
         assert_expanded("ls -l !cp:$", &[vec![(6, 11)]]);
         assert_expanded("ls -l !cp:^", &[vec![(6, 11)]]);
