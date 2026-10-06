@@ -179,18 +179,18 @@ fn format_static_style(style: &StaticStyle) -> String {
 #[deprecated = "Protocol version 1 will be removed in one of the next releases"]
 fn decode_string_v1(s: &str) -> String {
     let bytes = s.as_bytes();
-    let mut out = String::with_capacity(s.len());
+    let mut out = Vec::with_capacity(s.len());
     let mut i = 0;
     while i < bytes.len() {
         if bytes[i] == b'%' && i + 2 < bytes.len() {
             let decoded = match &bytes[i + 1..i + 3] {
                 // the same characters are used by Rust's is_ascii_whitespace()
-                b"20" => Some(' '),
-                b"09" => Some('\t'),
-                b"0A" => Some('\n'),
-                b"0D" => Some('\r'),
-                b"0C" => Some('\x0C'),
-                b"25" => Some('%'),
+                b"20" => Some(b' '),
+                b"09" => Some(b'\t'),
+                b"0A" => Some(b'\n'),
+                b"0D" => Some(b'\r'),
+                b"0C" => Some(b'\x0C'),
+                b"25" => Some(b'%'),
                 _ => None,
             };
             if let Some(c) = decoded {
@@ -199,10 +199,12 @@ fn decode_string_v1(s: &str) -> String {
                 continue;
             }
         }
-        out.push(bytes[i] as char);
+        out.push(bytes[i]);
         i += 1;
     }
-    out
+
+    // SAFETY: Because we copy the input string and only transform ASCII codes into more ASCII codes, it's guaranteed to be UTF-8
+    unsafe { String::from_utf8_unchecked(out) }
 }
 
 #[deprecated = "Protocol version 1 will be removed in one of the next releases"]
@@ -215,77 +217,147 @@ fn encode_string_v1(input: String) -> String {
         return input;
     }
 
-    let mut out = String::with_capacity(input.len());
+    let mut out = Vec::with_capacity(input.len());
     for b in input.bytes() {
         match b {
-            b'%' => out.push_str("%25"),
-            b' ' => out.push_str("%20"),
-            b'\t' => out.push_str("%09"),
-            b'\n' => out.push_str("%0A"),
-            b'\r' => out.push_str("%0D"),
-            b'\x0C' => out.push_str("%0C"),
-            // Safe to cast: all encoded chars are ASCII, and multi-byte UTF-8
-            // sequences (bytes >= 0x80) pass through unchanged, so valid UTF-8
-            // in means valid UTF-8 out.
-            _ => out.push(b as char),
+            b'%' => out.extend_from_slice(b"%25"),
+            b' ' => out.extend_from_slice(b"%20"),
+            b'\t' => out.extend_from_slice(b"%09"),
+            b'\n' => out.extend_from_slice(b"%0A"),
+            b'\r' => out.extend_from_slice(b"%0D"),
+            b'\x0C' => out.extend_from_slice(b"%0C"),
+            _ => out.push(b),
         }
     }
-    out
+
+    // SAFETY: Because we copy the input string and only transform ASCII codes into more ASCII codes, it's guaranteed to be UTF-8
+    unsafe { String::from_utf8_unchecked(out) }
 }
 
-fn decode_string(s: &str) -> String {
-    if !s.bytes().any(|b| b == b'%') {
+// Intentionally without the unsafe block, so that it's required at call-site!
+macro_rules! write_byte_unchecked {
+    ($vec:ident, $byte:expr) => {
+        let len = $vec.len();
+        *$vec.as_mut_ptr().add(len) = $byte;
+        $vec.set_len(len + 1);
+    };
+    ($vec:ident, $byte1:expr, $byte2:expr, $byte3:expr) => {
+        let len = $vec.len();
+        *$vec.as_mut_ptr().add(len) = $byte1;
+        *$vec.as_mut_ptr().add(len + 1) = $byte2;
+        *$vec.as_mut_ptr().add(len + 2) = $byte3;
+        $vec.set_len(len + 3);
+    };
+}
+
+fn decode_string<'a>(s: &'a str) -> Cow<'a, str> {
+    let mut i = 0;
+    let bytes = s.as_bytes();
+
+    'noop: {
+        while i < bytes.len() {
+            if bytes[i] == b'%' {
+                break 'noop;
+            }
+
+            i += 1;
+        }
+
         // fast path: nothing to decode
-        return s.to_string();
+        return Cow::Borrowed(s);
     }
 
-    let bytes = s.as_bytes();
-    let mut out = String::with_capacity(s.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            match &bytes[i + 1..i + 3] {
-                b"0A" => {
-                    out.push('\n');
-                    i += 3;
-                    continue;
+    // Allocate a vec to skip all the Unicode machinery of Rust which we don't need.
+    // Note: `out` will never need to be reallocated and has sufficient length as-is.
+    let mut out = Vec::<u8>::with_capacity(s.len());
+
+    // SAFETY: `out` has sufficient capacity (output is always going to be less than or equal to input's size).
+    // Memory ranges cannot overlap; c.f. borrowing rules; out is mutable thus not aliasable.
+    unsafe {
+        out.as_mut_ptr().copy_from_nonoverlapping(bytes.as_ptr(), i);
+        out.set_len(i);
+    }
+
+    let mut bytes = bytes[i..].iter();
+    while let Some(&byte) = bytes.next() {
+        if byte == b'%' && bytes.len() >= 2 {
+            // SAFETY: we already checked the remaining len (which is documented as a guarantee it'll return `Some`)
+            // The compiler still emits panic code with .unwrap() sadly.
+            let a = *unsafe { bytes.next().unwrap_unchecked() };
+            let b = *unsafe { bytes.next().unwrap_unchecked() };
+            match (a, b) {
+                (b'0', b'A') => {
+                    // SAFETY: `out` has sufficient capacity.
+                    unsafe {
+                        write_byte_unchecked!(out, b'\n');
+                    }
                 }
-                b"25" => {
-                    out.push('%');
-                    i += 3;
-                    continue;
+                (b'2', b'5') => {
+                    // SAFETY: `out` has sufficient capacity.
+                    unsafe {
+                        write_byte_unchecked!(out, b'%');
+                    }
                 }
-                _ => {
+                (a, b) => {
                     // unknown %XX: pass through as literal text
-                    out.push('%');
-                    out.push(bytes[i + 1] as char);
-                    out.push(bytes[i + 2] as char);
-                    i += 3;
-                    continue;
+                    // SAFETY: `out` has sufficient capacity.
+                    unsafe {
+                        write_byte_unchecked!(out, b'%', a, b);
+                    }
                 }
             }
+        } else {
+            // SAFETY: `out` has sufficient capacity.
+            unsafe {
+                write_byte_unchecked!(out, byte);
+            }
         }
-        out.push(bytes[i] as char);
-        i += 1;
     }
-    out
+
+    // SAFETY: Because we copy the input string and only transform ASCII codes into more ASCII codes, it's guaranteed to be UTF-8
+    let str = unsafe { String::from_utf8_unchecked(out) };
+    Cow::Owned(str)
 }
 
-fn encode_string(input: &str) -> Cow<'_, str> {
-    if !input.bytes().any(|b| matches!(b, b'%' | b'\n')) {
-        // fast path: nothing to encode
-        return Cow::from(input);
+pub fn encode_string(input: &str) -> Cow<'_, str> {
+    let mut i = 0;
+    let bytes = input.as_bytes();
+
+    'noop: {
+        while i < bytes.len() {
+            if matches!(bytes[i], b'%' | b'\n') {
+                break 'noop;
+            }
+
+            i += 1;
+        }
+
+        // fast path: nothing to decode
+        return Cow::Borrowed(input);
     }
 
-    let mut out = String::with_capacity(input.len());
-    for b in input.bytes() {
-        match b {
-            b'%' => out.push_str("%25"),
-            b'\n' => out.push_str("%0A"),
-            _ => out.push(b as char),
+    // Allocate a vec to skip all the Unicode machinery of Rust which we don't need.
+    let mut out = Vec::<u8>::with_capacity(input.len());
+
+    // SAFETY: `out` has sufficient capacity for a copy of a substring.
+    // Memory ranges cannot overlap; c.f. borrowing rules; out is mutable thus not aliasable.
+    unsafe {
+        out.as_mut_ptr().copy_from_nonoverlapping(bytes.as_ptr(), i);
+        out.set_len(i);
+    }
+
+    let mut bytes = bytes[i..].iter();
+    while let Some(&byte) = bytes.next() {
+        match byte {
+            b'%' => out.extend_from_slice(b"%25"),
+            b'\n' => out.extend_from_slice(b"%0A"),
+            _ => out.push(byte),
         }
     }
-    Cow::from(out)
+
+    // SAFETY: Because we copy the input string and only transform ASCII codes into more ASCII codes, it's guaranteed to be UTF-8
+    let str = unsafe { String::from_utf8_unchecked(out) };
+    Cow::from(str)
 }
 
 /// Add a region with a Zsh `zle_highlight` style if the region is active. The
@@ -296,7 +368,7 @@ fn add_zle_highlight<W: Write>(
     active: Option<bool>,
     start: Option<usize>,
     end: Option<usize>,
-    zle_highlight: Option<String>,
+    zle_highlight: Option<Cow<str>>,
     default_value: &str,
     writer: &mut W,
 ) -> Result<()> {
@@ -307,7 +379,7 @@ fn add_zle_highlight<W: Write>(
     {
         let style = zle_highlight
             .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| default_value.to_string());
+            .unwrap_or_else(|| Cow::Borrowed(default_value));
         let (from, to) = if start < end {
             (start, end)
         } else {
@@ -695,7 +767,7 @@ fn handle_connection_v1<R: BufRead, W: Write>(
         region_active.map(|a| a != "0"),
         mark,
         Some(cursor),
-        zle_highlight_region,
+        zle_highlight_region.map(|v| Cow::Owned(v)),
         "standout",
         &mut writer,
     )?;
@@ -703,7 +775,7 @@ fn handle_connection_v1<R: BufRead, W: Write>(
         suffix_active.map(|a| a != "0"),
         suffix_start,
         suffix_end,
-        zle_highlight_suffix,
+        zle_highlight_suffix.map(|v| Cow::Owned(v)),
         "bold",
         &mut writer,
     )?;
@@ -711,7 +783,7 @@ fn handle_connection_v1<R: BufRead, W: Write>(
         isearch_active.map(|a| a != "0"),
         isearch_start,
         isearch_end,
-        zle_highlight_isearch,
+        zle_highlight_isearch.map(|v| Cow::Owned(v)),
         "underline",
         &mut writer,
     )?;
@@ -719,7 +791,7 @@ fn handle_connection_v1<R: BufRead, W: Write>(
         yank_active.map(|a| a != "0"),
         yank_start,
         yank_end,
-        zle_highlight_paste,
+        zle_highlight_paste.map(|v| Cow::Owned(v)),
         "standout",
         &mut writer,
     )?;
@@ -801,8 +873,8 @@ fn handle_connection_v3_with_compatibility<R: BufRead, W: Write>(
     match cmd {
         Command::Hello => handle_hello(writer),
         Command::Highlight => handle_highlight(
-            header_lines,
-            body_lines,
+            header_lines.iter().map(AsRef::as_ref).collect(),
+            body_lines.iter().map(AsRef::as_ref).collect(),
             reader,
             writer,
             highlighter,
@@ -824,8 +896,8 @@ where
 
 /// Handle "HLT" command
 fn handle_highlight<R, W>(
-    header_lines: Vec<String>,
-    body_lines: Vec<String>,
+    header_lines: Vec<&str>,
+    body_lines: Vec<&str>,
     mut reader: R,
     mut writer: W,
     highlighter: &Highlighter,
@@ -867,114 +939,146 @@ where
 
     // parse header
     for line in header_lines {
-        if let Some(value) = line.strip_prefix("COL=") {
-            term_cols = value
-                .parse::<usize>()
-                .context("Unable to parse number of terminal columns")?;
-        } else if let Some(value) = line.strip_prefix("ROW=") {
-            term_rows = value
-                .parse::<usize>()
-                .context("Unable to parse number of terminal rows")?;
-        } else if let Some(value) = line.strip_prefix("CUR=") {
-            cursor = value
-                .parse::<usize>()
-                .context("Unable to parse cursor position")?;
-        } else if let Some(value) = line.strip_prefix("PWD=") {
-            pwd = Some(decode_string(value));
-        } else if let Some(value) = line.strip_prefix("CDP=") {
-            cdpath = Some(decode_string(value));
-        } else if let Some(value) = line.strip_prefix("ACD=") {
-            autocd_enabled = value
-                .parse::<u8>()
-                .context("Unable to parse autocd option")?
-                > 0;
-        } else if let Some(value) = line.strip_prefix("BNG=") {
-            history_expansions_enabled = value
-                .parse::<u8>()
-                .context("Unable to parse banghist option")?
-                > 0;
-        } else if let Some(value) = line.strip_prefix("PRL=") {
-            pre_buffer_line_count = value
-                .parse::<usize>()
-                .context("Unable to parse number of lines in pre-buffer")?;
-        } else if let Some(value) = line.strip_prefix("RGA=") {
-            region_active = Some(
-                value
+        let (prefix, value) = match line.split_at_checked(4) {
+            Some(s) => s,
+            None => continue,
+        };
+
+        match prefix {
+            "COL=" => {
+                term_cols = value
+                    .parse::<usize>()
+                    .context("Unable to parse number of terminal columns")?;
+            }
+            "ROW=" => {
+                term_rows = value
+                    .parse::<usize>()
+                    .context("Unable to parse number of terminal rows")?;
+            }
+            "CUR=" => {
+                cursor = value
+                    .parse::<usize>()
+                    .context("Unable to parse cursor position")?;
+            }
+            "PWD=" => {
+                pwd = Some(decode_string(value));
+            }
+            "CDP=" => {
+                cdpath = Some(decode_string(value));
+            }
+            "ACD=" => {
+                autocd_enabled = value
                     .parse::<u8>()
-                    .context("Unable to parse region active flag")?
-                    > 0,
-            );
-        } else if let Some(value) = line.strip_prefix("RGE=") {
-            mark = Some(
-                value
-                    .parse::<usize>()
-                    .context("Unable to parse region end position")?,
-            );
-        } else if let Some(value) = line.strip_prefix("RGH=") {
-            zle_highlight_region = Some(decode_string(value));
-        } else if let Some(value) = line.strip_prefix("SFA=") {
-            suffix_active = Some(
-                value
+                    .context("Unable to parse autocd option")?
+                    > 0;
+            }
+            "BNG=" => {
+                history_expansions_enabled = value
                     .parse::<u8>()
-                    .context("Unable to parse suffix active flag")?
-                    > 0,
-            );
-        } else if let Some(value) = line.strip_prefix("SFS=") {
-            suffix_start = Some(
-                value
+                    .context("Unable to parse banghist option")?
+                    > 0;
+            }
+            "PRL=" => {
+                pre_buffer_line_count = value
                     .parse::<usize>()
-                    .context("Unable to parse suffix start position")?,
-            );
-        } else if let Some(value) = line.strip_prefix("SFE=") {
-            suffix_end = Some(
-                value
-                    .parse::<usize>()
-                    .context("Unable to parse suffix end position")?,
-            );
-        } else if let Some(value) = line.strip_prefix("SFH=") {
-            zle_highlight_suffix = Some(decode_string(value));
-        } else if let Some(value) = line.strip_prefix("ISA=") {
-            isearch_active = Some(
-                value
-                    .parse::<u8>()
-                    .context("Unable to parse isearch active flag")?
-                    > 0,
-            );
-        } else if let Some(value) = line.strip_prefix("ISS=") {
-            isearch_start = Some(
-                value
-                    .parse::<usize>()
-                    .context("Unable to parse isearch start position")?,
-            );
-        } else if let Some(value) = line.strip_prefix("ISE=") {
-            isearch_end = Some(
-                value
-                    .parse::<usize>()
-                    .context("Unable to parse isearch end position")?,
-            );
-        } else if let Some(value) = line.strip_prefix("ISH=") {
-            zle_highlight_isearch = Some(decode_string(value));
-        } else if let Some(value) = line.strip_prefix("YKA=") {
-            yank_active = Some(
-                value
-                    .parse::<u8>()
-                    .context("Unable to parse yank active flag")?
-                    > 0,
-            );
-        } else if let Some(value) = line.strip_prefix("YKS=") {
-            yank_start = Some(
-                value
-                    .parse::<usize>()
-                    .context("Unable to parse yank start position")?,
-            );
-        } else if let Some(value) = line.strip_prefix("YKE=") {
-            yank_end = Some(
-                value
-                    .parse::<usize>()
-                    .context("Unable to parse yank end position")?,
-            );
-        } else if let Some(value) = line.strip_prefix("YKH=") {
-            zle_highlight_paste = Some(decode_string(value));
+                    .context("Unable to parse number of lines in pre-buffer")?;
+            }
+            "RGA=" => {
+                region_active = Some(
+                    value
+                        .parse::<u8>()
+                        .context("Unable to parse region active flag")?
+                        > 0,
+                );
+            }
+            "RGE=" => {
+                mark = Some(
+                    value
+                        .parse::<usize>()
+                        .context("Unable to parse region end position")?,
+                );
+            }
+            "RGH=" => {
+                zle_highlight_region = Some(decode_string(value));
+            }
+            "SFA=" => {
+                suffix_active = Some(
+                    value
+                        .parse::<u8>()
+                        .context("Unable to parse suffix active flag")?
+                        > 0,
+                );
+            }
+            "SFS=" => {
+                suffix_start = Some(
+                    value
+                        .parse::<usize>()
+                        .context("Unable to parse suffix start position")?,
+                );
+            }
+            "SFE=" => {
+                suffix_end = Some(
+                    value
+                        .parse::<usize>()
+                        .context("Unable to parse suffix end position")?,
+                );
+            }
+            "SFH=" => {
+                zle_highlight_suffix = Some(decode_string(value));
+            }
+            "ISA=" => {
+                isearch_active = Some(
+                    value
+                        .parse::<u8>()
+                        .context("Unable to parse isearch active flag")?
+                        > 0,
+                );
+            }
+            "ISS=" => {
+                isearch_start = Some(
+                    value
+                        .parse::<usize>()
+                        .context("Unable to parse isearch start position")?,
+                );
+            }
+            "ISE=" => {
+                isearch_end = Some(
+                    value
+                        .parse::<usize>()
+                        .context("Unable to parse isearch end position")?,
+                );
+            }
+            "ISH=" => {
+                zle_highlight_isearch = Some(decode_string(value));
+            }
+            "YKA=" => {
+                yank_active = Some(
+                    value
+                        .parse::<u8>()
+                        .context("Unable to parse yank active flag")?
+                        > 0,
+                );
+            }
+            "YKS=" => {
+                yank_start = Some(
+                    value
+                        .parse::<usize>()
+                        .context("Unable to parse yank start position")?,
+                );
+            }
+            "YKE=" => {
+                yank_end = Some(
+                    value
+                        .parse::<usize>()
+                        .context("Unable to parse yank end position")?,
+                );
+            }
+            "YKH=" => {
+                zle_highlight_paste = Some(decode_string(value));
+            }
+            _ => {
+                log::debug!("Unrecognised header '{}', ignoring", line)
+            }
         }
     }
 
@@ -1237,7 +1341,7 @@ where
 }
 
 /// Resolve named directories to absolute paths by asking the client.
-fn resolve_nameddirs<R, W>(
+fn resolve_nameddirs<'a, R, W>(
     names: &[&str],
     reader: &mut R,
     writer: &mut W,
@@ -1260,7 +1364,7 @@ where
         reader
             .read_line(&mut answer)
             .context("Unable to read NMD answer")?;
-        let answer = decode_string(answer.trim_ascii_end());
+        let answer = decode_string(answer.trim_ascii_end()).into_owned();
         result.insert((*name).to_owned(), answer);
     }
     Ok(result)
@@ -1276,7 +1380,7 @@ fn resolve_callables<R, W>(
     reader: &mut R,
     writer: &mut W,
     highlighter: &Highlighter,
-    pwd: &Option<String>,
+    pwd: &Option<Cow<str>>,
     visited: FxHashSet<&str>,
 ) -> Result<FxHashMap<String, CallableType>>
 where
