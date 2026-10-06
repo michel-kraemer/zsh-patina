@@ -1888,3 +1888,46 @@ pub fn status_daemon(runtime_dir: &Path) -> Result<()> {
         bail!("Daemon is stopped.");
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn string_decode() {
+        assert_eq!(decode_string("simple string"), "simple string");
+        assert_eq!(
+            decode_string("not simple string %25 %0A"),
+            "not simple string % \n"
+        );
+    }
+
+    #[test]
+    fn string_decode_unicode() {
+        // Ensure the function doesn't split/affect code-point bytes
+        assert_eq!(decode_string("simple 😺 string"), "simple 😺 string");
+        assert_eq!(
+            decode_string("not 😺 simple 😺 string %25 %0A"),
+            "not 😺 simple 😺 string % \n"
+        );
+    }
+
+    #[test]
+    fn string_encode() {
+        assert_eq!(encode_string("simple string"), "simple string");
+        assert_eq!(
+            encode_string("not simple string % \n"),
+            "not simple string %25 %0A"
+        );
+    }
+
+    #[test]
+    fn string_encode_unicode() {
+        // Ensure the function doesn't split/affect code-point bytes
+        assert_eq!(encode_string("simple 😺 string"), "simple 😺 string");
+        assert_eq!(
+            encode_string("not 😺 simple 😺 string % \n"),
+            "not 😺 simple 😺 string %25 %0A"
+        );
+    }
+}
