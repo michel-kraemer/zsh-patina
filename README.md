@@ -105,9 +105,9 @@ Besides normal static highlighting, zsh-patina is able to dynamically detect whe
 1. Install zsh-patina:
 
     ```shell
-    yay -S zsh-patina-git
+    yay -S zsh-patina
     # or
-    paru -S zsh-patina-git
+    paru -S zsh-patina
     ```
 
 2. Activate the plugin at the end of your `.zshrc` file:
