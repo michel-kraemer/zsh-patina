@@ -754,6 +754,10 @@ where
 
     // parse header
     for line in header_lines {
+        // The protocol specification says that header fields are always exactly
+        // 3 *bytes* long, the equals sign falls at byte offset 3, and the value
+        // therefore begins at byte offset 4. If `line` is too short, we can
+        // immediately stop here.
         let (prefix, value) = match line.split_at_checked(4) {
             Some(s) => s,
             None => continue,
