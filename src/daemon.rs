@@ -760,7 +760,10 @@ where
         // immediately stop here.
         let (prefix, value) = match line.split_at_checked(4) {
             Some(s) => s,
-            None => continue,
+            None => {
+                log::debug!("Ignoring short header `{line}'");
+                continue;
+            }
         };
 
         match prefix {
