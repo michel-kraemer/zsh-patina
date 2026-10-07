@@ -62,23 +62,24 @@ pub fn encode_string_v1(input: String) -> String {
     unsafe { String::from_utf8_unchecked(out) }
 }
 
-// Intentionally without an `unsafe` block, so that it's required at call-site
-macro_rules! write_byte_unchecked {
-    ($vec:ident, $byte:expr) => {
-        let len = $vec.len();
-        *$vec.as_mut_ptr().add(len) = $byte;
-        $vec.set_len(len + 1);
-    };
-    ($vec:ident, $byte1:expr, $byte2:expr, $byte3:expr) => {
-        let len = $vec.len();
-        *$vec.as_mut_ptr().add(len) = $byte1;
-        *$vec.as_mut_ptr().add(len + 1) = $byte2;
-        *$vec.as_mut_ptr().add(len + 2) = $byte3;
-        $vec.set_len(len + 3);
-    };
-}
-
 pub fn decode_string(s: &str) -> Cow<'_, str> {
+    // Intentionally without an `unsafe` block, so that it's required at
+    // call-site
+    macro_rules! write_byte_unchecked {
+        ($vec:ident, $byte:expr) => {
+            let len = $vec.len();
+            *$vec.as_mut_ptr().add(len) = $byte;
+            $vec.set_len(len + 1);
+        };
+        ($vec:ident, $byte1:expr, $byte2:expr, $byte3:expr) => {
+            let len = $vec.len();
+            *$vec.as_mut_ptr().add(len) = $byte1;
+            *$vec.as_mut_ptr().add(len + 1) = $byte2;
+            *$vec.as_mut_ptr().add(len + 2) = $byte3;
+            $vec.set_len(len + 3);
+        };
+    }
+
     let mut i = 0;
     let bytes = s.as_bytes();
 
