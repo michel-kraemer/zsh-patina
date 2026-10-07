@@ -172,8 +172,7 @@ pub fn encode_string(input: &str) -> Cow<'_, str> {
         out.set_len(i);
     }
 
-    let mut bytes = bytes[i..].iter();
-    while let Some(&byte) = bytes.next() {
+    for &byte in &bytes[i..] {
         match byte {
             b'%' => out.extend_from_slice(b"%25"),
             b'\n' => out.extend_from_slice(b"%0A"),

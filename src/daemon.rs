@@ -194,7 +194,7 @@ fn add_zle_highlight<W: Write>(
     {
         let style = zle_highlight
             .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| Cow::Borrowed(default_value));
+            .unwrap_or(Cow::Borrowed(default_value));
         let (from, to) = if start < end {
             (start, end)
         } else {
@@ -582,7 +582,7 @@ fn handle_connection_v1<R: BufRead, W: Write>(
         region_active.map(|a| a != "0"),
         mark,
         Some(cursor),
-        zle_highlight_region.map(|v| Cow::Owned(v)),
+        zle_highlight_region.map(Cow::Owned),
         "standout",
         &mut writer,
     )?;
@@ -590,7 +590,7 @@ fn handle_connection_v1<R: BufRead, W: Write>(
         suffix_active.map(|a| a != "0"),
         suffix_start,
         suffix_end,
-        zle_highlight_suffix.map(|v| Cow::Owned(v)),
+        zle_highlight_suffix.map(Cow::Owned),
         "bold",
         &mut writer,
     )?;
@@ -598,7 +598,7 @@ fn handle_connection_v1<R: BufRead, W: Write>(
         isearch_active.map(|a| a != "0"),
         isearch_start,
         isearch_end,
-        zle_highlight_isearch.map(|v| Cow::Owned(v)),
+        zle_highlight_isearch.map(Cow::Owned),
         "underline",
         &mut writer,
     )?;
@@ -606,7 +606,7 @@ fn handle_connection_v1<R: BufRead, W: Write>(
         yank_active.map(|a| a != "0"),
         yank_start,
         yank_end,
-        zle_highlight_paste.map(|v| Cow::Owned(v)),
+        zle_highlight_paste.map(Cow::Owned),
         "standout",
         &mut writer,
     )?;
@@ -892,7 +892,7 @@ where
                 zle_highlight_paste = Some(decode_string(value));
             }
             _ => {
-                log::debug!("Unrecognised header '{}', ignoring", line)
+                log::debug!("Ignoring unrecognised header `{line}'");
             }
         }
     }
@@ -911,7 +911,7 @@ where
         let line = body_iterator
             .next()
             .expect("pre_buffer_line_count is always less than or equal to body_lines.len()");
-        lines.push_str(&line);
+        lines.push_str(line);
         pre_buffer_total_len += line.chars().count();
     }
 
@@ -936,7 +936,7 @@ where
         }
 
         if !cursor_line_found || i < cursor_line.saturating_add(term_rows) {
-            lines.push_str(&line);
+            lines.push_str(line);
             line_lengths.push(line_len);
             total_len += line_len;
         } else {
@@ -1156,7 +1156,7 @@ where
 }
 
 /// Resolve named directories to absolute paths by asking the client.
-fn resolve_nameddirs<'a, R, W>(
+fn resolve_nameddirs<R, W>(
     names: &[&str],
     reader: &mut R,
     writer: &mut W,
