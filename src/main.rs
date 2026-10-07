@@ -20,6 +20,7 @@ mod color;
 mod commands;
 pub mod config;
 mod daemon;
+mod encode;
 mod highlighting;
 mod path;
 mod theme;
