@@ -170,12 +170,13 @@ pub fn encode_string(input: &str) -> Cow<'_, str> {
     let mut i = 0;
     let bytes = input.as_bytes();
 
+    // check if we can return the string as is, but if not, at least count the
+    // number of bytes we can copy verbatim
     'noop: {
         while i < bytes.len() {
             if matches!(bytes[i], b'%' | b'\n') {
                 break 'noop;
             }
-
             i += 1;
         }
 
