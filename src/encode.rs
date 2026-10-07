@@ -78,7 +78,7 @@ macro_rules! write_byte_unchecked {
     };
 }
 
-pub fn decode_string<'a>(s: &'a str) -> Cow<'a, str> {
+pub fn decode_string(s: &str) -> Cow<'_, str> {
     let mut i = 0;
     let bytes = s.as_bytes();
 
