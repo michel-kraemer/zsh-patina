@@ -29,7 +29,8 @@ pub fn decode_string_v1(s: &str) -> String {
         i += 1;
     }
 
-    // SAFETY: Because we copy the input string and only transform ASCII codes into more ASCII codes, it's guaranteed to be UTF-8
+    // SAFETY: Because we copy the input string and only transform ASCII codes
+    // into more ASCII codes, it's guaranteed to be UTF-8
     unsafe { String::from_utf8_unchecked(out) }
 }
 
@@ -56,11 +57,12 @@ pub fn encode_string_v1(input: String) -> String {
         }
     }
 
-    // SAFETY: Because we copy the input string and only transform ASCII codes into more ASCII codes, it's guaranteed to be UTF-8
+    // SAFETY: Because we copy the input string and only transform ASCII codes
+    // into more ASCII codes, it's guaranteed to be UTF-8
     unsafe { String::from_utf8_unchecked(out) }
 }
 
-// Intentionally without the unsafe block, so that it's required at call-site!
+// Intentionally without an `unsafe` block, so that it's required at call-site
 macro_rules! write_byte_unchecked {
     ($vec:ident, $byte:expr) => {
         let len = $vec.len();
@@ -80,12 +82,13 @@ pub fn decode_string<'a>(s: &'a str) -> Cow<'a, str> {
     let mut i = 0;
     let bytes = s.as_bytes();
 
+    // check if we can return the string as is, but if not, at least count the
+    // number of bytes we can copy verbatim
     'noop: {
         while i < bytes.len() {
             if bytes[i] == b'%' {
                 break 'noop;
             }
-
             i += 1;
         }
 
@@ -93,12 +96,18 @@ pub fn decode_string<'a>(s: &'a str) -> Cow<'a, str> {
         return Cow::Borrowed(s);
     }
 
-    // Allocate a vec to skip all the Unicode machinery of Rust which we don't need.
-    // Note: `out` will never need to be reallocated and has sufficient length as-is.
+    // Allocate a vec to skip all the Unicode machinery of Rust which we don't
+    // need.
+    // IMPORTANT FOR SAFETY: Make `out` at least as large as the input string,
+    // so we have enough room to copy bytes, and we will never need to
+    // reallocate it.
     let mut out = Vec::<u8>::with_capacity(s.len());
 
-    // SAFETY: `out` has sufficient capacity (output is always going to be less than or equal to input's size).
-    // Memory ranges cannot overlap; c.f. borrowing rules; out is mutable thus not aliasable.
+    // SAFETY: `out` is a freshly allocated Vec with capacity `s.len()`, and
+    // `bytes` points to the input slice from a different allocation. We copy
+    // exactly the unchanged prefix `[0..i]` before any mutation, so the source
+    // and destination do not overlap. The copied prefix length is at most the
+    // input length, so it fits in the reserved capacity.
     unsafe {
         out.as_mut_ptr().copy_from_nonoverlapping(bytes.as_ptr(), i);
         out.set_len(i);
@@ -107,40 +116,52 @@ pub fn decode_string<'a>(s: &'a str) -> Cow<'a, str> {
     let mut bytes = bytes[i..].iter();
     while let Some(&byte) = bytes.next() {
         if byte == b'%' && bytes.len() >= 2 {
-            // SAFETY: we already checked the remaining len (which is documented as a guarantee it'll return `Some`)
-            // The compiler still emits panic code with .unwrap() sadly.
+            // SAFETY: We only enter this branch when the current byte is `%`
+            // and at least two bytes remain in the iterator. Advancing the
+            // iterator twice here is therefore valid, and `unwrap_unchecked()`
+            // avoids the redundant panic path.
             let a = *unsafe { bytes.next().unwrap_unchecked() };
             let b = *unsafe { bytes.next().unwrap_unchecked() };
             match (a, b) {
                 (b'0', b'A') => {
-                    // SAFETY: `out` has sufficient capacity.
+                    // SAFETY: This replaces the three-byte escape sequence
+                    // `%0A` with a single decoded byte, so the output is
+                    // strictly shorter than the consumed input and cannot
+                    // overflow the preallocated buffer.
                     unsafe {
                         write_byte_unchecked!(out, b'\n');
                     }
                 }
                 (b'2', b'5') => {
-                    // SAFETY: `out` has sufficient capacity.
+                    // SAFETY: This replaces the three-byte escape sequence
+                    // `%25` with a single decoded byte, so the output is
+                    // strictly shorter than the consumed input and cannot
+                    // overflow the preallocated buffer.
                     unsafe {
                         write_byte_unchecked!(out, b'%');
                     }
                 }
                 (a, b) => {
-                    // unknown %XX: pass through as literal text
-                    // SAFETY: `out` has sufficient capacity.
+                    // SAFETY: This replaces a three-byte `%XX` sequence with
+                    // the same three output bytes, so the total output length
+                    // never exceeds the input length.
                     unsafe {
                         write_byte_unchecked!(out, b'%', a, b);
                     }
                 }
             }
         } else {
-            // SAFETY: `out` has sufficient capacity.
+            // SAFETY: This branch only writes one byte for an input byte that
+            // is copied verbatim. Therefore the current length is always
+            // strictly less than the reserved capacity here.
             unsafe {
                 write_byte_unchecked!(out, byte);
             }
         }
     }
 
-    // SAFETY: Because we copy the input string and only transform ASCII codes into more ASCII codes, it's guaranteed to be UTF-8
+    // SAFETY: Because we copy the input string and only transform ASCII codes
+    // into more ASCII codes, it's guaranteed to be UTF-8
     let str = unsafe { String::from_utf8_unchecked(out) };
     Cow::Owned(str)
 }
@@ -162,11 +183,17 @@ pub fn encode_string(input: &str) -> Cow<'_, str> {
         return Cow::Borrowed(input);
     }
 
-    // Allocate a vec to skip all the Unicode machinery of Rust which we don't need.
+    // Allocate a vec to skip all the Unicode machinery of Rust which we don't
+    // need.
+    // IMPORTANT FOR SAFETY: Make `out` at least as large as the input string,
+    // so we have enough room to copy bytes.
     let mut out = Vec::<u8>::with_capacity(input.len());
 
-    // SAFETY: `out` has sufficient capacity for a copy of a substring.
-    // Memory ranges cannot overlap; c.f. borrowing rules; out is mutable thus not aliasable.
+    // SAFETY: `out` is a freshly allocated Vec with capacity `s.len()`, and
+    // `bytes` points to the input slice from a different allocation. We copy
+    // exactly the unchanged prefix `[0..i]` before any mutation, so the source
+    // and destination do not overlap. The copied prefix length is at most the
+    // input length, so it fits in the reserved capacity.
     unsafe {
         out.as_mut_ptr().copy_from_nonoverlapping(bytes.as_ptr(), i);
         out.set_len(i);
@@ -180,7 +207,8 @@ pub fn encode_string(input: &str) -> Cow<'_, str> {
         }
     }
 
-    // SAFETY: Because we copy the input string and only transform ASCII codes into more ASCII codes, it's guaranteed to be UTF-8
+    // SAFETY: Because we copy the input string and only transform ASCII codes
+    // into more ASCII codes, it's guaranteed to be UTF-8
     let str = unsafe { String::from_utf8_unchecked(out) };
     Cow::from(str)
 }
@@ -200,7 +228,7 @@ mod tests {
 
     #[test]
     fn string_decode_unicode() {
-        // Ensure the function doesn't split/affect code-point bytes
+        // ensure the function doesn't split/affect code-point bytes
         assert_eq!(decode_string("simple 😺 string"), "simple 😺 string");
         assert_eq!(
             decode_string("not 😺 simple 😺 string %25 %0A"),
@@ -219,7 +247,7 @@ mod tests {
 
     #[test]
     fn string_encode_unicode() {
-        // Ensure the function doesn't split/affect code-point bytes
+        // ensure the function doesn't split/affect code-point bytes
         assert_eq!(encode_string("simple 😺 string"), "simple 😺 string");
         assert_eq!(
             encode_string("not 😺 simple 😺 string % \n"),
