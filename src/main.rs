@@ -1,7 +1,10 @@
 use std::{io::Write, process};
 
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{
+    Parser, Subcommand,
+    builder::{Styles, styling::AnsiColor},
+};
 use figment::{
     Figment,
     providers::{Format, Serialized, Toml},
@@ -26,8 +29,14 @@ mod path;
 mod theme;
 mod unescape;
 
+const CLAP_STYLES: Styles = Styles::styled()
+    .usage(AnsiColor::White.on_default().bold())
+    .header(AnsiColor::White.on_default().bold())
+    .literal(AnsiColor::Cyan.on_default().bold())
+    .placeholder(AnsiColor::Magenta.on_default().bold());
+
 #[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
+#[command(version, about, long_about = None, styles = CLAP_STYLES)]
 struct Args {
     #[command(subcommand)]
     command: Command,
