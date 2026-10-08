@@ -28,7 +28,7 @@ _Note: This project follows [Semantic Versioning]._
 - Add `zsh-patina highlight` subcommand (thanks to @iamkroot for this very useful feature request 👍). The subcommand can be used to highlight a command line from an input file or stdin ad-hoc within the current shell session.
 - Deprecate flake.nix (contributed by @Lubsch 🎉). The package is now available in nixpkgs-26.05 and nixpkgs-unstable.
 - Remove check for `zsh-patina activate` invoked last in the `.zshrc` (contributed by @ccjmne 😎). Placing zsh-patina at the end of the file is now just a recommendation mentioned in the [troubleshooting section][troubleshooting] of the [README].
-- Add install instructions for various plugin managers and add `zsh-patina.plugin.zsh` (thanks to @jasonm23 for the idea 💡)
+- Add install instructions for various plugin managers and add `zsh-patina.plugin.zsh` (thanks to @ocodo for the idea 💡)
 - Bump up client/daemon protocol to v3
 
 **Bug fixes**
