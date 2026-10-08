@@ -2,6 +2,24 @@
 
 _Note: This project follows [Semantic Versioning]._
 
+## [1.11.0] - 2026-10-08
+
+**New features**
+
+- Add support for the Zsh `cdpath` variable (contributed by @ccjmne 🎉). Entries in `cdpath` will be correctly highlighted when used in `cd`, `chdir`, and `pushd` commands.
+- Dynamically highlight path arguments of `cd`, `chdir`, and `pushd` only if they are directories
+- Colorize CLI help
+
+**Bug fixes**
+
+- Correctly decode Unicode sequences when strings are sent from the client to the daemon (contributed by @cyyynthia 😺)
+- Fix indentation in CLI help
+
+**Maintenance**
+
+- Update dependencies
+- Use base package name for AUR instructions in README (contributed by @cyyynthia 🦋)
+
 ## [1.10.0] - 2026-08-23
 
 **New features**
@@ -225,6 +243,7 @@ _Note: This project follows [Semantic Versioning]._
 
 _First release._
 
+[1.11.0]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.11.0
 [1.10.0]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.10.0
 [1.9.0]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.9.0
 [1.8.0]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.8.0
