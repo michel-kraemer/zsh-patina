@@ -57,8 +57,8 @@ enum Command {
     ///
     /// Alternatively, you can permanently install the script to your site-functions directory:
     ///
-    ///    zsh-patina completion > /usr/local/share/zsh/site-functions/_zsh-patina
-    ///    chmod +x /usr/local/share/zsh/site-functions/_zsh-patina
+    ///     zsh-patina completion > /usr/local/share/zsh/site-functions/_zsh-patina
+    ///     chmod +x /usr/local/share/zsh/site-functions/_zsh-patina
     ///
     /// Or with Homebrew under macOS:
     ///
