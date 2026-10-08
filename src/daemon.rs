@@ -688,8 +688,8 @@ fn handle_connection_v3_with_compatibility<R: BufRead, W: Write>(
     match cmd {
         Command::Hello => handle_hello(writer),
         Command::Highlight => handle_highlight(
-            header_lines.iter().map(AsRef::as_ref).collect(),
-            body_lines.iter().map(AsRef::as_ref).collect(),
+            header_lines,
+            body_lines,
             reader,
             writer,
             highlighter,
@@ -711,8 +711,8 @@ where
 
 /// Handle "HLT" command
 fn handle_highlight<R, W>(
-    header_lines: Vec<&str>,
-    body_lines: Vec<&str>,
+    header_lines: Vec<String>,
+    body_lines: Vec<String>,
     mut reader: R,
     mut writer: W,
     highlighter: &Highlighter,
@@ -753,7 +753,7 @@ where
     let mut zle_highlight_paste = None;
 
     // parse header
-    for line in header_lines {
+    for line in &header_lines {
         // The protocol specification says that header fields are always exactly
         // 3 *bytes* long, the equals sign falls at byte offset 3, and the value
         // therefore begins at byte offset 4. If `line` is too short, we can
@@ -918,7 +918,7 @@ where
         let line = body_iterator
             .next()
             .expect("pre_buffer_line_count is always less than or equal to body_lines.len()");
-        lines.push_str(line);
+        lines.push_str(&line);
         pre_buffer_total_len += line.chars().count();
     }
 
@@ -943,7 +943,7 @@ where
         }
 
         if !cursor_line_found || i < cursor_line.saturating_add(term_rows) {
-            lines.push_str(line);
+            lines.push_str(&line);
             line_lengths.push(line_len);
             total_len += line_len;
         } else {
