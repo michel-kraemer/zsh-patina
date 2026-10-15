@@ -516,6 +516,7 @@ zsh-patina dynamically highlights commands, files, and directories based on whet
 
 # Optional fine-grained scopes for each individual callable
 "dynamic.callable.alias" = "cyan"
+"dynamic.callable.autocd" = "cyan"
 "dynamic.callable.builtin" = "cyan"
 "dynamic.callable.command" = "cyan"
 "dynamic.callable.function" = "cyan"
