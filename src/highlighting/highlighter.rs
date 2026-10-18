@@ -15,7 +15,7 @@ use syntect::{
 
 use super::*;
 use crate::{
-    config::{DynamicConfigType, HighlightingConfig},
+    config::{AutocdStyle, DynamicConfigType, HighlightingConfig},
     highlighting::{
         dynamic::{
             DynamicHighlightingOptions, DynamicScopes, DynamicTokenGroupBuilder, DynamicType,
@@ -291,6 +291,7 @@ pub struct Highlighter {
     timeout: Duration,
     dynamic_callables_enabled: bool,
     dynamic_arguments_type: DynamicConfigType,
+    autocd_style: AutocdStyle,
     syntax_set: SyntaxSet,
     theme: Theme,
     scope_mapping: ScopeMapping,
@@ -358,6 +359,7 @@ impl Highlighter {
             timeout: config.timeout,
             dynamic_callables_enabled: config.dynamic.callables,
             dynamic_arguments_type: config.dynamic.paths,
+            autocd_style: config.autocd_style,
             syntax_set,
             theme,
             scope_mapping,
@@ -392,6 +394,7 @@ impl Highlighter {
             request.pwd?,
             &request.cdpath,
             request.autocd_enabled,
+            self.autocd_style,
             &self.home_dir,
             &self.theme,
             self.dynamic_arguments_type == DynamicConfigType::Partial,
@@ -442,6 +445,7 @@ impl Highlighter {
                 pwd,
                 &request.cdpath,
                 request.autocd_enabled,
+                self.autocd_style,
                 &self.home_dir,
                 &self.theme,
                 self.dynamic_arguments_type == DynamicConfigType::Partial,

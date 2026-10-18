@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use syntect::parsing::{ClearAmount, Scope, ScopeStackOp};
 
 use crate::{
+    config::AutocdStyle,
     path::{PathType, is_path_executable, named_directory, path_type},
     unescape::ZshUnescape,
 };
@@ -50,6 +51,7 @@ pub struct DynamicHighlightingOptions<'a> {
     pwd: &'a str,
     cdpath: &'a [&'a str],
     autocd: bool,
+    autocd_style: AutocdStyle,
     home_dir: &'a str,
     theme: &'a Theme,
     highlight_partial_paths: bool,
@@ -64,6 +66,7 @@ impl<'a> DynamicHighlightingOptions<'a> {
         pwd: &'a str,
         cdpath: &'a [&'a str],
         autocd: bool,
+        autocd_style: AutocdStyle,
         home_dir: &'a str,
         theme: &'a Theme,
         highlight_partial_paths: bool,
@@ -74,6 +77,7 @@ impl<'a> DynamicHighlightingOptions<'a> {
             pwd,
             cdpath,
             autocd,
+            autocd_style,
             home_dir,
             theme,
             highlight_partial_paths,
@@ -409,7 +413,14 @@ pub(super) fn classify_callable(
 
     let autocd_style = if options.autocd {
         match classify_argument(&path, range, options, true) {
-            Some(SpanStyle::Static(style)) => Some(style),
+            Some(SpanStyle::Static(style)) => Some(match options.autocd_style {
+                AutocdStyle::Command => {
+                    resolve_static_style(DYNAMIC_CALLABLE_COMMAND, options.theme)
+                        .or_else(|| resolve_static_style(CALLABLE, options.theme))
+                        .unwrap_or_default()
+                }
+                AutocdStyle::Directory => style,
+            }),
             _ => None,
         }
     } else {

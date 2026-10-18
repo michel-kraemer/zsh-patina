@@ -758,7 +758,11 @@ async fn highlight_subcommand_help() {
 #[ignore]
 async fn autocd_directory_uses_directory_scope() {
     run_highlight(
-        &["mkdir mydir", "setopt autocd"],
+        &[
+            "mkdir mydir",
+            "setopt autocd",
+            r#"printf '\nautocd_style = "directory"\n' >> /root/.config/zsh-patina/config.toml"#,
+        ],
         &[],
         "mydir",
         &[h(0, 5, [FUNCTION, DYNAMIC_PATH_DIRECTORY_COMPLETE])],
@@ -795,7 +799,11 @@ async fn command_takes_precedence_over_autocd() {
 #[ignore]
 async fn autocd_directory_with_trailing_slash_uses_directory_scope() {
     run_highlight(
-        &["mkdir ls", "setopt autocd"],
+        &[
+            "mkdir ls",
+            "setopt autocd",
+            r#"printf '\nautocd_style = "directory"\n' >> /root/.config/zsh-patina/config.toml"#,
+        ],
         &[],
         "ls/",
         &[h(0, 3, [FUNCTION, DYNAMIC_PATH_DIRECTORY_COMPLETE])],
