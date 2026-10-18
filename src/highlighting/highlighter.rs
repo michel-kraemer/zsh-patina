@@ -15,7 +15,7 @@ use syntect::{
 
 use super::*;
 use crate::{
-    config::{DynamicConfigType, HighlightingConfig},
+    config::{AutocdStyle, DynamicConfigType, HighlightingConfig},
     highlighting::{
         dynamic::{
             DynamicHighlightingOptions, DynamicScopes, DynamicTokenGroupBuilder, DynamicType,
@@ -85,22 +85,26 @@ fn mix_spans(base: Vec<Span>, mut mixins: Vec<Span>) -> Vec<Span> {
     result
 }
 
+fn mix_static_styles(base: &StaticStyle, mixin: &StaticStyle) -> StaticStyle {
+    StaticStyle {
+        foreground_color: mixin
+            .foreground_color
+            .clone()
+            .or_else(|| base.foreground_color.clone()),
+        background_color: mixin
+            .background_color
+            .clone()
+            .or_else(|| base.background_color.clone()),
+        bold: mixin.bold || base.bold,
+        underline: mixin.underline || base.underline,
+    }
+}
+
 fn mix_styles(base: &SpanStyle, mixin: &SpanStyle) -> SpanStyle {
     match (base, mixin) {
-        (SpanStyle::Static(b), SpanStyle::Static(m)) => SpanStyle::Static(StaticStyle {
-            foreground_color: if m.foreground_color.is_some() {
-                m.foreground_color.clone()
-            } else {
-                b.foreground_color.clone()
-            },
-            background_color: if m.background_color.is_some() {
-                m.background_color.clone()
-            } else {
-                b.background_color.clone()
-            },
-            bold: if m.bold { true } else { b.bold },
-            underline: if m.underline { true } else { b.underline },
-        }),
+        (SpanStyle::Static(base), SpanStyle::Static(mixin)) => {
+            SpanStyle::Static(mix_static_styles(base, mixin))
+        }
 
         (
             SpanStyle::Static(base_style),
@@ -115,6 +119,17 @@ fn mix_styles(base: &SpanStyle, mixin: &SpanStyle) -> SpanStyle {
             parsed_path: parsed_path.clone(),
             dynamic_type: *dynamic_type,
             base_style: Some(base_style.clone()),
+        }),
+
+        (
+            SpanStyle::Static(base_style),
+            SpanStyle::Dynamic(DynamicStyle::Callable {
+                parsed_callable,
+                autocd_style: Some(autocd_style),
+            }),
+        ) => SpanStyle::Dynamic(DynamicStyle::Callable {
+            parsed_callable: parsed_callable.clone(),
+            autocd_style: Some(mix_static_styles(base_style, autocd_style)),
         }),
 
         (_, SpanStyle::Dynamic(m)) => SpanStyle::Dynamic(m.clone()),
@@ -218,9 +233,7 @@ impl<'a, P> HighlightingRequest<'a, P> {
         self
     }
 
-    /// Enable or disable support for the AUTO_CD option (i.e. that a bare
-    /// directory in callable position is highlighted as a command if it is
-    /// executable)
+    /// Enable or disable directory highlighting for AUTO_CD targets in callable position.
     pub fn with_autocd(mut self, enabled: bool) -> Self
     where
         P: Copy,
@@ -278,6 +291,7 @@ pub struct Highlighter {
     timeout: Duration,
     dynamic_callables_enabled: bool,
     dynamic_arguments_type: DynamicConfigType,
+    autocd_style: AutocdStyle,
     syntax_set: SyntaxSet,
     theme: Theme,
     scope_mapping: ScopeMapping,
@@ -345,6 +359,7 @@ impl Highlighter {
             timeout: config.timeout,
             dynamic_callables_enabled: config.dynamic.callables,
             dynamic_arguments_type: config.dynamic.paths,
+            autocd_style: config.autocd_style,
             syntax_set,
             theme,
             scope_mapping,
@@ -379,6 +394,7 @@ impl Highlighter {
             request.pwd?,
             &request.cdpath,
             request.autocd_enabled,
+            self.autocd_style,
             &self.home_dir,
             &self.theme,
             self.dynamic_arguments_type == DynamicConfigType::Partial,
@@ -429,6 +445,7 @@ impl Highlighter {
                 pwd,
                 &request.cdpath,
                 request.autocd_enabled,
+                self.autocd_style,
                 &self.home_dir,
                 &self.theme,
                 self.dynamic_arguments_type == DynamicConfigType::Partial,
@@ -716,7 +733,9 @@ pub mod tests {
                     }
 
                     SpanStyle::Dynamic(dynamic_style) => match dynamic_style {
-                        DynamicStyle::Callable { parsed_callable } => {
+                        DynamicStyle::Callable {
+                            parsed_callable, ..
+                        } => {
                             write!(tw, "CALLABLE `{parsed_callable}`").unwrap();
                         }
                         DynamicStyle::Nameddir { parsed_path, .. } => {
@@ -1021,7 +1040,7 @@ pub mod tests {
         let cfg = test_cfg_with(config)?;
         cfg.create_dir("mydir")?;
 
-        // will be highlighted as a command
+        // will be highlighted as a directory
         assert_snapshot!(
             "directory_in_callable_position_partial__partial_name_autocd",
             cfg.highlight_with_request(
@@ -1045,7 +1064,7 @@ pub mod tests {
             )?
         );
 
-        // will be highlighted as a command
+        // will be highlighted as a directory
         assert_snapshot!(
             "directory_in_callable_position_partial__full_name_autocd",
             cfg.highlight_with_request(
@@ -1069,7 +1088,7 @@ pub mod tests {
             )?
         );
 
-        // will be highlighted as a command
+        // will be highlighted as a directory
         assert_snapshot!(
             "directory_in_callable_position_partial__partial_dotslash_name_autocd",
             cfg.highlight_with_request(
@@ -1093,7 +1112,7 @@ pub mod tests {
             )?
         );
 
-        // will be highlighted as a command
+        // will be highlighted as a directory
         assert_snapshot!(
             "directory_in_callable_position_partial__full_dotslash_name_autocd",
             cfg.highlight_with_request(
