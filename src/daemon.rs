@@ -515,7 +515,10 @@ fn handle_connection_v1<R: BufRead, W: Write>(
     // handle "resolve" command - return list of dynamic callables
     if cmd == Some("resolve") {
         for s in merged {
-            if let SpanStyle::Dynamic(DynamicStyle::Callable { parsed_callable }) = s.style {
+            if let SpanStyle::Dynamic(DynamicStyle::Callable {
+                parsed_callable, ..
+            }) = s.style
+            {
                 writer
                     .write_all(format!("{}\n", encode_string_v1(parsed_callable)).as_bytes())
                     .context("Unable to send response")?;
@@ -536,7 +539,9 @@ fn handle_connection_v1<R: BufRead, W: Write>(
                 }
             }
             SpanStyle::Dynamic(dynamic_style) => match dynamic_style {
-                DynamicStyle::Callable { parsed_callable } => {
+                DynamicStyle::Callable {
+                    parsed_callable, ..
+                } => {
                     let all_fss = highlighter
                         .callable_choices()
                         .iter()
@@ -1076,7 +1081,10 @@ where
     // collect unique callables that need to be resolved
     let mut callables_to_resolve: FxHashSet<&str> = FxHashSet::default();
     for span in &merged {
-        if let SpanStyle::Dynamic(DynamicStyle::Callable { parsed_callable }) = &span.style {
+        if let SpanStyle::Dynamic(DynamicStyle::Callable {
+            parsed_callable, ..
+        }) = &span.style
+        {
             callables_to_resolve.insert(parsed_callable);
         }
     }
@@ -1103,12 +1111,16 @@ where
                     Some(format!("{} {} {}\n", s.start, s.end, fss))
                 }
             }
-            SpanStyle::Dynamic(DynamicStyle::Callable { parsed_callable }) => resolved_callables
+            SpanStyle::Dynamic(DynamicStyle::Callable {
+                parsed_callable,
+                autocd_style,
+            }) => resolved_callables
                 .get(parsed_callable.as_str())
                 .and_then(|callable_type| {
-                    highlighter
-                        .callable_choices()
-                        .get(callable_type)
+                    autocd_style
+                        .as_ref()
+                        .filter(|_| *callable_type == CallableType::Missing)
+                        .or_else(|| highlighter.callable_choices().get(callable_type))
                         .or_else(|| highlighter.callable_choices().get(&CallableType::Unknown))
                         .map(format_static_style)
                         .filter(|s| !s.is_empty())
@@ -1263,7 +1275,9 @@ where
 
             // check if all callables can be resolved
             'outer: for span in &alias_spans {
-                if let SpanStyle::Dynamic(DynamicStyle::Callable { parsed_callable }) = &span.style
+                if let SpanStyle::Dynamic(DynamicStyle::Callable {
+                    parsed_callable, ..
+                }) = &span.style
                 {
                     // If this callable is already in the visited set, tell the
                     // client to only lookup builtins, functions, commands, but

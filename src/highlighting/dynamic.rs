@@ -400,47 +400,26 @@ pub(super) fn classify_callable(
     range: &Range<usize>,
     options: &DynamicHighlightingOptions,
 ) -> Option<SpanStyle> {
-    if path == "."
-        || path == ".."
-        || (path.contains('/') && is_path_executable(&path, options.pwd, options.autocd))
-    {
+    if path == "." || (path.contains('/') && is_path_executable(&path, options.pwd)) {
         log::trace!("Callable `{path}' is executable.");
-        resolve_static_style(DYNAMIC_CALLABLE_COMMAND, options.theme)
+        return resolve_static_style(DYNAMIC_CALLABLE_COMMAND, options.theme)
             .or_else(|| resolve_static_style(CALLABLE, options.theme))
-            .map(SpanStyle::Static)
-    } else if options.autocd {
-        // only perform highlighting of partial paths if it is enabled and if
-        // the cursor touches the prefix
-        let partial = options.highlight_partial_paths
-            && options
-                .cursor
-                .map(|cursor| (range.start..=range.end).contains(&cursor))
-                .unwrap_or_default();
+            .map(SpanStyle::Static);
+    }
 
-        // Prefer working directory before falling back to cdpath entries. Note
-        // that Zsh allows you to put `.` into `cdpath` in which case, other
-        // directories can take precedence. However, since we only need to check
-        // for the presence of the directory in any (!) path to highlight it,
-        // without needing to identify the actual path, this is fine.
-        let search_dirs = std::iter::once(options.pwd).chain(options.cdpath.iter().copied());
-
-        match path_type(&path, search_dirs, true, partial) {
-            Some((PathType::Directory, _)) => {
-                log::trace!("Callable `{path}' is a directory (autocd).");
-                resolve_static_style(DYNAMIC_CALLABLE_COMMAND, options.theme)
-                    .or_else(|| resolve_static_style(CALLABLE, options.theme))
-                    .map(SpanStyle::Static)
-            }
-
-            _ => Some(SpanStyle::Dynamic(DynamicStyle::Callable {
-                parsed_callable: path,
-            })),
+    let autocd_style = if options.autocd {
+        match classify_argument(&path, range, options, true) {
+            Some(SpanStyle::Static(style)) => Some(style),
+            _ => None,
         }
     } else {
-        Some(SpanStyle::Dynamic(DynamicStyle::Callable {
-            parsed_callable: path,
-        }))
-    }
+        None
+    };
+
+    Some(SpanStyle::Dynamic(DynamicStyle::Callable {
+        parsed_callable: path,
+        autocd_style,
+    }))
 }
 
 pub(super) fn classify_argument(
@@ -478,7 +457,10 @@ pub(super) fn classify_argument(
         (PathType::Directory, false) => DYNAMIC_PATH_DIRECTORY_COMPLETE,
     };
 
-    resolve_static_style(dynamic_scope, options.theme).map(SpanStyle::Static)
+    // A matched path remains valid even when the theme adds no styling.
+    Some(SpanStyle::Static(
+        resolve_static_style(dynamic_scope, options.theme).unwrap_or_default(),
+    ))
 }
 
 #[derive(Clone, Copy)]

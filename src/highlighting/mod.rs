@@ -56,7 +56,7 @@ pub struct Span {
     pub style: SpanStyle,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Default, PartialEq, Eq, Hash, Debug)]
 pub struct StaticStyle {
     /// The foreground color of the span
     pub foreground_color: Option<String>,
@@ -77,6 +77,8 @@ pub enum DynamicStyle {
     Callable {
         /// The parsed callable name
         parsed_callable: String,
+        /// Directory styling to use only if command lookup finds no callable
+        autocd_style: Option<StaticStyle>,
     },
 
     /// A path containing a named directory that must be resolved by the client

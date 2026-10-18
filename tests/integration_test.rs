@@ -752,3 +752,53 @@ async fn highlight_subcommand_help() {
             .contains("unexpected argument"),
     );
 }
+
+/// Test that AUTO_CD directories use normal directory highlighting
+#[tokio::test]
+#[ignore]
+async fn autocd_directory_uses_directory_scope() {
+    run_highlight(
+        &["mkdir mydir", "setopt autocd"],
+        &[],
+        "mydir",
+        &[h(0, 5, [FUNCTION, DYNAMIC_PATH_DIRECTORY_COMPLETE])],
+    )
+    .await;
+}
+
+/// Test that commands take precedence over same-named AUTO_CD directories
+#[tokio::test]
+#[ignore]
+async fn command_takes_precedence_over_autocd() {
+    run_highlight(
+        &["mkdir ls", "setopt autocd"],
+        &[],
+        "ls",
+        &[h(0, 2, [DYNAMIC_CALLABLE_COMMAND])],
+    )
+    .await;
+    run_highlight(
+        &[
+            "mkdir -p /tmp/cdpath/ls",
+            "cdpath=(/tmp/cdpath)",
+            "setopt autocd",
+        ],
+        &[],
+        "ls",
+        &[h(0, 2, [DYNAMIC_CALLABLE_COMMAND])],
+    )
+    .await;
+}
+
+/// Test that slash-suffixed directories take precedence over same-named commands
+#[tokio::test]
+#[ignore]
+async fn autocd_directory_with_trailing_slash_uses_directory_scope() {
+    run_highlight(
+        &["mkdir ls", "setopt autocd"],
+        &[],
+        "ls/",
+        &[h(0, 3, [FUNCTION, DYNAMIC_PATH_DIRECTORY_COMPLETE])],
+    )
+    .await;
+}
