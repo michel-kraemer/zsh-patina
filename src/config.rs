@@ -58,6 +58,11 @@ pub struct HighlightingConfig {
     /// ```
     pub dynamic: DynamicConfig,
 
+    /// How AUTO_CD directory targets are highlighted. Defaults to
+    /// [`AutocdStyle::Command`].
+    #[serde(default)]
+    pub autocd_style: AutocdStyle,
+
     /// For performance reasons, highlighting is disabled for very long lines.
     /// This option specifies the maximum length of a line (in bytes) up to
     /// which highlighting is applied.
@@ -101,6 +106,7 @@ impl Default for HighlightingConfig {
         Self {
             theme: ThemeSource::Patina,
             dynamic: DynamicConfig::default(),
+            autocd_style: AutocdStyle::default(),
             max_line_length: 20000,
             timeout: Duration::from_millis(500),
             precommands: Vec::new(),
@@ -249,6 +255,20 @@ impl<'de> Deserialize<'de> for DynamicConfig {
 
         deserializer.deserialize_any(DynamicConfigVisitor)
     }
+}
+
+/// Controls how AUTO_CD directory targets are highlighted.
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum AutocdStyle {
+    /// Use command highlighting. This is the default and preserves existing
+    /// styling for AUTO_CD targets.
+    #[default]
+    Command,
+
+    /// Use directory highlighting, with separate styles for complete and
+    /// partial paths.
+    Directory,
 }
 
 /// Controls how zsh-patina highlights the word that follows a precommand's

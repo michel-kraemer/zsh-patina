@@ -4,4 +4,4 @@ expression: "cfg.highlight_with_request(\"cdpathdir\",\nHighlightingRequest::def
 ---
 cdpathdir
 
-0  9  `cdpathdir`  variable.function + dynamic.callable.command
+0  9  `cdpathdir`  CALLABLE `cdpathdir`
