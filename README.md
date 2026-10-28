@@ -304,8 +304,8 @@ dynamic = true
 # "complete" - dynamically highlight paths only if they have been entered
 #              completely (default)
 
-# Style AUTO_CD targets as "command" (default) or "directory".
-# This only changes their appearance; actual commands still take precedence.
+# Highlight AUTO_CD targets as `"command"` (default) or `"directory"`. This
+# only changes their appearance. Actual commands still take precedence.
 autocd_style = "command"
 
 # For performance reasons, highlighting is disabled for very long lines. This

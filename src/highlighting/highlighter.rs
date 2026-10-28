@@ -233,7 +233,8 @@ impl<'a, P> HighlightingRequest<'a, P> {
         self
     }
 
-    /// Enable or disable directory highlighting for AUTO_CD targets in callable position.
+    /// Enable or disable directory highlighting for AUTO_CD targets in callable
+    /// position.
     pub fn with_autocd(mut self, enabled: bool) -> Self
     where
         P: Copy,

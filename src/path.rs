@@ -117,8 +117,8 @@ pub fn path_type<'a>(
     })
 }
 
-/// Check if the given path is an executable file.
-/// * If the path is relative, it is resolved against the provided `pwd`.
+/// Check if the given path is an executable file. If the path is relative, it
+/// is resolved against the provided `pwd`.
 pub fn is_path_executable(path: &str, pwd: &str) -> bool {
     let Some(metadata) = metadata(path, pwd) else {
         return false;

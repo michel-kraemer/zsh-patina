@@ -77,6 +77,7 @@ pub enum DynamicStyle {
     Callable {
         /// The parsed callable name
         parsed_callable: String,
+
         /// Directory styling to use only if command lookup finds no callable
         autocd_style: Option<StaticStyle>,
     },

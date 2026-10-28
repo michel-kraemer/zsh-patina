@@ -468,7 +468,7 @@ pub(super) fn classify_argument(
         (PathType::Directory, false) => DYNAMIC_PATH_DIRECTORY_COMPLETE,
     };
 
-    // A matched path remains valid even when the theme adds no styling.
+    // a matched path remains valid even when the theme adds no styling
     Some(SpanStyle::Static(
         resolve_static_style(dynamic_scope, options.theme).unwrap_or_default(),
     ))
