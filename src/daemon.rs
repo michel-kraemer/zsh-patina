@@ -2,6 +2,7 @@ use anyhow::{Context, Result, bail};
 use askama::Template;
 use rayon::ThreadPoolBuilder;
 use rustc_hash::{FxHashMap, FxHashSet};
+use rustix::fs::{AtFlags, CWD, Timespec, Timestamps, UTIME_NOW, UTIME_OMIT, utimensat};
 use std::{
     borrow::Cow,
     fs::{self, File, OpenOptions, Permissions, TryLockError},
@@ -15,9 +16,12 @@ use std::{
     },
     path::{Path, PathBuf},
     process,
-    sync::Arc,
-    thread,
-    time::Duration,
+    sync::{
+        Arc,
+        mpsc::{RecvTimeoutError, Sender},
+    },
+    thread::{self, JoinHandle},
+    time::{Duration, Instant},
 };
 
 use crate::{
@@ -82,8 +86,87 @@ const LOCK_WAIT_TIMEOUT: Duration = Duration::from_millis(1000);
 // Polling interval used while waiting for the daemon to finish initialization.
 const LOCK_WAIT_INTERVAL: Duration = Duration::from_millis(50);
 
+/// Refresh runtime-file access times every 5 hours. This is necessary because
+/// the XDG specification says that a cleanup process might delete files in
+/// `XDG_RUNTIME_DIR` unless their access time is periodically updated. See:
+///
+/// https://specifications.freedesktop.org/basedir/latest/
+///
+/// Note: It's unsure whether the six-hour threshold mentioned in the
+/// specification includes the time the system was suspended or not. Since
+/// there's no portable way to create a timer that keeps on counting even when
+/// the system is suspended (and which triggers immediately after wake), we opt
+/// for the simpler implementation and just use a plain
+/// [`std::sync::mpsc::Receiver::recv_timeout`] call.
+///
+/// The timer is a fallback anyhow, because we also try to set the sticky bit on
+/// the files we want to protect, which - according to the specification -
+/// should also prevent automatic cleanup. However, some systems such as OpenBSD
+/// or FreeBSD do not allow non-root process to set the sticky bit on files.
+/// See:
+///
+/// https://github.com/michel-kraemer/zsh-patina/issues/113
+const RUNTIME_FILE_REFRESH_INTERVAL: Duration = Duration::from_secs(5 * 60 * 60);
+
+/// Set owner-only access and sticky bit where the operating system allows it
+fn set_runtime_file_permissions(path: &Path) -> Result<()> {
+    fs::set_permissions(path, Permissions::from_mode(0o600))
+        .with_context(|| format!("Unable to set permissions of {path:?}"))?;
+
+    if let Err(error) = fs::set_permissions(path, Permissions::from_mode(0o1600)) {
+        log::warn!("Unable to set sticky bit on runtime file {path:?}: {error}");
+    }
+
+    Ok(())
+}
+
+/// Set a file's access time to now without changing its modification time
+fn refresh_access_time(path: &Path) -> Result<()> {
+    let times = Timestamps {
+        last_access: Timespec {
+            tv_sec: 0,
+            tv_nsec: UTIME_NOW,
+        },
+        last_modification: Timespec {
+            tv_sec: 0,
+            tv_nsec: UTIME_OMIT,
+        },
+    };
+    Ok(utimensat(CWD, path, &times, AtFlags::empty())?)
+}
+
+/// Refresh the access times of the daemon's lock file and socket
+fn refresh_access_times(lock_file_path: &Path, socket_path: &Path) {
+    for path in [lock_file_path, socket_path] {
+        if let Err(error) = refresh_access_time(path) {
+            log::warn!("Unable to refresh access time of runtime file {path:?}: {error}");
+        }
+    }
+}
+
+/// Spawn a timer that refreshes both runtime paths until its sender is notified
+/// or dropped
+fn spawn_refresh_access_times_timer(
+    lock_file_path: PathBuf,
+    socket_path: PathBuf,
+) -> (JoinHandle<()>, Sender<()>) {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let thread = thread::spawn(move || {
+        loop {
+            match receiver.recv_timeout(RUNTIME_FILE_REFRESH_INTERVAL) {
+                Ok(()) | Err(RecvTimeoutError::Disconnected) => break,
+                Err(RecvTimeoutError::Timeout) => {
+                    refresh_access_times(&lock_file_path, &socket_path);
+                }
+            }
+        }
+    });
+
+    (thread, sender)
+}
+
 fn read_pid(pid_file: &mut File) -> Result<u32> {
-    let deadline = std::time::Instant::now() + LOCK_WAIT_TIMEOUT;
+    let deadline = Instant::now() + LOCK_WAIT_TIMEOUT;
     loop {
         pid_file.seek(SeekFrom::Start(0))?;
         let mut pid = String::new();
@@ -92,7 +175,7 @@ fn read_pid(pid_file: &mut File) -> Result<u32> {
         if !pid.is_empty() {
             return pid.parse().context("Could not parse PID from lock file");
         }
-        if std::time::Instant::now() >= deadline {
+        if Instant::now() >= deadline {
             bail!("Daemon is running but current PID could not be read");
         }
         thread::sleep(LOCK_WAIT_INTERVAL);
@@ -103,12 +186,12 @@ fn read_pid(pid_file: &mut File) -> Result<u32> {
 /// exist yet. This handles the short window after a new daemon has acquired the
 /// startup lock but has not finished binding the socket.
 fn connect_with_retry(socket_path: &Path) -> Result<UnixStream> {
-    let deadline = std::time::Instant::now() + LOCK_WAIT_TIMEOUT;
+    let deadline = Instant::now() + LOCK_WAIT_TIMEOUT;
     loop {
         match UnixStream::connect(socket_path) {
             Ok(stream) => return Ok(stream),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                if std::time::Instant::now() >= deadline {
+                if Instant::now() >= deadline {
                     return Err(e.into());
                 }
                 thread::sleep(LOCK_WAIT_INTERVAL);
@@ -122,12 +205,12 @@ fn connect_with_retry(socket_path: &Path) -> Result<UnixStream> {
 /// expires. Returns an error if the lock is still held when the timeout is
 /// reached.
 fn wait_for_lock_release(lock_file: &mut File) -> Result<()> {
-    let deadline = std::time::Instant::now() + LOCK_WAIT_TIMEOUT;
+    let deadline = Instant::now() + LOCK_WAIT_TIMEOUT;
     loop {
         match lock_file.try_lock() {
             Ok(()) => return Ok(()),
             Err(TryLockError::WouldBlock) => {
-                if std::time::Instant::now() >= deadline {
+                if Instant::now() >= deadline {
                     bail!("Daemon did not release the lock file in time");
                 }
                 thread::sleep(LOCK_WAIT_INTERVAL);
@@ -1506,11 +1589,9 @@ fn start_daemon_internal(
     writeln!(lock_file, "{}", process::id())?;
     lock_file.flush()?;
 
-    // Set read/write permissions and protect lock file from being deleted by
-    // periodic cleanup (https://specifications.freedesktop.org/basedir/latest/).
-    lock_file
-        .set_permissions(Permissions::from_mode(0o1600))
-        .with_context(|| format!("Unable to set permissions of {lock_file_path:?}"))?;
+    // restrict lock-file access and mark it for cleanup protection where
+    // supported
+    set_runtime_file_permissions(&lock_file_path)?;
 
     // clean up leftover socket
     let socket_path = sock_path(runtime_dir);
@@ -1535,10 +1616,14 @@ fn start_daemon_internal(
     let listener = UnixListener::bind(&socket_path)
         .with_context(|| format!("Unable to bind socket {socket_path:?}"))?;
 
-    // Set read/write permissions and protect socket from being deleted by
-    // periodic cleanup (https://specifications.freedesktop.org/basedir/latest/).
-    fs::set_permissions(&socket_path, Permissions::from_mode(0o1600))
-        .with_context(|| format!("Unable to set permissions of {socket_path:?}"))?;
+    // restrict socket access and mark it for cleanup protection where supported
+    set_runtime_file_permissions(&socket_path)?;
+
+    // refresh access times immediately at startup
+    refresh_access_times(&lock_file_path, &socket_path);
+
+    let (refresh_access_times_thread, refresh_access_times_sender) =
+        spawn_refresh_access_times_timer(lock_file_path.clone(), socket_path.clone());
 
     log::info!("Listening for connections on {socket_path:?} ...");
 
@@ -1583,6 +1668,10 @@ fn start_daemon_internal(
             }
         }
     }
+
+    // stop refresh access timer before removing runtime files
+    let _ = refresh_access_times_sender.send(());
+    let _ = refresh_access_times_thread.join();
 
     // always remove socket before lock file to avoid a possible race condition
     let _ = fs::remove_file(socket_path);

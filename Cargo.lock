@@ -3229,6 +3229,7 @@ dependencies = [
  "rayon",
  "regex-syntax",
  "rustc-hash",
+ "rustix",
  "serde",
  "shellexpand",
  "strum",
