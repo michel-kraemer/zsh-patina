@@ -212,11 +212,23 @@ _zsh_patina_resolve_callable() {
     # $commands may stay stale until rehash after a new executable appears in
     # an existing PATH entry. Fall back to a targeted PATH lookup for this one
     # word instead of refreshing the whole command hash with each keystroke.
-    elif whence -p -- "$word" >/dev/null 2>&1; then
+    elif _zsh_patina_path_lookup "$word"; then
         REPLY=c
     else
         REPLY=m
     fi
+}
+
+_zsh_patina_path_lookup() {
+    if [[ $1 == */* ]]; then
+        whence -p -- "$1" >/dev/null 2>&1
+        return
+    fi
+    local d
+    for d in "${path[@]}"; do
+        [[ -f ${d:-.}/$1 && -x ${d:-.}/$1 ]] && return 0
+    done
+    return 1
 }
 
 _zsh_patina_resolve_nameddir() {
@@ -296,7 +308,7 @@ _zsh_patina() {
         count=$(( ${#${BUFFER//[^$'\n']/}} + 1 ))
     fi
 
-    if ! zsocket "$socket_path" 2>/dev/null; then
+    if ! zsocket "$socket_path"; then
         # this is a real error that should not happen - so better print an error
         # message than being silent
         zle -M "zsh-patina: failed to connect to socket at $socket_path. Please restart your shell and/or the zsh-patina daemon with 'zsh-patina restart'."
@@ -349,18 +361,20 @@ _zsh_patina() {
             fi
 
             # send header
-            print -r -- "$header"
+            local message="$header"$'\n'
 
             # send pre-buffer lines
             if (( pre_count != 0 )); then
-                print -r -- "$trimmed_prebuffer"
+                message+="$trimmed_prebuffer"$'\n'
             fi
 
             # send lines
             if (( count != 0 )); then
-                print -r -- "$BUFFER"
+                message+="$BUFFER"$'\n'
             fi
-        } >&"$fd" || {
+
+            print -rn -u "$fd" -- "$message"
+        } || {
             print -u2 "zsh-patina: Write to socket failed"
             return
         }
@@ -370,7 +384,8 @@ _zsh_patina() {
         # (strange Zsh behaviour). As a matter of fact, declaring all variables
         # outside the while loop (outside the hot path), slightly increases
         # performance.
-        local query_cmd query_lns query_las qline qi
+        local query_cmd query_lns query_las qline qi chunk rest
+        local -a answers spans
 
         local new_regions=("${region_highlight[@]}") # preserve existing highlighting
         local line
@@ -391,21 +406,24 @@ _zsh_patina() {
                     fi
                 done
 
+                answers=()
                 if [[ "$query_cmd" == "CAL" ]]; then
                     for (( qi = 0; qi < query_lns; qi++ )); do
                         IFS= read -r -u "$fd" qline
                         _zsh_patina_decode_string "$qline"
                         _zsh_patina_resolve_callable "$REPLY" "$query_las"
-                        print -r -u "$fd" -- "$REPLY"
+                        answers+=("$REPLY")
                     done
+                    (( ${#answers} )) && print -rl -u "$fd" -- "${answers[@]}"
                 elif [[ "$query_cmd" == "NMD" ]]; then
                     for (( qi = 0; qi < query_lns; qi++ )); do
                         IFS= read -r -u "$fd" qline
                         _zsh_patina_decode_string "$qline"
                         _zsh_patina_resolve_nameddir "$REPLY"
                         _zsh_patina_encode_string "$REPLY"
-                        print -r -u "$fd" -- "$REPLY"
+                        answers+=("$REPLY")
                     done
+                    (( ${#answers} )) && print -rl -u "$fd" -- "${answers[@]}"
                 else
                     # unknown query type: drain body lines to keep socket in
                     # sync
@@ -415,6 +433,15 @@ _zsh_patina() {
                 fi
             else
                 new_regions+=("$line memo=zsh_patina")
+
+                rest=
+                while sysread -i "$fd" chunk; do
+                    rest+=$chunk
+                done
+                spans=("${(@f)rest}")
+                spans=("${(@)spans:#}")
+                (( ${#spans} )) && new_regions+=("${(@)^spans} memo=zsh_patina")
+                break
             fi
         done
 
@@ -440,6 +467,9 @@ _zsh_patina_chpwd() {
 
 if ! zmodload zsh/net/socket 2>/dev/null; then
     print -u2 "zsh-patina: failed to load zsh/net/socket module"
+fi
+if ! zmodload -F zsh/system b:sysread 2>/dev/null; then
+    print -u2 "zsh-patina: failed to load zsh/system module"
 fi
 
 autoload -U add-zle-hook-widget add-zsh-hook
