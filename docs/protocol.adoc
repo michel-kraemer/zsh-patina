@@ -121,7 +121,7 @@ If a value itself contains `=` signs (e.g., a ZLE style string such as `fg=red,b
 |`VER`
 |string
 |REQUIRED
-|Protocol version. MUST be the string `2`.
+|Protocol version. MUST be the string `3`.
 
 |`CMD`
 |string
