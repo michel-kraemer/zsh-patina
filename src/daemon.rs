@@ -1641,6 +1641,7 @@ fn start_daemon_internal(
                     .set_read_timeout(Some(Duration::from_secs(1)))
                     .and_then(|_| stream.set_write_timeout(Some(Duration::from_secs(1))))
                 {
+                    // the client has hung up
                     log::error!("Unable to set socket timeouts: {e}");
                     continue;
                 }
