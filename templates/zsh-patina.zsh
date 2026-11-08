@@ -285,15 +285,19 @@ _zsh_patina() {
     # the pre-buffer contains the lines before the one the cursor is currently
     # in.
     local pre_count=0
+    local -a lines_tmp
     if [[ -n "$trimmed_prebuffer" ]]; then
-        # remove every character instead of '\n' and then get string length
-        pre_count=$(( ${#${trimmed_prebuffer//[^$'\n']/}} + 1 ))
+        # splitting the string with (@f) into a temporary array and then
+        # counting the elements is the fastest way to count lines in Zsh
+        lines_tmp=("${(@f)trimmed_prebuffer}")
+        pre_count=${#lines_tmp}
     fi
 
     # Count lines in buffer
     local count=0
     if [[ -n "$BUFFER" ]]; then
-        count=$(( ${#${BUFFER//[^$'\n']/}} + 1 ))
+        lines_tmp=("${(@f)BUFFER}")
+        count=${#lines_tmp}
     fi
 
     if ! zsocket "$socket_path" 2>/dev/null; then
