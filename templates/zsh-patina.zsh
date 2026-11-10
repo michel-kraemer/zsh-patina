@@ -212,23 +212,11 @@ _zsh_patina_resolve_callable() {
     # $commands may stay stale until rehash after a new executable appears in
     # an existing PATH entry. Fall back to a targeted PATH lookup for this one
     # word instead of refreshing the whole command hash with each keystroke.
-    elif _zsh_patina_path_lookup "$word"; then
+    elif whence -p -- "$word" >/dev/null 2>&1; then
         REPLY=c
     else
         REPLY=m
     fi
-}
-
-_zsh_patina_path_lookup() {
-    if [[ $1 == */* ]]; then
-        whence -p -- "$1" >/dev/null 2>&1
-        return
-    fi
-    local d
-    for d in "${path[@]}"; do
-        [[ -f ${d:-.}/$1 && -x ${d:-.}/$1 ]] && return 0
-    done
-    return 1
 }
 
 _zsh_patina_resolve_nameddir() {
