@@ -299,7 +299,9 @@ The client inserts each received span into `$region_highlight` verbatim, in the 
 
 ===== Queries and Answers
 
-During response generation, the daemon MAY emit query blocks and span lines in any order; they MAY be freely interleaved. The client MUST be prepared to handle a query block at any point while reading the response. A query block uses the same header-and-body structure as a client request, with `?` prepended to the first line to distinguish it from a span line:
+The daemon first performs all required queries, sending them in a sequence of zero or more query blocks. After all queries have been sent and answered, the daemon sends span lines for the highlighted ranges. Once the daemon begins emitting spans, it MUST NOT emit any further queries.
+
+A query block uses the same header-and-body structure as a client request, with `?` prepended to the first line to distinguish it from a span line:
 
 ----
 query            = query-first-line *header-field blank-line *query-body-line
