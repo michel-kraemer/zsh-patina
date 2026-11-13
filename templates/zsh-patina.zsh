@@ -296,7 +296,7 @@ _zsh_patina() {
         count=$(( ${#${BUFFER//[^$'\n']/}} + 1 ))
     fi
 
-    if ! zsocket "$socket_path"; then
+    if ! zsocket "$socket_path" 2>/dev/null; then
         # this is a real error that should not happen - so better print an error
         # message than being silent
         zle -M "zsh-patina: failed to connect to socket at $socket_path. Please restart your shell and/or the zsh-patina daemon with 'zsh-patina restart'."
