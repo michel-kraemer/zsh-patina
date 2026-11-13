@@ -426,6 +426,9 @@ _zsh_patina() {
             else
                 new_regions+=("$line memo=zsh_patina")
 
+                # performance: according to the protocol specification, the
+                # daemon must not send any further query once it has started
+                # sending spans, so we can read the rest in one batch
                 rest=
                 while sysread -i "$fd" chunk; do
                     rest+=$chunk
