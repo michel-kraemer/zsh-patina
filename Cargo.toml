@@ -6,7 +6,6 @@ authors = ["Michel Krämer <michel@undercouch.de>"]
 license = "MIT"
 description = "$ A blazingly fast Zsh plugin performing syntax highlighting of your command line while you type 🌈"
 readme = "README.md"
-homepage = "https://github.com/michel-kraemer/zsh-patina"
 repository = "https://github.com/michel-kraemer/zsh-patina"
 keywords = ["shell", "zsh", "syntax", "highlighting", "syntax-highlighting"]
 categories = ["command-line-utilities"]
