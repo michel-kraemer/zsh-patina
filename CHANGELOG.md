@@ -2,11 +2,33 @@
 
 _Note: This project follows [Semantic Versioning]._
 
+## [1.12.0] - 2026-11-15
+
+**New features**
+
+- Distinguish `AUTO_CD` directories from commands and make `AUTO_CD` highlighting style configurable (contributed by @ccjmne 🍕)
+- Support colonless numeric history expansion word designators (contributed by @ccjmne 🚀)
+- Improve highlighting performance (contributed by @hood 🏎️💨)
+  - Count buffer lines in linear time
+  - Buffer daemon-client communication
+  - Bulk read spans after last query
+  - Improve time to first character after daemon restart
+
+**Bug fixes**
+
+- Make sticky bit on runtime files optional. This fixes compatibility with OpenBSD and FreeBSD.
+- Keep daemon running if a client disconnects early (contributed by @hood 🦺)
+
+**Maintenance**
+
+- Update dependencies
+- Update protocol: clarify that spans strictly follow queries and are never interleaved
+
 ## [1.11.0] - 2026-10-08
 
 **New features**
 
-- Add support for the Zsh `cdpath` variable (contributed by @ccjmne 🎉). Entries in `cdpath` will be correctly highlighted when used in `cd`, `chdir`, and `pushd` commands.
+- Add support for the Zsh `CDPATH` variable (contributed by @ccjmne 🎉). Entries in `CDPATH` will be correctly highlighted when used in `cd`, `chdir`, and `pushd` commands.
 - Dynamically highlight path arguments of `cd`, `chdir`, and `pushd` only if they are directories
 - Colorize CLI help
 
@@ -243,6 +265,7 @@ _Note: This project follows [Semantic Versioning]._
 
 _First release._
 
+[1.12.0]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.12.0
 [1.11.0]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.11.0
 [1.10.0]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.10.0
 [1.9.0]: https://github.com/michel-kraemer/zsh-patina/releases/tag/1.9.0
