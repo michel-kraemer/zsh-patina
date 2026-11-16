@@ -33,6 +33,7 @@ const ARGUMENTS: &str = "meta.function-call.arguments.shell";
 const KEYWORD_TIME: &str = "keyword.control.flow.time.shell";
 const OPERATOR_LOGICAL_AND: &str = "keyword.operator.logical.and.shell";
 const STRING_QUOTED_DOUBLE: &str = "string.quoted.double.shell";
+const STRING_QUOTED_SINGLE: &str = "string.quoted.single.shell";
 const PUNCTUATION_PARAMETER: &str = "punctuation.definition.parameter.shell";
 const PUNCTUATION_STRING_BEGIN: &str = "punctuation.definition.string.begin.shell";
 const PUNCTUATION_STRING_END: &str = "punctuation.definition.string.end.shell";
@@ -579,6 +580,52 @@ async fn resolve_alias() {
             h(0, 4, [DYNAMIC_CALLABLE_ALIAS]),
             h(5, 7, [OPERATOR_LOGICAL_AND]),
             h(8, 9, [DYNAMIC_CALLABLE_ALIAS]),
+        ],
+    )
+    .await;
+}
+
+/// Test global aliases in argument position.
+#[tokio::test]
+#[ignore]
+async fn global_alias() {
+    // global alias in argument position
+    run_highlight(
+        &["alias -g C='| head'"],
+        &[],
+        "ls C",
+        &[
+            h(0, 2, [DYNAMIC_CALLABLE_COMMAND]),
+            h(2, 3, [ARGUMENTS]),
+            h(3, 4, [ARGUMENTS, DYNAMIC_CALLABLE_ALIAS]),
+        ],
+    )
+    .await;
+
+    // quoted words are not expanded by Zsh and thus not highlighted as aliases
+    run_highlight(
+        &["alias -g C='| head'"],
+        &[],
+        "echo 'C'",
+        &[
+            h(0, 4, [DYNAMIC_CALLABLE_BUILTIN]),
+            h(4, 5, [ARGUMENTS]),
+            h(5, 6, [PUNCTUATION_STRING_BEGIN]),
+            h(6, 7, [STRING_QUOTED_SINGLE]),
+            h(7, 8, [PUNCTUATION_STRING_END]),
+        ],
+    )
+    .await;
+
+    // a global alias defined after activation is picked up as well
+    run_highlight(
+        &[],
+        &["alias -g L='| less'"],
+        "ls L",
+        &[
+            h(0, 2, [DYNAMIC_CALLABLE_COMMAND]),
+            h(2, 3, [ARGUMENTS]),
+            h(3, 4, [ARGUMENTS, DYNAMIC_CALLABLE_ALIAS]),
         ],
     )
     .await;

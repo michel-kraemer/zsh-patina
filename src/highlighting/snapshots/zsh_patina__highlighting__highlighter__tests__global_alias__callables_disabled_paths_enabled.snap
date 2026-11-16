@@ -1,0 +1,9 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight_with_request(\"ls C file\", request)?"
+---
+ls C file
+
+0  2  `ls`    variable.function
+2  5  ` C `   meta.function-call.arguments
+5  9  `file`  meta.function-call.arguments + dynamic.path.file.complete

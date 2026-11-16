@@ -1,0 +1,9 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight_with_request(\"git log C\", request())?"
+---
+git log C
+
+0  3  `git`    CALLABLE `git`
+3  8  ` log `  meta.function-call.arguments
+8  9  `C`      meta.function-call.arguments + dynamic.callable.alias

@@ -830,6 +830,7 @@ where
 
     let mut pwd = None;
     let mut cdpath = None;
+    let mut galiases: Option<Cow<str>> = None;
     let mut autocd_enabled = false;
     let mut history_expansions_enabled = true;
 
@@ -887,6 +888,9 @@ where
             }
             "CDP=" => {
                 cdpath = Some(decode_string(value));
+            }
+            "GAL=" => {
+                galiases = Some(decode_string(value));
             }
             "ACD=" => {
                 autocd_enabled = value
@@ -1079,6 +1083,16 @@ where
             cdpath
                 .as_ref()
                 .map(|p| p.lines().collect::<Vec<_>>())
+                .unwrap_or_default(),
+        )
+        .with_galiases(
+            galiases
+                .as_deref()
+                .map(|g| {
+                    g.lines()
+                        .filter(|name| !name.contains(char::is_whitespace))
+                        .collect::<Vec<_>>()
+                })
                 .unwrap_or_default(),
         )
         .with_autocd(autocd_enabled)
