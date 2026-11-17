@@ -532,6 +532,8 @@ zsh-patina dynamically highlights commands, files, and directories based on whet
 "dynamic.path.directory.partial" = { underline = true }
 ```
 
+zsh-patina also highlights global aliases (created with `alias -g`).
+
 The styles of the dynamic scopes are *mixed into* the normal styles, which means, first the normal styles are applied, and then every attribute of the dynamic style overwrites the normal style's attribute with the same name. For example, if `variable.function.shell` (the normal style for callables if dynamic highlighting is disabled) specifies that a callable should be highlighted in blue, and `dynamic.callable.command.shell` specifies `underline = true`, then any command that exists and can be executed will be highlighted in blue *and* underlined.
 
 ### Extending another theme

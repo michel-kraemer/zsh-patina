@@ -180,6 +180,11 @@ The highlight command is the primary operation, issued on every keypress. It sub
 |empty
 |Newline-separated `cdpath` entries in shell search order, with LF and `%` percent-encoded as part of the complete field value. Used when resolving paths for `cd`-like commands as well as bare directories when AUTO_CD is enabled.
 
+|`GAL`
+|string
+|empty
+|Newline-separated names of global aliases (defined with `alias -g`) in the client shell, with LF and `%` percent-encoded as part of the complete field value. Unquoted words in argument position that exactly match one of these names are highlighted as aliases. Names containing whitespace MUST be omitted; they can never match a single word and would corrupt the newline-separated list.
+
 |`ACD`
 |uint
 |0

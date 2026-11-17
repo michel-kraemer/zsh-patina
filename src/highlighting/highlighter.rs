@@ -18,8 +18,8 @@ use crate::{
     config::{AutocdStyle, DynamicConfigType, HighlightingConfig},
     highlighting::{
         dynamic::{
-            DynamicHighlightingOptions, DynamicScopes, DynamicTokenGroupBuilder, DynamicType,
-            classify_argument, classify_callable,
+            DynamicHighlightingOptions, DynamicScopes, DynamicTokenGroup, DynamicTokenGroupBuilder,
+            DynamicType, classify_argument, classify_callable,
         },
         historyexpansion::HistoryExpanded,
         syntax::load_syntax_set,
@@ -186,6 +186,7 @@ pub struct HighlightingRequest<'a, P> {
     cursor: Option<usize>,
     pwd: Option<&'a str>,
     cdpath: Vec<&'a str>,
+    galiases: Vec<&'a str>,
     history_expansions_enabled: bool,
     autocd_enabled: bool,
     resolve_nameddirs: bool,
@@ -222,6 +223,15 @@ impl<'a, P> HighlightingRequest<'a, P> {
         'a: 'b,
     {
         HighlightingRequest { cdpath, ..self }
+    }
+
+    /// Set the global alias names defined in the user's shell
+    pub fn with_galiases<'b>(self, galiases: Vec<&'b str>) -> HighlightingRequest<'b, P>
+    where
+        P: Copy,
+        'a: 'b,
+    {
+        HighlightingRequest { galiases, ..self }
     }
 
     /// Enable or disable highlighting of history expansions
@@ -264,6 +274,7 @@ impl<'a, P> HighlightingRequest<'a, P> {
             cursor: self.cursor,
             pwd: self.pwd,
             cdpath: self.cdpath,
+            galiases: self.galiases,
             history_expansions_enabled: self.history_expansions_enabled,
             autocd_enabled: self.autocd_enabled,
             resolve_nameddirs: self.resolve_nameddirs,
@@ -278,6 +289,7 @@ impl Default for HighlightingRequest<'_, fn(&Range<usize>) -> bool> {
             cursor: None,
             pwd: None,
             cdpath: Vec::new(),
+            galiases: Vec::new(),
             history_expansions_enabled: true,
             autocd_enabled: false,
             resolve_nameddirs: false,
@@ -390,17 +402,7 @@ impl Highlighter {
         base_style: Option<&StaticStyle>,
         request: &HighlightingRequest<P>,
     ) -> Option<SpanStyle> {
-        let options = DynamicHighlightingOptions::new(
-            request.cursor,
-            request.pwd?,
-            &request.cdpath,
-            request.autocd_enabled,
-            self.autocd_style,
-            &self.home_dir,
-            &self.theme,
-            self.dynamic_arguments_type == DynamicConfigType::Partial,
-            request.resolve_nameddirs,
-        );
+        let options = self.dynamic_options(request, request.pwd?);
 
         let style = match dynamic_type {
             DynamicType::Callable => classify_callable(path, range, &options),
@@ -417,11 +419,41 @@ impl Highlighter {
         }
     }
 
-    fn should_highlight_dynamic(&self, dynamic_type: &DynamicType) -> bool {
-        match dynamic_type {
-            DynamicType::Unknown => true,
-            DynamicType::Callable => self.dynamic_callables_enabled,
-            DynamicType::Arguments => self.dynamic_arguments_type != DynamicConfigType::None,
+    /// Collect dynamic highlighting options; `pwd` comes separately since it is optional
+    fn dynamic_options<'a, P>(
+        &'a self,
+        request: &'a HighlightingRequest<'a, P>,
+        pwd: &'a str,
+    ) -> DynamicHighlightingOptions<'a> {
+        DynamicHighlightingOptions {
+            cursor: request.cursor,
+            pwd,
+            cdpath: &request.cdpath,
+            autocd: request.autocd_enabled,
+            autocd_style: self.autocd_style,
+            home_dir: &self.home_dir,
+            theme: &self.theme,
+            callables: self.dynamic_callables_enabled,
+            arguments: self.dynamic_arguments_type,
+            galiases: &request.galiases,
+            resolve_nameddirs: request.resolve_nameddirs,
+        }
+    }
+
+    /// Highlight token groups into `mixins`, skipping disabled group types
+    fn extend_mixins(
+        groups: Vec<DynamicTokenGroup>,
+        command: &str,
+        options: &DynamicHighlightingOptions,
+        mixins: &mut Vec<Span>,
+    ) {
+        for g in groups {
+            let dynamic_type = g.dynamic_type;
+            if let Ok(group_spans) = g.highlight(command, options)
+                && options.allows(dynamic_type)
+            {
+                mixins.extend(group_spans);
+            }
         }
     }
 
@@ -440,19 +472,12 @@ impl Highlighter {
         let mut dynamic_builder = DynamicTokenGroupBuilder::new(self.dynamic_scopes);
         let mut mixins = Vec::new();
 
-        let dynamic_highlighting_options = request.pwd.map(|pwd| {
-            DynamicHighlightingOptions::new(
-                request.cursor,
-                pwd,
-                &request.cdpath,
-                request.autocd_enabled,
-                self.autocd_style,
-                &self.home_dir,
-                &self.theme,
-                self.dynamic_arguments_type == DynamicConfigType::Partial,
-                request.resolve_nameddirs,
-            )
-        });
+        let dynamic_highlighting_options =
+            request.pwd.map(|pwd| self.dynamic_options(request, pwd));
+
+        // fast path: skip group building when no dynamic feature is enabled
+        let dynamic_highlighting_enabled = self.dynamic_callables_enabled
+            || self.dynamic_arguments_type != DynamicConfigType::None;
 
         let mut i = 0;
         let mut byte_offset = 0;
@@ -505,36 +530,22 @@ impl Highlighter {
             }
 
             // perform dynamic highlighting
-            if (self.dynamic_callables_enabled
-                || self.dynamic_arguments_type != DynamicConfigType::None)
+            if dynamic_highlighting_enabled
                 && let Some(dynamic_highlighting_options) = &dynamic_highlighting_options
             {
-                for g in dynamic_builder.build(&ops, byte_offset) {
-                    let dynamic_type = g.dynamic_type;
-                    if let Ok(group_spans) = g.highlight(command, dynamic_highlighting_options)
-                        && self.should_highlight_dynamic(&dynamic_type)
-                    {
-                        mixins.extend(group_spans);
-                    }
-                }
+                let groups = dynamic_builder.build(&ops, byte_offset);
+                Self::extend_mixins(groups, command, dynamic_highlighting_options, &mut mixins);
             }
 
             byte_offset += line.len();
         }
 
         // perform dynamic highlighting for the remaining groups
-        if (self.dynamic_callables_enabled
-            || self.dynamic_arguments_type != DynamicConfigType::None)
+        if dynamic_highlighting_enabled
             && let Some(dynamic_highlighting_options) = &dynamic_highlighting_options
         {
-            for g in dynamic_builder.finish(byte_offset) {
-                let dynamic_type = g.dynamic_type;
-                if let Ok(group_spans) = g.highlight(command, dynamic_highlighting_options)
-                    && self.should_highlight_dynamic(&dynamic_type)
-                {
-                    mixins.extend(group_spans);
-                }
-            }
+            let groups = dynamic_builder.finish(byte_offset);
+            Self::extend_mixins(groups, command, dynamic_highlighting_options, &mut mixins);
         }
 
         // mix into result
@@ -1138,6 +1149,140 @@ pub mod tests {
         assert_snapshot!(
             "argument_is_directory__simple",
             cfg.highlight("cp test.txt dest")?
+        );
+
+        Ok(())
+    }
+
+    /// Test global aliases in argument position
+    #[test]
+    fn global_alias_is_highlighted_in_argument_position() -> Result<()> {
+        let cfg = test_cfg()?;
+        let request = || {
+            HighlightingRequest::default()
+                .with_pwd(cfg.pwd.as_str())
+                .with_galiases(vec!["C", "L"])
+        };
+
+        // a global alias is highlighted with the alias scope
+        assert_snapshot!(
+            "global_alias__argument",
+            cfg.highlight_with_request("git log C", request())?
+        );
+
+        // a word that only partially matches is not highlighted
+        assert_snapshot!(
+            "global_alias__partial_word_no_match",
+            cfg.highlight_with_request("git logCC", request())?
+        );
+
+        // quoted words are not expanded by Zsh and thus not highlighted
+        assert_snapshot!(
+            "global_alias__single_quoted_no_match",
+            cfg.highlight_with_request("echo 'C'", request())?
+        );
+        assert_snapshot!(
+            "global_alias__double_quoted_no_match",
+            cfg.highlight_with_request("echo \"C\"", request())?
+        );
+
+        // words with adjacent empty quotes are not expanded either
+        assert_snapshot!(
+            "global_alias__adjacent_empty_quotes_no_match",
+            cfg.highlight_with_request("echo C\"\"", request())?
+        );
+        assert_snapshot!(
+            "global_alias__leading_empty_quotes_no_match",
+            cfg.highlight_with_request("echo ''C", request())?
+        );
+
+        // escaped words are not expanded by Zsh and thus not highlighted
+        assert_snapshot!(
+            "global_alias__escaped_no_match",
+            cfg.highlight_with_request("echo \\C", request())?
+        );
+
+        // a global alias takes precedence over an existing file
+        cfg.touch_file("C")?;
+        assert_snapshot!(
+            "global_alias__existing_file",
+            cfg.highlight_with_request("ls C", request())?
+        );
+
+        // matches inside a command substitution as well
+        assert_snapshot!(
+            "global_alias__command_substitution",
+            cfg.highlight_with_request("echo $(ls C) L", request())?
+        );
+
+        Ok(())
+    }
+
+    /// Test that global aliases require galiases to be set on the request
+    #[test]
+    fn global_alias_requires_galiases_to_be_configured() -> Result<()> {
+        let cfg = test_cfg()?;
+
+        let without_galiases = cfg.highlight("git log C")?;
+        assert!(!without_galiases.spans.iter().any(|span| span.start == 8));
+
+        let request = HighlightingRequest::default()
+            .with_pwd(cfg.pwd.as_str())
+            .with_galiases(vec!["C"]);
+        let with_galiases = cfg.highlighter.highlight("git log C", &request)?;
+        assert!(with_galiases.iter().any(|span| span.start == 8));
+
+        Ok(())
+    }
+
+    /// Test that global aliases follow the callables switch, not the paths one
+    #[test]
+    fn global_alias_respects_dynamic_config() -> Result<()> {
+        let mut config = test_config();
+        config.dynamic = DynamicConfig {
+            callables: true,
+            paths: DynamicConfigType::None,
+        };
+        let cfg = test_cfg_with(config)?;
+        let request = HighlightingRequest::default()
+            .with_pwd(cfg.pwd.as_str())
+            .with_galiases(vec!["C"]);
+
+        assert_snapshot!(
+            "global_alias__paths_disabled",
+            cfg.highlight_with_request("ls C file", request)?
+        );
+
+        let mut config = test_config();
+        config.dynamic = DynamicConfig {
+            callables: false,
+            paths: DynamicConfigType::None,
+        };
+        let cfg = test_cfg_with(config)?;
+        let request = HighlightingRequest::default()
+            .with_pwd(cfg.pwd.as_str())
+            .with_galiases(vec!["C"]);
+
+        assert_snapshot!(
+            "global_alias__callables_disabled",
+            cfg.highlight_with_request("ls C file", request)?
+        );
+
+        // callables disabled suppresses global aliases even with paths enabled
+        let mut config = test_config();
+        config.dynamic = DynamicConfig {
+            callables: false,
+            paths: DynamicConfigType::Complete,
+        };
+        let cfg = test_cfg_with(config)?;
+        cfg.touch_file("file")?;
+        let request = HighlightingRequest::default()
+            .with_pwd(cfg.pwd.as_str())
+            .with_galiases(vec!["C"]);
+
+        assert_snapshot!(
+            "global_alias__callables_disabled_paths_enabled",
+            cfg.highlight_with_request("ls C file", request)?
         );
 
         Ok(())
