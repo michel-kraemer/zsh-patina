@@ -1,0 +1,17 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"nocorrect VAR=value sh -c 'echo $VAR'\")?"
+---
+nocorrect VAR=value sh -c 'echo $VAR'
+
+0   9   `nocorrect`  keyword.control.flow.nocorrect
+10  13  `VAR`        variable.other.readwrite.assignment
+13  14  `=`          keyword.operator.assignment
+14  19  `value`      string.unquoted
+20  22  `sh`         CALLABLE `sh`
+22  24  ` -`         punctuation.definition.parameter
+24  25  `c`          variable.parameter.option
+25  26  ` `          meta.function-call.arguments
+26  27  `'`          punctuation.definition.string.begin
+27  36  `echo $VAR`  string.quoted.single
+36  37  `'`          punctuation.definition.string.end

@@ -175,13 +175,18 @@ contexts:
         5: keyword.control.end.shell
       set: [cmd-post, cmd-args]
     # minor performance optimization: merge similar patterns
-    - match: \b((while)|(until)|(continue)|(time)|(nocorrect)){{keyword_boundary_end}}
+    - match: \b((while)|(until)|(continue)){{keyword_boundary_end}}
       captures:
         2: keyword.control.while.shell
         3: keyword.control.until.shell
         4: keyword.control.flow.continue.shell
-        5: keyword.control.flow.time.shell
-        6: keyword.control.flow.nocorrect.shell
+    - match: \b((time)|(nocorrect)){{keyword_boundary_end}}
+      captures:
+        2: keyword.control.flow.time.shell
+        3: keyword.control.flow.nocorrect.shell
+      set:
+        - match: (?=\S)
+          pop: true
     - match: \bcase{{keyword_boundary_end}}
       scope: keyword.control.case.begin.shell
       set: [case-body, case-item, case-item-first-character, case-preamble]

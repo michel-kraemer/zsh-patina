@@ -1814,6 +1814,12 @@ pub mod tests {
 
         assert_snapshot!("time__sleep", cfg.highlight("time sleep 2")?);
 
+        // see https://github.com/michel-kraemer/zsh-patina/issues/120
+        assert_snapshot!(
+            "time__with_var",
+            cfg.highlight("time VAR=value sh -c 'echo $VAR'")?
+        );
+
         Ok(())
     }
 
@@ -1822,6 +1828,12 @@ pub mod tests {
         let cfg = test_cfg()?;
 
         assert_snapshot!("nocorrect__typo", cfg.highlight("nocorrect slep 2")?);
+
+        // see https://github.com/michel-kraemer/zsh-patina/issues/120
+        assert_snapshot!(
+            "nocorrect__with_var",
+            cfg.highlight("nocorrect VAR=value sh -c 'echo $VAR'")?
+        );
 
         Ok(())
     }

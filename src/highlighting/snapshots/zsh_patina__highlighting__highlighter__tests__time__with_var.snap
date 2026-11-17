@@ -1,0 +1,17 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight(\"time VAR=value sh -c 'echo $VAR'\")?"
+---
+time VAR=value sh -c 'echo $VAR'
+
+0   4   `time`       keyword.control.flow.time
+5   8   `VAR`        variable.other.readwrite.assignment
+8   9   `=`          keyword.operator.assignment
+9   14  `value`      string.unquoted
+15  17  `sh`         CALLABLE `sh`
+17  19  ` -`         punctuation.definition.parameter
+19  20  `c`          variable.parameter.option
+20  21  ` `          meta.function-call.arguments
+21  22  `'`          punctuation.definition.string.begin
+22  31  `echo $VAR`  string.quoted.single
+31  32  `'`          punctuation.definition.string.end
