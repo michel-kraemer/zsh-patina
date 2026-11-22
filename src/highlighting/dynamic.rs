@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use syntect::parsing::{ClearAmount, Scope, ScopeStackOp};
 
 use crate::{
-    config::AutocdStyle,
+    config::{AutocdStyle, DynamicConfigType},
     path::{PathType, is_path_executable, named_directory, path_type},
     unescape::ZshUnescape,
 };
@@ -47,41 +47,42 @@ pub enum DynamicType {
 }
 
 pub struct DynamicHighlightingOptions<'a> {
-    cursor: Option<usize>,
-    pwd: &'a str,
-    cdpath: &'a [&'a str],
-    autocd: bool,
-    autocd_style: AutocdStyle,
-    home_dir: &'a str,
-    theme: &'a Theme,
-    highlight_partial_paths: bool,
+    pub cursor: Option<usize>,
+    pub pwd: &'a str,
+    pub cdpath: &'a [&'a str],
+    pub autocd: bool,
+    pub autocd_style: AutocdStyle,
+    pub home_dir: &'a str,
+    pub theme: &'a Theme,
+
+    /// Whether dynamic highlighting of callables is enabled
+    pub callables: bool,
+
+    /// Which kind of dynamic highlighting to apply to argument-position words
+    pub arguments: DynamicConfigType,
+
+    /// Names of global aliases (`alias -g`) defined in the user's shell
+    pub galiases: &'a [&'a str],
+
     // TODO: this should always be true starting from protocol v3, stop passing
     // it around once v1 and v2 are decommissioned.
-    resolve_nameddirs: bool,
+    pub resolve_nameddirs: bool,
 }
 
-impl<'a> DynamicHighlightingOptions<'a> {
-    pub fn new(
-        cursor: Option<usize>,
-        pwd: &'a str,
-        cdpath: &'a [&'a str],
-        autocd: bool,
-        autocd_style: AutocdStyle,
-        home_dir: &'a str,
-        theme: &'a Theme,
-        highlight_partial_paths: bool,
-        resolve_nameddirs: bool,
-    ) -> Self {
-        Self {
-            cursor,
-            pwd,
-            cdpath,
-            autocd,
-            autocd_style,
-            home_dir,
-            theme,
-            highlight_partial_paths,
-            resolve_nameddirs,
+impl DynamicHighlightingOptions<'_> {
+    /// Whether global aliases are highlighted in argument position
+    fn global_aliasing_enabled(&self) -> bool {
+        self.callables && !self.galiases.is_empty()
+    }
+
+    /// Whether token groups of the given type are dynamically highlighted
+    pub(super) fn allows(&self, dynamic_type: DynamicType) -> bool {
+        match dynamic_type {
+            DynamicType::Unknown => true,
+            DynamicType::Callable => self.callables,
+            DynamicType::Arguments => {
+                self.arguments != DynamicConfigType::None || self.global_aliasing_enabled()
+            }
         }
     }
 }
@@ -98,6 +99,9 @@ struct ParsedToken {
     /// The resolved named-directory name, if the token starts with a `~user`
     /// reference
     named_directory: Option<String>,
+
+    /// Whether the word is unquoted and unescaped
+    plain: bool,
 }
 
 #[derive(Debug)]
@@ -161,6 +165,28 @@ impl DynamicTokenGroup {
         let parsed = self.parse(line, options.home_dir)?;
         for token in parsed {
             log::trace!("Dynamically highlighting argument: {}", token.text);
+
+            // Zsh expands global aliases before resolving paths
+            if options.global_aliasing_enabled()
+                && token.plain
+                && options.galiases.contains(&token.text.as_str())
+            {
+                log::trace!("Argument `{}' is a global alias", token.text);
+                if let Some(style) = resolve_callable_style(DYNAMIC_CALLABLE_ALIAS, options.theme) {
+                    result.push(Span {
+                        start: token.range.start,
+                        end: token.range.end,
+                        style: SpanStyle::Static(style),
+                    });
+                }
+                continue;
+            }
+
+            // with paths disabled, global aliases are the only spans produced
+            if options.arguments == DynamicConfigType::None {
+                continue;
+            }
+
             let style = if options.resolve_nameddirs
                 && let Some(name) = token.named_directory
             {
@@ -199,6 +225,7 @@ impl DynamicTokenGroup {
             utf8_buf: Vec<u8>,
             resolve_tilde: bool,
             is_poison: bool,
+            plain: bool,
             result: Vec<ParsedToken>,
         }
 
@@ -234,6 +261,7 @@ impl DynamicTokenGroup {
                         text: std::mem::take(&mut self.s),
                         range: self.start..self.end,
                         named_directory: nameddir,
+                        plain: self.plain,
                     });
                 } else {
                     self.s = String::new();
@@ -241,6 +269,7 @@ impl DynamicTokenGroup {
 
                 self.is_poison = false;
                 self.resolve_tilde = false;
+                self.plain = true;
 
                 Ok(())
             }
@@ -255,6 +284,7 @@ impl DynamicTokenGroup {
             utf8_buf: Vec::new(),
             resolve_tilde: false,
             is_poison: false,
+            plain: true,
             result: Vec::new(),
         };
 
@@ -304,6 +334,7 @@ impl DynamicTokenGroup {
                     let len = c.chars().count();
                     state.s.push_str(c);
                     state.end += len;
+                    state.plain = false;
                 }
 
                 DynamicScope::CharacterEscape => {
@@ -311,6 +342,7 @@ impl DynamicTokenGroup {
                     let len = c.chars().count();
                     state.s.push_str(&c[1..]); // trim leading '\'
                     state.end += len;
+                    state.plain = false;
                 }
 
                 DynamicScope::CharacterEscapeQuotedAnsi => {
@@ -322,14 +354,17 @@ impl DynamicTokenGroup {
                         state.s.push(c.zsh_unescape_char()?);
                     }
                     state.end += len;
+                    state.plain = false;
                 }
 
                 DynamicScope::StringQuotedBegin => {
                     state.end += line[t.byte_range.clone()].chars().count();
+                    state.plain = false;
                 }
 
                 DynamicScope::StringQuotedEnd => {
                     state.end += 1;
+                    state.plain = false;
                 }
 
                 DynamicScope::Tilde => {
@@ -343,6 +378,7 @@ impl DynamicTokenGroup {
 
                     let len = c.chars().count();
                     state.end += len;
+                    state.plain = false;
                 }
 
                 DynamicScope::Redirection => {
@@ -406,8 +442,7 @@ pub(super) fn classify_callable(
 ) -> Option<SpanStyle> {
     if path == "." || (path.contains('/') && is_path_executable(&path, options.pwd)) {
         log::trace!("Callable `{path}' is executable.");
-        return resolve_static_style(DYNAMIC_CALLABLE_COMMAND, options.theme)
-            .or_else(|| resolve_static_style(CALLABLE, options.theme))
+        return resolve_callable_style(DYNAMIC_CALLABLE_COMMAND, options.theme)
             .map(SpanStyle::Static);
     }
 
@@ -415,8 +450,7 @@ pub(super) fn classify_callable(
         match classify_argument(&path, range, options, true) {
             Some(SpanStyle::Static(style)) => Some(match options.autocd_style {
                 AutocdStyle::Command => {
-                    resolve_static_style(DYNAMIC_CALLABLE_COMMAND, options.theme)
-                        .or_else(|| resolve_static_style(CALLABLE, options.theme))
+                    resolve_callable_style(DYNAMIC_CALLABLE_COMMAND, options.theme)
                         .unwrap_or_default()
                 }
                 AutocdStyle::Directory => style,
@@ -452,7 +486,7 @@ pub(super) fn classify_argument(
 
     // only perform highlighting of partial paths if it is enabled and if the
     // cursor touches the prefix
-    let partial = options.highlight_partial_paths
+    let partial = options.arguments == DynamicConfigType::Partial
         && options
             .cursor
             .map(|cursor| (range.start..=range.end).contains(&cursor))

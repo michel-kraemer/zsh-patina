@@ -345,6 +345,17 @@ _zsh_patina() {
                 header="${header}CDP=$REPLY"$'\n'
             fi
 
+            if (( ${#galiases} )); then
+                # Drop names containing whitespace characters. They can never
+                # match a word.
+                local -a gal_names
+                gal_names=(${(k)galiases:#*[[:space:]]*})
+                if (( ${#gal_names} )); then
+                    _zsh_patina_encode_string "${(F)gal_names}"
+                    header="${header}GAL=$REPLY"$'\n'
+                fi
+            fi
+
             if [[ -o autocd ]]; then
                 header="${header}ACD=1"$'\n'
             fi

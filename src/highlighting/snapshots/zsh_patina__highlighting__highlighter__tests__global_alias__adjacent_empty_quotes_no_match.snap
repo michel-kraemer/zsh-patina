@@ -1,0 +1,10 @@
+---
+source: src/highlighting/highlighter.rs
+expression: "cfg.highlight_with_request(\"echo C\\\"\\\"\", request())?"
+---
+echo C""
+
+0  4  `echo`  CALLABLE `echo`
+4  6  ` C`    meta.function-call.arguments
+6  7  `"`     punctuation.definition.string.begin
+7  8  `"`     punctuation.definition.string.end

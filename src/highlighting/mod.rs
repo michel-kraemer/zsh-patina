@@ -139,3 +139,8 @@ fn resolve_static_style(scope: &str, theme: &Theme) -> Option<StaticStyle> {
         })
     }
 }
+
+/// Resolve a callable scope style, falling back to the general callable scope
+fn resolve_callable_style(scope: &str, theme: &Theme) -> Option<StaticStyle> {
+    resolve_static_style(scope, theme).or_else(|| resolve_static_style(CALLABLE, theme))
+}
