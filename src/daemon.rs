@@ -830,7 +830,7 @@ where
 
     let mut pwd = None;
     let mut cdpath = None;
-    let mut galiases: Option<Cow<str>> = None;
+    let mut galiases = None;
     let mut autocd_enabled = false;
     let mut history_expansions_enabled = true;
 
@@ -1087,7 +1087,7 @@ where
         )
         .with_galiases(
             galiases
-                .as_deref()
+                .as_ref()
                 .map(|g| {
                     g.lines()
                         .filter(|name| !name.contains(char::is_whitespace))

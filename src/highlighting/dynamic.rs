@@ -47,22 +47,26 @@ pub enum DynamicType {
 }
 
 pub struct DynamicHighlightingOptions<'a> {
-    pub(super) cursor: Option<usize>,
-    pub(super) pwd: &'a str,
-    pub(super) cdpath: &'a [&'a str],
-    pub(super) autocd: bool,
-    pub(super) autocd_style: AutocdStyle,
-    pub(super) home_dir: &'a str,
-    pub(super) theme: &'a Theme,
+    pub cursor: Option<usize>,
+    pub pwd: &'a str,
+    pub cdpath: &'a [&'a str],
+    pub autocd: bool,
+    pub autocd_style: AutocdStyle,
+    pub home_dir: &'a str,
+    pub theme: &'a Theme,
+
     /// Whether dynamic highlighting of callables is enabled
-    pub(super) callables: bool,
+    pub callables: bool,
+
     /// Which kind of dynamic highlighting to apply to argument-position words
-    pub(super) arguments: DynamicConfigType,
+    pub arguments: DynamicConfigType,
+
     /// Names of global aliases (`alias -g`) defined in the user's shell
-    pub(super) galiases: &'a [&'a str],
+    pub galiases: &'a [&'a str],
+
     // TODO: this should always be true starting from protocol v3, stop passing
     // it around once v1 and v2 are decommissioned.
-    pub(super) resolve_nameddirs: bool,
+    pub resolve_nameddirs: bool,
 }
 
 impl DynamicHighlightingOptions<'_> {
@@ -167,8 +171,8 @@ impl DynamicTokenGroup {
                 && token.plain
                 && options.galiases.contains(&token.text.as_str())
             {
-                log::trace!("Argument `{}` is a global alias", token.text);
-                if let Some(style) = callable_style(DYNAMIC_CALLABLE_ALIAS, options.theme) {
+                log::trace!("Argument `{}' is a global alias", token.text);
+                if let Some(style) = resolve_callable_style(DYNAMIC_CALLABLE_ALIAS, options.theme) {
                     result.push(Span {
                         start: token.range.start,
                         end: token.range.end,
@@ -438,14 +442,16 @@ pub(super) fn classify_callable(
 ) -> Option<SpanStyle> {
     if path == "." || (path.contains('/') && is_path_executable(&path, options.pwd)) {
         log::trace!("Callable `{path}' is executable.");
-        return callable_style(DYNAMIC_CALLABLE_COMMAND, options.theme).map(SpanStyle::Static);
+        return resolve_callable_style(DYNAMIC_CALLABLE_COMMAND, options.theme)
+            .map(SpanStyle::Static);
     }
 
     let autocd_style = if options.autocd {
         match classify_argument(&path, range, options, true) {
             Some(SpanStyle::Static(style)) => Some(match options.autocd_style {
                 AutocdStyle::Command => {
-                    callable_style(DYNAMIC_CALLABLE_COMMAND, options.theme).unwrap_or_default()
+                    resolve_callable_style(DYNAMIC_CALLABLE_COMMAND, options.theme)
+                        .unwrap_or_default()
                 }
                 AutocdStyle::Directory => style,
             }),

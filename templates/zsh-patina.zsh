@@ -346,7 +346,8 @@ _zsh_patina() {
             fi
 
             if (( ${#galiases} )); then
-                # drop whitespace-containing names, they can never match a word
+                # Drop names containing whitespace characters. They can never
+                # match a word.
                 local -a gal_names
                 gal_names=(${(k)galiases:#*[[:space:]]*})
                 if (( ${#gal_names} )); then

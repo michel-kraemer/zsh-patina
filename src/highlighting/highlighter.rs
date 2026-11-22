@@ -402,7 +402,7 @@ impl Highlighter {
         base_style: Option<&StaticStyle>,
         request: &HighlightingRequest<P>,
     ) -> Option<SpanStyle> {
-        let options = self.dynamic_options(request, request.pwd?);
+        let options = self.dynamic_options(request)?;
 
         let style = match dynamic_type {
             DynamicType::Callable => classify_callable(path, range, &options),
@@ -419,15 +419,15 @@ impl Highlighter {
         }
     }
 
-    /// Collect dynamic highlighting options; `pwd` comes separately since it is optional
+    /// Collect dynamic highlighting options when a working directory is
+    /// available
     fn dynamic_options<'a, P>(
         &'a self,
         request: &'a HighlightingRequest<'a, P>,
-        pwd: &'a str,
-    ) -> DynamicHighlightingOptions<'a> {
-        DynamicHighlightingOptions {
+    ) -> Option<DynamicHighlightingOptions<'a>> {
+        Some(DynamicHighlightingOptions {
             cursor: request.cursor,
-            pwd,
+            pwd: request.pwd?,
             cdpath: &request.cdpath,
             autocd: request.autocd_enabled,
             autocd_style: self.autocd_style,
@@ -437,7 +437,7 @@ impl Highlighter {
             arguments: self.dynamic_arguments_type,
             galiases: &request.galiases,
             resolve_nameddirs: request.resolve_nameddirs,
-        }
+        })
     }
 
     /// Highlight token groups into `mixins`, skipping disabled group types
@@ -472,8 +472,7 @@ impl Highlighter {
         let mut dynamic_builder = DynamicTokenGroupBuilder::new(self.dynamic_scopes);
         let mut mixins = Vec::new();
 
-        let dynamic_highlighting_options =
-            request.pwd.map(|pwd| self.dynamic_options(request, pwd));
+        let dynamic_highlighting_options = self.dynamic_options(request);
 
         // fast path: skip group building when no dynamic feature is enabled
         let dynamic_highlighting_enabled = self.dynamic_callables_enabled
