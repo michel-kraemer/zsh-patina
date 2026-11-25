@@ -578,15 +578,15 @@ Here are the results from benchmarks I ran to compare the performance of zsh-pat
 
 &nbsp; | zsh-patina | zsh-syntax-highlighting | fast-syntax-highlighting
 -|-|-|-
-first_prompt_lag_ms | **17.680** | 23.389 | 26.164
-first_command_lag_ms | **26.090** | 31.771 | 28.601
-command_lag_ms |  **0.197** | 0.528 | 0.240
-input_lag_ms | **1.394** | 8.385 | 3.643
-exit_time_ms | **17.725** | 19.934 | 24.095
+first_prompt_lag_ms | **7.757** | 9.953 | 11.586
+first_command_lag_ms | **8.556** | 14.728 | 12.688
+command_lag_ms |  **0.036** | 0.229 | 0.051
+input_lag_ms | **1.041** | 5.265 | 2.161
+exit_time_ms | **9.809** | 10.876 | 14.755
 
 Fastest times are displayed in **bold**.
 
-**Setup:** I ran the benchmarks with a clean Zsh configuration. The only thing that was included in the `.zshrc` file was the code required to initialize the individual plugins. I ran all benchmarks 5 times to make sure the numbers are consistent. I have copied the results from the fastest run for each plugin here. The benchmarks were executed on a MacBook Pro 16″ 2023.
+**Setup:** I ran the benchmarks with a clean Zsh configuration. The only thing that was included in the `.zshrc` file was `compinit -C` and the code required to initialize the individual plugins. I ran all benchmarks 5 times to make sure the numbers are consistent. I have copied the results from the fastest run for each plugin here. The benchmarks were executed on an AMD Ryzen 9 9900X 12-Core Processor with a Samsung SSD 990 PRO, 64 GB RAM, and Ubuntu 24.04 LTS.
 
 **Disclaimer:** Benchmarks are hard and the numbers may be different on other systems, so take these results with a grain of salt. You may want to run zsh-bench on your own system and with your own setup.
 
